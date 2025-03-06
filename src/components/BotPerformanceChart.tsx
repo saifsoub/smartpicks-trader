@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -43,11 +42,9 @@ const BotPerformanceChart: React.FC = () => {
   const loadPerformanceData = () => {
     setIsLoading(true);
     
-    // Get actual data from trading service or local storage
     const rawData = tradingService.getPerformanceHistory(timeframe);
     setPerformanceData(rawData);
     
-    // Calculate summary metrics
     let total = 0;
     let bestProfit = 0;
     let bestDate = "";
@@ -57,7 +54,7 @@ const BotPerformanceChart: React.FC = () => {
     rawData.forEach(day => {
       total += day.profit;
       trades += day.trades;
-      winRateSum += day.winRate * day.trades; // Weight by number of trades
+      winRateSum += day.winRate * day.trades;
       
       if (day.profit > bestProfit) {
         bestProfit = day.profit;
@@ -191,7 +188,9 @@ const BotPerformanceChart: React.FC = () => {
                         borderColor: '#374151',
                         color: '#e5e7eb'
                       }}
-                      formatter={(value: any) => [`$${value.toFixed(2)}`, 'Profit']}
+                      formatter={(value: any, name: string) => {
+                        return [`$${Number(value).toFixed(2)}`, name];
+                      }}
                     />
                     <Legend />
                     <Area 

@@ -51,7 +51,7 @@ const BotStatus: React.FC = () => {
     }
     
     const handleStatsUpdate = () => {
-      loadStatistics();
+      loadBotStatistics();
     };
     
     window.addEventListener('bot-statistics-updated', handleStatsUpdate);
@@ -145,6 +145,16 @@ const BotStatus: React.FC = () => {
     }
   }, [totalTrades, winRate, profitLoss]);
   
+  const loadBotStatistics = () => {
+    const savedStats = localStorage.getItem('botStatistics');
+    if (savedStats) {
+      const stats = JSON.parse(savedStats);
+      setTotalTrades(stats.totalTrades || 0);
+      setWinRate(stats.winRate || "0%");
+      setProfitLoss(stats.profitLoss || "$0.00");
+    }
+  };
+  
   const toggleBotStatus = async () => {
     setIsLoading(true);
     
@@ -237,8 +247,11 @@ const BotStatus: React.FC = () => {
                 </div>
                 <div className="text-xs text-slate-400">{Math.round(monthlyProgress)}%</div>
               </div>
-              <Progress value={monthlyProgress} className="h-2" 
-                indicator={`bg-gradient-to-r ${monthlyProgress > 75 ? 'from-green-500 to-green-400' : 'from-blue-600 to-indigo-500'}`} />
+              <Progress 
+                value={monthlyProgress} 
+                className="h-2" 
+                indicatorClassName={`bg-gradient-to-r ${monthlyProgress > 75 ? 'from-green-500 to-green-400' : 'from-blue-600 to-indigo-500'}`} 
+              />
             </div>
             
             <div className="mb-1">
@@ -249,8 +262,11 @@ const BotStatus: React.FC = () => {
                 </div>
                 <div className="text-xs text-slate-400">{Math.round(dailyProgress)}%</div>
               </div>
-              <Progress value={dailyProgress} className="h-2" 
-                indicator={`bg-gradient-to-r ${dailyProgress > 75 ? 'from-green-500 to-green-400' : 'from-blue-600 to-indigo-500'}`} />
+              <Progress 
+                value={dailyProgress} 
+                className="h-2" 
+                indicatorClassName={`bg-gradient-to-r ${dailyProgress > 75 ? 'from-green-500 to-green-400' : 'from-blue-600 to-indigo-500'}`} 
+              />
             </div>
             
             <div className="mb-1">
@@ -261,8 +277,11 @@ const BotStatus: React.FC = () => {
                 </div>
                 <div className="text-xs text-slate-400">{Math.round(botEfficiency)}%</div>
               </div>
-              <Progress value={botEfficiency} className="h-2" 
-                indicator={`bg-gradient-to-r ${botEfficiency > 70 ? 'from-green-500 to-green-400' : botEfficiency > 40 ? 'from-yellow-500 to-amber-400' : 'from-red-500 to-rose-400'}`} />
+              <Progress 
+                value={botEfficiency} 
+                className="h-2" 
+                indicatorClassName={`bg-gradient-to-r ${botEfficiency > 70 ? 'from-green-500 to-green-400' : botEfficiency > 40 ? 'from-yellow-500 to-amber-400' : 'from-red-500 to-rose-400'}`} 
+              />
             </div>
           </div>
           
