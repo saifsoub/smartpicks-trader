@@ -28,6 +28,10 @@ const Index: React.FC = () => {
   
   const marketSentiment = tradingService.getMarketSentiment();
   
+  // Mock data for BTC price and change
+  const btcPrice = "67,850.45";
+  const btcChange = 3.72;
+  
   const aiInsights = {
     mainInsight: "Bitcoin shows a strong bullish trend with increasing institutional interest. Technical indicators and sentiment analysis suggest further upside potential.",
     technicalAnalysis: "Multiple indicators showing bullish signals with strong support at $65,400. RSI at 62 indicates room for growth before overbought conditions.",
@@ -127,7 +131,7 @@ const Index: React.FC = () => {
           </div>
         ) : (
           <>
-            <PriceDisplay />
+            <PriceDisplay btcPrice={btcPrice} btcChange={btcChange} />
             
             {dashboardMode === 'beginner' ? (
               <AIInsightsBanner 
@@ -143,7 +147,7 @@ const Index: React.FC = () => {
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
               <div className="lg:col-span-2">
-                <TradingChart symbol="BTCUSDT" />
+                <TradingChart />
               </div>
               <div className="space-y-4">
                 <BotStatus />

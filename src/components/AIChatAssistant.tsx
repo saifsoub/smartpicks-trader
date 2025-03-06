@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,17 +23,14 @@ const predefinedQuestions = [
   "Explain what's happening with BTC price"
 ];
 
-// AI assistant logic - in a real app, this would call an actual AI service
 const generateBotResponse = (message: string): Promise<ChatMessage> => {
   return new Promise((resolve) => {
-    // Simulate AI processing time
     setTimeout(() => {
       const lowerMessage = message.toLowerCase();
       let response: string;
       let icon = <Bot className="h-6 w-6 text-blue-400" />;
       let isAction = false;
       
-      // Generate context-aware responses based on message
       if (lowerMessage.includes('hello') || lowerMessage.includes('hi') || lowerMessage.includes('hey')) {
         response = "Hello! I'm your AI trading assistant. I can help you with market analysis, trading strategies, or managing your portfolio. What would you like to know today?";
       }
@@ -103,7 +99,6 @@ const AIChatAssistant: React.FC = () => {
     e.preventDefault();
     if (!input.trim()) return;
     
-    // Add user message
     const userMessage: ChatMessage = {
       id: Date.now(),
       type: 'user',
@@ -117,18 +112,13 @@ const AIChatAssistant: React.FC = () => {
     setIsTyping(true);
     
     try {
-      // Get AI response
       const botResponse = await generateBotResponse(input);
       setMessages(prev => [...prev, botResponse]);
       
-      // If this is an action message, perform the associated action
       if (botResponse.isAction) {
-        // This is a simulation, in a real app you would call appropriate service methods
         if (botResponse.content.includes('Stop loss')) {
-          // Simulate setting stop loss
           toast.success("Stop loss updated successfully");
         } else if (botResponse.content.includes('risk settings')) {
-          // Simulate updating risk settings
           tradingService.updateBotSettings({ riskLevel: 35 });
           toast.success("Risk settings updated");
         }
@@ -142,7 +132,6 @@ const AIChatAssistant: React.FC = () => {
   };
   
   const handleQuickQuestion = (question: string) => {
-    // Simulate clicking the question
     setInput(question);
   };
   
@@ -244,7 +233,8 @@ const AIChatAssistant: React.FC = () => {
             </Button>
           </form>
           
-          <style jsx>{`
+          <style>
+            {`
             .typing-indicator {
               display: flex;
               align-items: center;
@@ -282,7 +272,8 @@ const AIChatAssistant: React.FC = () => {
                 opacity: 1;
               }
             }
-          `}</style>
+            `}
+          </style>
         </div>
       </CardContent>
     </Card>
