@@ -18,6 +18,7 @@ const PortfolioSummary: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [testMode, setTestMode] = useState(false);
+  const [dataSource, setDataSource] = useState<'real' | 'test'>('real');
   
   useEffect(() => {
     // Check initial connection state and load portfolio
@@ -26,7 +27,7 @@ const PortfolioSummary: React.FC = () => {
     // Refresh portfolio data more frequently (every 30 seconds)
     const interval = setInterval(() => {
       if (isConnected) {
-        loadPortfolio();
+        loadPortfolio(false);
       }
     }, 30000);
     
@@ -70,7 +71,7 @@ const PortfolioSummary: React.FC = () => {
       // Always set connected to true in test mode
       if (inTestMode) {
         setIsConnected(true);
-        await loadPortfolio();
+        await loadPortfolio(true);
         return;
       }
       
@@ -78,13 +79,13 @@ const PortfolioSummary: React.FC = () => {
       try {
         await binanceService.testConnection();
         setIsConnected(true); // Assume connected even if test has issues
-        await loadPortfolio();
+        await loadPortfolio(false);
       } catch (error) {
         console.error("Connection test error:", error);
         // Still set connected if we have credentials, despite errors
         // This helps with CORS issues in browser environment
         setIsConnected(true);
-        await loadPortfolio();
+        await loadPortfolio(false);
       }
     } catch (error) {
       console.error("Failed to test connection:", error);
@@ -92,7 +93,7 @@ const PortfolioSummary: React.FC = () => {
       // Still set connected to true in test mode even if error occurs
       if (inTestMode) {
         setIsConnected(true);
-        await loadPortfolio();
+        await loadPortfolio(true);
       } else {
         setIsConnected(false);
       }
@@ -101,34 +102,51 @@ const PortfolioSummary: React.FC = () => {
     }
   };
 
-  const loadPortfolio = async () => {
+  const loadPortfolio = async (forceTestData: boolean = false) => {
     try {
       setIsLoading(true);
       setLoadError(null);
       
-      // Get account balances
-      const accountInfo = await binanceService.getAccountInfo();
-      
-      if (!accountInfo || !accountInfo.balances) {
-        throw new Error("Invalid account data received");
+      // If we're forcing test data, just load it directly
+      if (forceTestData || testMode) {
+        loadTestData();
+        setDataSource('test');
+        return;
       }
       
-      // Get current prices to calculate USD values
-      const prices = await binanceService.getPrices();
-      
-      // Get symbol info for percent changes
-      const symbols = await binanceService.getSymbols();
-      
-      // Process the data with the account info and returned prices/symbols
-      processPortfolioData(accountInfo, prices, symbols);
-      
+      // Try to get real account balances
+      try {
+        // Get account balances
+        const accountInfo = await binanceService.getAccountInfo();
+        
+        if (!accountInfo || !accountInfo.balances) {
+          throw new Error("Invalid account data received");
+        }
+        
+        // Get current prices to calculate USD values
+        const prices = await binanceService.getPrices();
+        
+        // Get symbol info for percent changes
+        const symbols = await binanceService.getSymbols();
+        
+        // Process the data with the account info and returned prices/symbols
+        processPortfolioData(accountInfo, prices, symbols);
+        setDataSource('real');
+      } catch (error) {
+        console.error("Failed to load real portfolio data:", error);
+        setLoadError(error instanceof Error ? error.message : "Failed to load real portfolio data");
+        toast.error("Failed to load real balance data, using test data instead");
+        
+        // Use test data when real data fails
+        loadTestData();
+        setDataSource('test');
+      }
     } catch (error) {
       console.error("Failed to load portfolio:", error);
       setLoadError(error instanceof Error ? error.message : "Failed to load portfolio data");
-      toast.error("Failed to load portfolio data, using test data instead");
-      
-      // Always load test data when real data fails
-      loadTestData();
+      toast.error("Failed to load portfolio data");
+      setBalances([]);
+      setTotalValue(0);
     } finally {
       setIsLoading(false);
     }
@@ -138,14 +156,12 @@ const PortfolioSummary: React.FC = () => {
   const loadTestData = () => {
     const testData = {
       balances: [
-        { asset: 'BTC', free: '0.5876', locked: '0.0012' },
-        { asset: 'ETH', free: '8.345', locked: '0.00' },
-        { asset: 'BNB', free: '35.75', locked: '0.25' },
-        { asset: 'ADA', free: '4250.32', locked: '0.00' },
-        { asset: 'SOL', free: '42.75', locked: '0.00' },
-        { asset: 'USDT', free: '15750.42', locked: '250.00' },
-        { asset: 'DOGE', free: '12500.35', locked: '0.00' },
-        { asset: 'XRP', free: '1850.78', locked: '0.00' },
+        { asset: 'BTC', free: '0.0034', locked: '0.0000' },
+        { asset: 'ETH', free: '0.057', locked: '0.00' },
+        { asset: 'BNB', free: '0.12', locked: '0.00' },
+        { asset: 'USDT', free: '127.42', locked: '0.00' },
+        { asset: 'ADA', free: '55.23', locked: '0.00' },
+        { asset: 'SOL', free: '0.24', locked: '0.00' },
       ]
     };
     
@@ -156,8 +172,6 @@ const PortfolioSummary: React.FC = () => {
       'BNBUSDT': '612.45',
       'ADAUSDT': '0.5723',
       'SOLUSDT': '182.95',
-      'DOGEUSDT': '0.1752',
-      'XRPUSDT': '0.6824',
     };
     
     // Mock symbols for test mode
@@ -167,8 +181,6 @@ const PortfolioSummary: React.FC = () => {
       { symbol: 'BNBUSDT', baseAsset: 'BNB', quoteAsset: 'USDT', priceChangePercent: '1.25', lastPrice: '612.45', volume: '12345.67' },
       { symbol: 'ADAUSDT', baseAsset: 'ADA', quoteAsset: 'USDT', priceChangePercent: '0.85', lastPrice: '0.5723', volume: '45678.90' },
       { symbol: 'SOLUSDT', baseAsset: 'SOL', quoteAsset: 'USDT', priceChangePercent: '4.65', lastPrice: '182.95', volume: '34567.89' },
-      { symbol: 'DOGEUSDT', baseAsset: 'DOGE', quoteAsset: 'USDT', priceChangePercent: '2.15', lastPrice: '0.1752', volume: '98765.43' },
-      { symbol: 'XRPUSDT', baseAsset: 'XRP', quoteAsset: 'USDT', priceChangePercent: '1.75', lastPrice: '0.6824', volume: '76543.21' },
     ];
     
     processPortfolioData(testData, mockPrices, mockSymbols);
@@ -234,7 +246,7 @@ const PortfolioSummary: React.FC = () => {
           <Button 
             variant="ghost" 
             size="sm" 
-            onClick={checkConnectionAndLoadPortfolio}
+            onClick={() => loadPortfolio(false)}
             disabled={isLoading}
             className="text-slate-200 hover:text-white hover:bg-slate-800"
           >
@@ -271,6 +283,31 @@ const PortfolioSummary: React.FC = () => {
                   <p className="text-sm text-indigo-200">
                     Running in test mode with simulated data. This simulates connection to Binance API with demo data.
                   </p>
+                </div>
+              </div>
+            )}
+            
+            {dataSource === 'test' && !testMode && (
+              <div className="mb-4 p-3 rounded-md bg-yellow-900/20 border border-yellow-800">
+                <div className="flex items-start">
+                  <AlertTriangle className="h-5 w-5 text-yellow-300 mr-2 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm text-yellow-200 font-medium">
+                      Displaying test data due to API connection issues
+                    </p>
+                    <p className="text-xs text-yellow-300 mt-1">
+                      We couldn't retrieve your real balances from Binance. This could be due to CORS restrictions in the browser.
+                    </p>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="mt-2 border-yellow-800 bg-yellow-900/30 text-yellow-200 hover:bg-yellow-900/50"
+                      onClick={() => loadPortfolio(false)}
+                    >
+                      <RefreshCw className="mr-2 h-3 w-3" />
+                      Try again
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}
@@ -338,23 +375,22 @@ const PortfolioSummary: React.FC = () => {
                         "Using live Binance API"
                       }
                     </p>
-                    {testMode && (
-                      <div className="mt-3 mx-auto max-w-md p-3 rounded-md bg-blue-900/20 border border-blue-800">
-                        <div className="flex items-start">
-                          <Info className="h-5 w-5 text-blue-300 mr-2 mt-0.5 flex-shrink-0" />
-                          <p className="text-sm text-blue-200">
-                            In test mode, simulated assets will be displayed based on predefined test data. Try refreshing to view test assets.
-                          </p>
-                        </div>
-                      </div>
-                    )}
                     <Button 
                       variant="link" 
                       className="text-blue-300 p-0 h-auto mt-3"
-                      onClick={checkConnectionAndLoadPortfolio}
+                      onClick={() => loadPortfolio(false)}
                     >
                       Refresh portfolio
                     </Button>
+                    {!testMode && (
+                      <Button 
+                        variant="link" 
+                        className="text-blue-300 p-0 h-auto mt-3 ml-3"
+                        onClick={() => loadPortfolio(true)}
+                      >
+                        Show sample data
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>

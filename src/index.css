@@ -133,4 +133,14 @@
   .card-content {
     @apply text-white;
   }
+  
+  /* Ensure all table headers have good contrast */
+  th.text-slate-400 {
+    @apply text-gray-100;
+  }
+  
+  /* Fix for dark text on dark backgrounds */
+  .text-black, .text-gray-900 {
+    @apply text-white;
+  }
 }
