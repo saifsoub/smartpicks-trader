@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, ArrowUp, ArrowDown, DollarSign, AlertTriangle } from "lucide-react";
+import { RefreshCw, ArrowUp, ArrowDown, DollarSign, AlertTriangle, Settings } from "lucide-react";
 import binanceService, { BinanceBalance } from "@/services/binanceService";
 import { toast } from "sonner";
 

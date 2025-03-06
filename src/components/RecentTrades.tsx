@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +22,6 @@ const RecentTrades: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   
-  // Check connection and fetch trades on component mount
   useEffect(() => {
     checkConnectionAndFetchTrades();
   }, []);
@@ -37,12 +35,10 @@ const RecentTrades: React.FC = () => {
     setIsLoading(true);
     
     try {
-      // First check if we're connected to the real API
       const testConnection = await binanceService.testConnection();
       setIsConnected(testConnection && !binanceService.isInTestMode());
       
       if (testConnection && !binanceService.isInTestMode()) {
-        // Only fetch trades if we have real connection
         fetchTrades();
       } else {
         setTrades([]);
@@ -60,23 +56,21 @@ const RecentTrades: React.FC = () => {
   
   const fetchTrades = async () => {
     try {
-      // Attempt to get real trades from Binance
       const btcTrades = await binanceService.getRecentTrades("BTCUSDT");
       const ethTrades = await binanceService.getRecentTrades("ETHUSDT");
       
-      // Transform to our trade format
       const formattedTrades = [...btcTrades, ...ethTrades]
         .sort((a, b) => b.time - a.time)
         .slice(0, 10)
         .map(trade => ({
           id: trade.id,
           pair: trade.symbol.replace("USDT", "/USDT"),
-          type: trade.isBuyer ? "buy" : "sell",
+          type: trade.isBuyer ? "buy" as const : "sell" as const,
           amount: `${parseFloat(trade.qty).toFixed(6)} ${trade.symbol.replace("USDT", "")}`,
           price: `$${parseFloat(trade.price).toFixed(2)}`,
           value: `$${(parseFloat(trade.price) * parseFloat(trade.qty)).toFixed(2)}`,
           time: new Date(trade.time).toLocaleString(),
-          strategy: "API Trade" // Real trades wouldn't have a strategy attached
+          strategy: "API Trade"
         }));
       
       setTrades(formattedTrades);
