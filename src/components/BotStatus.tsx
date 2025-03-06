@@ -136,7 +136,7 @@ const BotStatus: React.FC = () => {
           useDynamicPositionSizing: dynamicPositionSizing
         });
         
-        const success = tradingService.startTrading();
+        const success = await tradingService.startTrading();
         if (success) {
           setIsActive(true);
           const now = new Date();

@@ -757,7 +757,7 @@ class TradingService {
     return this.isRunning;
   }
   
-  public startTrading(): boolean {
+  public async startTrading(): Promise<boolean> {
     if (this.isRunning) {
       console.log('Trading bot is already running');
       return true;
