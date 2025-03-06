@@ -268,22 +268,24 @@ class BinanceService {
       this.addLogEntry('Fetching account information', 'info');
       
       if (this.testMode) {
-        // Simulate a response with mock data
+        // Simulate a response with more realistic mock data
         await new Promise(resolve => setTimeout(resolve, 500));
         
-        // Mock response with common cryptocurrencies
+        // Enhanced mock response with more realistic balances
         return {
           balances: [
-            { asset: 'BTC', free: '0.12345678', locked: '0.00000000' },
-            { asset: 'ETH', free: '2.34567890', locked: '0.00000000' },
-            { asset: 'BNB', free: '10.5', locked: '0.00' },
-            { asset: 'ADA', free: '1250.45', locked: '0.00' },
-            { asset: 'SOL', free: '15.75', locked: '0.00' },
-            { asset: 'DOT', free: '85.32', locked: '0.00' },
-            { asset: 'USDT', free: '5000.00', locked: '0.00' },
-            { asset: 'DOGE', free: '4500.12', locked: '0.00' },
-            { asset: 'XRP', free: '750.25', locked: '0.00' },
-            { asset: 'LINK', free: '42.18', locked: '0.00' }
+            { asset: 'BTC', free: '0.5876', locked: '0.0012' },
+            { asset: 'ETH', free: '8.345', locked: '0.00' },
+            { asset: 'BNB', free: '35.75', locked: '0.25' },
+            { asset: 'ADA', free: '4250.32', locked: '0.00' },
+            { asset: 'SOL', free: '42.75', locked: '0.00' },
+            { asset: 'DOT', free: '125.65', locked: '0.00' },
+            { asset: 'USDT', free: '15750.42', locked: '250.00' },
+            { asset: 'DOGE', free: '12500.35', locked: '0.00' },
+            { asset: 'XRP', free: '1850.78', locked: '0.00' },
+            { asset: 'LINK', free: '87.65', locked: '0.00' },
+            { asset: 'AVAX', free: '65.32', locked: '0.00' },
+            { asset: 'MATIC', free: '2750.45', locked: '0.00' }
           ]
         };
       }
@@ -311,15 +313,15 @@ class BinanceService {
       this.addLogEntry(`Failed to get account info: ${error}`, 'error');
       toast.error('Failed to retrieve account information');
       
-      // Return mock data when real request fails
+      // Return enhanced mock data when real request fails
       return {
         balances: [
-          { asset: 'BTC', free: '0.12345678', locked: '0.00000000' },
-          { asset: 'ETH', free: '2.34567890', locked: '0.00000000' },
-          { asset: 'BNB', free: '10.5', locked: '0.00' },
-          { asset: 'ADA', free: '1250.45', locked: '0.00' },
-          { asset: 'SOL', free: '15.75', locked: '0.00' },
-          { asset: 'USDT', free: '5000.00', locked: '0.00' }
+          { asset: 'BTC', free: '0.5876', locked: '0.0012' },
+          { asset: 'ETH', free: '8.345', locked: '0.00' },
+          { asset: 'BNB', free: '35.75', locked: '0.25' },
+          { asset: 'ADA', free: '4250.32', locked: '0.00' },
+          { asset: 'SOL', free: '42.75', locked: '0.00' },
+          { asset: 'USDT', free: '15750.42', locked: '250.00' }
         ]
       };
     }
@@ -342,16 +344,17 @@ class BinanceService {
         await new Promise(resolve => setTimeout(resolve, 500));
         
         return {
-          'BTCUSDT': '66120.35',
-          'ETHUSDT': '3221.48',
-          'BNBUSDT': '567.89',
-          'ADAUSDT': '0.4523',
-          'SOLUSDT': '172.62',
-          'DOGEUSDT': '0.1324',
-          'DOTUSDT': '7.25',
-          'XRPUSDT': '0.5732',
-          'MATICUSDT': '0.7845',
-          'LINKUSDT': '14.25'
+          'BTCUSDT': '66789.35',
+          'ETHUSDT': '3578.24',
+          'BNBUSDT': '612.45',
+          'ADAUSDT': '0.5723',
+          'SOLUSDT': '182.95',
+          'DOGEUSDT': '0.1752',
+          'DOTUSDT': '8.45',
+          'XRPUSDT': '0.6824',
+          'MATICUSDT': '0.9245',
+          'LINKUSDT': '16.75',
+          'AVAXUSDT': '37.92'
         };
       }
       

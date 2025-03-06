@@ -100,26 +100,37 @@
     @apply bg-background text-foreground;
   }
   
-  /* Improved text readability for dark mode */
+  /* Improved text readability for dark mode - making text much lighter */
   .text-slate-400 {
-    color: rgb(226 232 240); /* Lighter shade for better visibility */
+    color: rgb(241 245 249); /* Much lighter for better visibility */
   }
   
   .text-slate-300 {
-    color: rgb(241 245 249); /* Lighter shade for better visibility */
+    color: rgb(248 250 252); /* Much lighter for better visibility */
   }
   
   .text-slate-200 {
-    color: rgb(248 250 252); /* Lighter shade for better visibility */
+    color: rgb(255 255 255); /* White for maximum visibility */
   }
   
   /* Additional utility classes for readable text on dark backgrounds */
   .readable-text {
-    @apply text-slate-200;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    @apply text-white;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   }
   
   .glass-card {
     @apply bg-slate-800/60 backdrop-blur-sm border border-slate-700;
+  }
+  
+  /* Enhanced text visibility in dark UI */
+  .text-enhanced {
+    color: rgb(255 255 255);
+    text-shadow: 0 0 1px rgba(255, 255, 255, 0.2);
+  }
+  
+  /* Card content with improved contrast */
+  .card-content {
+    @apply text-white;
   }
 }

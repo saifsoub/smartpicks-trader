@@ -23,12 +23,12 @@ const PortfolioSummary: React.FC = () => {
     // Check initial connection state and load portfolio
     checkConnectionAndLoadPortfolio();
     
-    // Refresh portfolio data every minute
+    // Refresh portfolio data more frequently (every 30 seconds)
     const interval = setInterval(() => {
       if (isConnected) {
         loadPortfolio();
       }
-    }, 60000);
+    }, 30000);
     
     // Listen for credential updates from settings page
     const handleCredentialsUpdate = () => {
@@ -76,7 +76,7 @@ const PortfolioSummary: React.FC = () => {
       
       // For real mode, check connection but be forgiving with errors
       try {
-        const testConnection = await binanceService.testConnection();
+        await binanceService.testConnection();
         setIsConnected(true); // Assume connected even if test has issues
         await loadPortfolio();
       } catch (error) {
@@ -105,14 +105,6 @@ const PortfolioSummary: React.FC = () => {
     try {
       setIsLoading(true);
       setLoadError(null);
-      
-      // Load test data immediately if in test mode to avoid delays
-      if (testMode) {
-        console.log("Using test data for portfolio in test mode");
-        loadTestData();
-        setIsLoading(false);
-        return;
-      }
       
       // Get account balances
       const accountInfo = await binanceService.getAccountInfo();
@@ -146,31 +138,37 @@ const PortfolioSummary: React.FC = () => {
   const loadTestData = () => {
     const testData = {
       balances: [
-        { asset: 'BTC', free: '0.12345678', locked: '0.00000000' },
-        { asset: 'ETH', free: '2.34567890', locked: '0.00000000' },
-        { asset: 'BNB', free: '10.5', locked: '0.00' },
-        { asset: 'ADA', free: '1250.45', locked: '0.00' },
-        { asset: 'SOL', free: '15.75', locked: '0.00' },
-        { asset: 'USDT', free: '5000.00', locked: '0.00' },
+        { asset: 'BTC', free: '0.5876', locked: '0.0012' },
+        { asset: 'ETH', free: '8.345', locked: '0.00' },
+        { asset: 'BNB', free: '35.75', locked: '0.25' },
+        { asset: 'ADA', free: '4250.32', locked: '0.00' },
+        { asset: 'SOL', free: '42.75', locked: '0.00' },
+        { asset: 'USDT', free: '15750.42', locked: '250.00' },
+        { asset: 'DOGE', free: '12500.35', locked: '0.00' },
+        { asset: 'XRP', free: '1850.78', locked: '0.00' },
       ]
     };
     
     // Mock prices for test mode
     const mockPrices = {
-      'BTCUSDT': '66120.35',
-      'ETHUSDT': '3221.48',
-      'BNBUSDT': '567.89',
-      'ADAUSDT': '0.4523',
-      'SOLUSDT': '172.62',
+      'BTCUSDT': '66789.35',
+      'ETHUSDT': '3578.24',
+      'BNBUSDT': '612.45',
+      'ADAUSDT': '0.5723',
+      'SOLUSDT': '182.95',
+      'DOGEUSDT': '0.1752',
+      'XRPUSDT': '0.6824',
     };
     
     // Mock symbols for test mode
     const mockSymbols = [
-      { symbol: 'BTCUSDT', baseAsset: 'BTC', quoteAsset: 'USDT', priceChangePercent: '2.45', lastPrice: '66120.35', volume: '21345.67' },
-      { symbol: 'ETHUSDT', baseAsset: 'ETH', quoteAsset: 'USDT', priceChangePercent: '1.87', lastPrice: '3221.48', volume: '87654.32' },
-      { symbol: 'BNBUSDT', baseAsset: 'BNB', quoteAsset: 'USDT', priceChangePercent: '0.95', lastPrice: '567.89', volume: '12345.67' },
-      { symbol: 'ADAUSDT', baseAsset: 'ADA', quoteAsset: 'USDT', priceChangePercent: '-1.23', lastPrice: '0.4523', volume: '45678.90' },
-      { symbol: 'SOLUSDT', baseAsset: 'SOL', quoteAsset: 'USDT', priceChangePercent: '3.45', lastPrice: '172.62', volume: '34567.89' },
+      { symbol: 'BTCUSDT', baseAsset: 'BTC', quoteAsset: 'USDT', priceChangePercent: '2.75', lastPrice: '66789.35', volume: '21345.67' },
+      { symbol: 'ETHUSDT', baseAsset: 'ETH', quoteAsset: 'USDT', priceChangePercent: '3.42', lastPrice: '3578.24', volume: '87654.32' },
+      { symbol: 'BNBUSDT', baseAsset: 'BNB', quoteAsset: 'USDT', priceChangePercent: '1.25', lastPrice: '612.45', volume: '12345.67' },
+      { symbol: 'ADAUSDT', baseAsset: 'ADA', quoteAsset: 'USDT', priceChangePercent: '0.85', lastPrice: '0.5723', volume: '45678.90' },
+      { symbol: 'SOLUSDT', baseAsset: 'SOL', quoteAsset: 'USDT', priceChangePercent: '4.65', lastPrice: '182.95', volume: '34567.89' },
+      { symbol: 'DOGEUSDT', baseAsset: 'DOGE', quoteAsset: 'USDT', priceChangePercent: '2.15', lastPrice: '0.1752', volume: '98765.43' },
+      { symbol: 'XRPUSDT', baseAsset: 'XRP', quoteAsset: 'USDT', priceChangePercent: '1.75', lastPrice: '0.6824', volume: '76543.21' },
     ];
     
     processPortfolioData(testData, mockPrices, mockSymbols);
