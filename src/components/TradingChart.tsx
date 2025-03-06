@@ -28,6 +28,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ symbol: initialSymbol = "BT
   const [loading, setLoading] = useState(false);
   const [currentPrice, setCurrentPrice] = useState<string | null>(null);
   const [priceChange, setPriceChange] = useState<number | null>(null);
+  const [refreshInterval, setRefreshInterval] = useState<NodeJS.Timeout | null>(null);
 
   const timeIntervals = [
     { value: "15m", label: "15 min" },
@@ -47,12 +48,23 @@ const TradingChart: React.FC<TradingChartProps> = ({ symbol: initialSymbol = "BT
   useEffect(() => {
     loadChartData();
     
+    // Clear any existing interval
+    if (refreshInterval) {
+      clearInterval(refreshInterval);
+    }
+    
     // Refresh data every minute
-    const interval = setInterval(() => {
+    const newInterval = setInterval(() => {
       loadChartData(false);
     }, 60000);
     
-    return () => clearInterval(interval);
+    setRefreshInterval(newInterval);
+    
+    return () => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+    };
   }, [symbol, interval]);
 
   const loadChartData = async (showToast = true) => {
