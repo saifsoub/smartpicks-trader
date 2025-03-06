@@ -1,25 +1,25 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { 
-  ArrowUpDown, Bell, Settings, Brain, TrendingUp, LineChart, 
-  BadgeDollarSign, BarChart4, Bot, Zap, AlertTriangle,
-  ArrowUpRight, ArrowDownRight, Gauge, MessageSquare, AreaChart
-} from "lucide-react";
-import TradingChart from "@/components/TradingChart";
+import Header from "@/components/dashboard/Header";
+import AIInsightsBanner from "@/components/dashboard/AIInsightsBanner";
+import PriceDisplay from "@/components/dashboard/PriceDisplay";
+import MarketInsightsPanel from "@/components/dashboard/MarketInsightsPanel";
 import BotStatus from "@/components/BotStatus";
 import ActiveStrategies from "@/components/ActiveStrategies";
 import RecentTrades from "@/components/RecentTrades";
 import TradingActivityLog from "@/components/TradingActivityLog";
 import PortfolioSummary from "@/components/PortfolioSummary";
+import TradingChartEnhanced from "@/components/TradingChartEnhanced";
+import RiskManagementTools from "@/components/RiskManagementTools";
+import BacktestingModule from "@/components/BacktestingModule";
+import TwoFactorAuth from "@/components/TwoFactorAuth";
+import SocialTradingFeatures from "@/components/SocialTradingFeatures";
 import tradingService from "@/services/tradingService";
 import binanceService from "@/services/binanceService";
 import notificationService from "@/services/notificationService";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 
 const Index = () => {
-  const navigate = useNavigate();
   const [marketSentiment, setMarketSentiment] = useState<Record<string, { score: number; trend: 'bullish' | 'bearish' | 'neutral' }>>({});
   const [btcPrice, setBtcPrice] = useState("Loading...");
   const [btcChange, setBtcChange] = useState(0);
@@ -127,265 +127,108 @@ const Index = () => {
   return (
     <div className="flex min-h-screen flex-col bg-slate-950 text-white">
       {/* Header */}
-      <header className="border-b border-slate-800 bg-slate-900 px-4 py-3">
-        <div className="container mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <ArrowUpDown className="h-6 w-6 text-blue-400" />
-            <h1 className="text-xl font-bold text-white">TradingBot AI</h1>
-          </div>
-          <div className="flex items-center gap-4">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="border-slate-700 bg-slate-800 text-white hover:bg-slate-700"
-              onClick={() => navigate("/strategies")}
-            >
-              <TrendingUp className="mr-2 h-4 w-4 text-green-300" />
-              Strategies
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              className="border-slate-700 bg-slate-800 text-white hover:bg-slate-700"
-              onClick={() => navigate("/settings")}
-            >
-              <Settings className="mr-2 h-4 w-4 text-blue-300" />
-              Settings
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon"
-              className="text-yellow-300 hover:text-white hover:bg-slate-800"
-            >
-              <Bell className="h-5 w-5" />
-            </Button>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* Main Content */}
       <main className="container mx-auto flex-1 p-4">
         {/* AI Insights Banner */}
-        <div className="mb-6 p-4 rounded-lg bg-blue-900/20 border border-blue-800 flex items-start">
-          <Brain className="h-6 w-6 text-blue-300 mr-3 mt-1 flex-shrink-0" />
-          <div>
-            <h2 className="text-lg font-medium text-blue-200 mb-1">AI Trading Assistant</h2>
-            <p className="text-blue-100">
-              {aiInsights.mainInsight}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {Object.keys(marketSentiment).map(symbol => {
-                const sentiment = marketSentiment[symbol];
-                if (sentiment.score > 65) {
-                  return (
-                    <Badge key={symbol} className="bg-green-700 text-white">
-                      {symbol} Bullish
-                    </Badge>
-                  );
-                } else if (sentiment.score < 35) {
-                  return (
-                    <Badge key={symbol} className="bg-red-700 text-white">
-                      {symbol} Bearish
-                    </Badge>
-                  );
-                }
-                return null;
-              })}
-              <Badge className="bg-yellow-700 text-white">Market Volatility: Medium</Badge>
+        <AIInsightsBanner 
+          marketSentiment={marketSentiment} 
+          mainInsight={aiInsights.mainInsight} 
+        />
+
+        <Tabs defaultValue="trading">
+          <div className="mb-4">
+            <TabsList className="w-full bg-slate-800 p-1">
+              <TabsTrigger value="trading" className="flex-1">Trading Dashboard</TabsTrigger>
+              <TabsTrigger value="analysis" className="flex-1">Advanced Analysis</TabsTrigger>
+              <TabsTrigger value="social" className="flex-1">Social Trading</TabsTrigger>
+              <TabsTrigger value="security" className="flex-1">Security</TabsTrigger>
+            </TabsList>
+          </div>
+
+          <TabsContent value="trading" className="space-y-6">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+              {/* Trading Chart - Takes 8/12 of screen on large displays */}
+              <div className="lg:col-span-8">
+                <PriceDisplay 
+                  btcPrice={btcPrice} 
+                  btcChange={btcChange} 
+                />
+              </div>
+
+              {/* Right sidebar with bot status and portfolio */}
+              <div className="lg:col-span-4 space-y-6">
+                <BotStatus />
+                <PortfolioSummary />
+                <ActiveStrategies />
+              </div>
+
+              {/* Market Insights Panel */}
+              <div className="lg:col-span-12">
+                <MarketInsightsPanel 
+                  aiInsights={aiInsights} 
+                  marketSentiment={marketSentiment} 
+                />
+              </div>
+
+              {/* Activity log - takes 8/12 of screen */}
+              <div className="lg:col-span-8">
+                <TradingActivityLog />
+              </div>
+              
+              {/* Recent trades - takes 4/12 of screen */}
+              <div className="lg:col-span-4">
+                <RecentTrades />
+              </div>
             </div>
-            <div className="mt-3">
-              <Button 
-                size="sm" 
-                variant="outline" 
-                className="bg-blue-800/50 text-blue-100 border-blue-700 hover:bg-blue-800"
-                onClick={() => {
-                  toast.success("AI Assistant actively monitoring market conditions");
-                  notificationService.sendMarketAnalysisAlert("BTC", "Bullish divergence detected on 4h chart", 78);
-                }}
-              >
-                <Zap className="mr-2 h-4 w-4" />
-                Get AI Recommendations
-              </Button>
+          </TabsContent>
+
+          <TabsContent value="analysis" className="space-y-6">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+              {/* Enhanced Trading Chart */}
+              <div className="lg:col-span-8">
+                <div className="bg-slate-900 border-slate-800 shadow-lg rounded-lg overflow-hidden">
+                  <div className="border-b border-slate-800 px-4 py-3">
+                    <h3 className="text-lg font-medium text-white">Advanced Chart Analysis</h3>
+                  </div>
+                  <TradingChartEnhanced />
+                </div>
+              </div>
+
+              {/* Risk Management */}
+              <div className="lg:col-span-4">
+                <RiskManagementTools currentPrice={parseFloat(btcPrice.replace(/,/g, ''))} />
+              </div>
+
+              {/* Backtesting Module */}
+              <div className="lg:col-span-12">
+                <BacktestingModule />
+              </div>
             </div>
-          </div>
-        </div>
+          </TabsContent>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          {/* Trading Chart - Takes 8/12 of screen on large displays */}
-          <div className="lg:col-span-8">
-            <Card className="bg-slate-900 border-slate-800 shadow-lg">
-              <CardHeader className="border-b border-slate-800 pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-white">BTC/USDT</CardTitle>
-                  <div className="flex items-center">
-                    <span className="text-green-300 mr-2 text-lg font-medium">${btcPrice}</span>
-                    <span className={`text-xs px-1.5 py-0.5 rounded flex items-center ${btcChange >= 0 ? 'bg-green-400/10 text-green-300' : 'bg-red-400/10 text-red-300'}`}>
-                      {btcChange >= 0 ? <ArrowUpRight className="h-3 w-3 mr-1" /> : <ArrowDownRight className="h-3 w-3 mr-1" />}
-                      {btcChange >= 0 ? '+' : ''}{btcChange.toFixed(2)}%
-                    </span>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <TradingChart />
-              </CardContent>
-            </Card>
-          </div>
+          <TabsContent value="social" className="space-y-6">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+              <div className="lg:col-span-12">
+                <SocialTradingFeatures />
+              </div>
+            </div>
+          </TabsContent>
 
-          {/* Right sidebar with bot status and portfolio */}
-          <div className="lg:col-span-4 space-y-6">
-            <BotStatus />
-            <PortfolioSummary />
-            <ActiveStrategies />
-          </div>
-
-          {/* Market Insights Panel */}
-          <div className="lg:col-span-12">
-            <Card className="bg-slate-900 border-slate-800 shadow-lg">
-              <CardHeader className="border-b border-slate-800 pb-3">
-                <CardTitle className="text-white flex items-center">
-                  <Brain className="h-5 w-5 mr-2 text-purple-300" />
-                  AI Market Analysis
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="p-4 rounded-lg bg-slate-800/50 border border-slate-700">
-                    <div className="flex items-center mb-2">
-                      <BarChart4 className="h-5 w-5 text-blue-300 mr-2" />
-                      <h3 className="text-lg font-medium text-blue-100">Technical Analysis</h3>
-                    </div>
-                    <p className="text-slate-200">{aiInsights.technicalAnalysis}</p>
-                    <div className="mt-3 pt-3 border-t border-slate-700">
-                      <div className="flex justify-between items-center mb-1 text-xs text-slate-400">
-                        <span>Buy Signal Strength</span>
-                        <span>{marketSentiment["BTC"]?.score || 50}%</span>
-                      </div>
-                      <div className="w-full bg-slate-700 rounded-full h-2">
-                        <div 
-                          className="bg-green-500 h-2 rounded-full" 
-                          style={{ width: `${marketSentiment["BTC"]?.score || 50}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="p-4 rounded-lg bg-slate-800/50 border border-slate-700">
-                    <div className="flex items-center mb-2">
-                      <MessageSquare className="h-5 w-5 text-green-300 mr-2" />
-                      <h3 className="text-lg font-medium text-green-100">News Sentiment</h3>
-                    </div>
-                    <p className="text-slate-200">{aiInsights.newsSentiment}</p>
-                    <div className="mt-3 grid grid-cols-3 gap-2">
-                      <div className="bg-green-900/30 p-2 rounded text-center">
-                        <div className="text-xs text-green-400">Positive</div>
-                        <div className="text-sm font-bold text-green-300">68%</div>
-                      </div>
-                      <div className="bg-yellow-900/30 p-2 rounded text-center">
-                        <div className="text-xs text-yellow-400">Neutral</div>
-                        <div className="text-sm font-bold text-yellow-300">22%</div>
-                      </div>
-                      <div className="bg-red-900/30 p-2 rounded text-center">
-                        <div className="text-xs text-red-400">Negative</div>
-                        <div className="text-sm font-bold text-red-300">10%</div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="p-4 rounded-lg bg-slate-800/50 border border-slate-700">
-                    <div className="flex items-center mb-2">
-                      <AreaChart className="h-5 w-5 text-yellow-300 mr-2" />
-                      <h3 className="text-lg font-medium text-yellow-100">AI Predictions</h3>
-                    </div>
-                    <p className="text-slate-200">{aiInsights.prediction}</p>
-                    <div className="mt-3 grid grid-cols-3 gap-2">
-                      <div className="relative">
-                        <Gauge className="w-full h-12 text-blue-300" />
-                        <div className="absolute top-7 left-0 right-0 text-center text-xs font-medium text-blue-200">24h</div>
-                      </div>
-                      <div className="relative">
-                        <Gauge className="w-full h-12 text-purple-300" />
-                        <div className="absolute top-7 left-0 right-0 text-center text-xs font-medium text-purple-200">7d</div>
-                      </div>
-                      <div className="relative">
-                        <Gauge className="w-full h-12 text-green-300" />
-                        <div className="absolute top-7 left-0 right-0 text-center text-xs font-medium text-green-200">30d</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* AI Strategy Recommendations */}
-                <div className="mt-4 p-4 rounded-lg bg-indigo-900/20 border border-indigo-800">
-                  <div className="flex items-center mb-3">
-                    <Bot className="h-5 w-5 text-indigo-300 mr-2" />
-                    <h3 className="text-lg font-medium text-indigo-100">AI Strategy Recommendations</h3>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex bg-slate-800/70 rounded-lg p-3 border border-slate-700">
-                      <div className="flex-shrink-0 mr-3">
-                        <div className="h-10 w-10 rounded-full bg-green-700/30 flex items-center justify-center">
-                          <TrendingUp className="h-5 w-5 text-green-400" />
-                        </div>
-                      </div>
-                      <div>
-                        <h4 className="font-medium text-green-200">Long BTC with Bollinger Breakout</h4>
-                        <p className="text-xs text-slate-400 mt-1">
-                          Price breaking above upper Bollinger Band with increasing volume suggests strong momentum.
-                        </p>
-                        <div className="mt-2">
-                          <Button size="sm" variant="outline" className="text-xs h-7 bg-slate-800">
-                            Apply Strategy
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex bg-slate-800/70 rounded-lg p-3 border border-slate-700">
-                      <div className="flex-shrink-0 mr-3">
-                        <div className="h-10 w-10 rounded-full bg-yellow-700/30 flex items-center justify-center">
-                          <AlertTriangle className="h-5 w-5 text-yellow-400" />
-                        </div>
-                      </div>
-                      <div>
-                        <h4 className="font-medium text-yellow-200">Reduce ETH exposure</h4>
-                        <p className="text-xs text-slate-400 mt-1">
-                          ETH showing bearish divergence on RSI with decreasing trading volume. Consider reducing position size.
-                        </p>
-                        <div className="mt-2">
-                          <Button size="sm" variant="outline" className="text-xs h-7 bg-slate-800">
-                            Review Position
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Activity log - takes 8/12 of screen */}
-          <div className="lg:col-span-8">
-            <TradingActivityLog />
-          </div>
-          
-          {/* Recent trades - takes 4/12 of screen */}
-          <div className="lg:col-span-4">
-            <RecentTrades />
-          </div>
-        </div>
+          <TabsContent value="security" className="space-y-6">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+              <div className="lg:col-span-6">
+                <TwoFactorAuth />
+              </div>
+              <div className="lg:col-span-6">
+                {/* Additional security content could go here */}
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
-  );
-};
-
-// Badge component for the AI insights
-const Badge = ({ children, className }: { children: React.ReactNode, className?: string }) => {
-  return (
-    <span className={`px-2 py-1 rounded text-xs font-medium ${className}`}>
-      {children}
-    </span>
   );
 };
 
