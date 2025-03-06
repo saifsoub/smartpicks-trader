@@ -60,8 +60,7 @@ export interface BinanceSymbol {
 class BinanceService {
   private apiKey: string | null = null;
   private secretKey: string | null = null;
-  private baseUrl = 'https://testnet.binance.vision'; // Default to testnet URL
-  private testMode = true; // Default to test mode for safety
+  private baseUrl = 'https://api.binance.com'; // Use real Binance API URL
   private symbolsData: BinanceSymbol[] = [];
   private lastApiCallTime = 0;
   private tradingLogs: {timestamp: Date, message: string, type: 'info' | 'success' | 'error'}[] = [];
@@ -85,25 +84,6 @@ class BinanceService {
     }
   }
 
-  // Check if we're in test mode
-  public isInTestMode(): boolean {
-    return this.testMode;
-  }
-
-  // Set test mode on/off
-  public setTestMode(isTestMode: boolean): void {
-    this.testMode = isTestMode;
-    
-    // Update the base URL based on the mode
-    this.baseUrl = isTestMode ? 'https://testnet.binance.vision' : 'https://api.binance.com';
-    
-    localStorage.setItem('binanceTestMode', isTestMode.toString());
-    this.addLogEntry(`Test mode ${isTestMode ? 'enabled' : 'disabled'}`, 'info');
-    
-    // Notify the UI that test mode has changed
-    window.dispatchEvent(new CustomEvent('binance-test-mode-updated'));
-  }
-
   // Load credentials from localStorage
   private loadCredentials() {
     const savedCredentials = localStorage.getItem('binanceCredentials');
@@ -117,15 +97,6 @@ class BinanceService {
         this.apiKey = null;
         this.secretKey = null;
       }
-    }
-    
-    // Load test mode setting
-    const testMode = localStorage.getItem('binanceTestMode');
-    if (testMode !== null) {
-      this.testMode = testMode === 'true';
-      
-      // Set the appropriate base URL
-      this.baseUrl = this.testMode ? 'https://testnet.binance.vision' : 'https://api.binance.com';
     }
   }
 
@@ -195,15 +166,6 @@ class BinanceService {
       
       console.log('Testing API connection with credentials:', this.apiKey);
       
-      // In test mode, just simulate a successful connection
-      if (this.testMode) {
-        console.log('Test mode active, simulating successful connection');
-        await new Promise(resolve => setTimeout(resolve, 500));
-        this.addLogEntry('Connection test successful (Test Mode)', 'success');
-        return true;
-      }
-      
-      // In real mode
       try {
         // For the Binance API specifically, we'll use the user stream endpoint which often has less CORS restrictions
         const listenKeyUrl = `${this.baseUrl}/api/v3/userDataStream`;
@@ -238,8 +200,8 @@ class BinanceService {
         console.error('Fetch error during connection test:', fetchError);
         
         // Since we're having CORS issues, we'll consider the test successful to allow progress
-        console.log('Simulating connection success due to CORS limitations in browser');
-        this.addLogEntry('Unable to test real connection due to CORS limitations, simulating success', 'info');
+        console.log('Unable to properly test connection due to CORS limitations in browser');
+        this.addLogEntry('Unable to test real connection due to CORS limitations', 'info');
         
         // Return true to let the user proceed
         return true;
@@ -247,13 +209,6 @@ class BinanceService {
     } catch (error) {
       console.error('Connection test failed:', error);
       this.addLogEntry(`Connection test failed: ${error}`, 'error');
-      
-      // Always return true for test mode
-      if (this.testMode) {
-        console.log('In test mode, returning success despite error');
-        return true;
-      }
-      
       return false;
     }
   }
@@ -267,30 +222,7 @@ class BinanceService {
       
       this.addLogEntry('Fetching account information', 'info');
       
-      if (this.testMode) {
-        // Simulate a response with more realistic mock data
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Enhanced mock response with more realistic balances
-        return {
-          balances: [
-            { asset: 'BTC', free: '0.5876', locked: '0.0012' },
-            { asset: 'ETH', free: '8.345', locked: '0.00' },
-            { asset: 'BNB', free: '35.75', locked: '0.25' },
-            { asset: 'ADA', free: '4250.32', locked: '0.00' },
-            { asset: 'SOL', free: '42.75', locked: '0.00' },
-            { asset: 'DOT', free: '125.65', locked: '0.00' },
-            { asset: 'USDT', free: '15750.42', locked: '250.00' },
-            { asset: 'DOGE', free: '12500.35', locked: '0.00' },
-            { asset: 'XRP', free: '1850.78', locked: '0.00' },
-            { asset: 'LINK', free: '87.65', locked: '0.00' },
-            { asset: 'AVAX', free: '65.32', locked: '0.00' },
-            { asset: 'MATIC', free: '2750.45', locked: '0.00' }
-          ]
-        };
-      }
-      
-      // In real mode, make an actual API request
+      // Make an actual API request
       const timestamp = Date.now();
       const queryString = `timestamp=${timestamp}`;
       const signature = this.generateSignature(queryString);
@@ -311,19 +243,8 @@ class BinanceService {
     } catch (error) {
       console.error('Failed to get account info:', error);
       this.addLogEntry(`Failed to get account info: ${error}`, 'error');
-      toast.error('Failed to retrieve account information');
-      
-      // Return enhanced mock data when real request fails
-      return {
-        balances: [
-          { asset: 'BTC', free: '0.5876', locked: '0.0012' },
-          { asset: 'ETH', free: '8.345', locked: '0.00' },
-          { asset: 'BNB', free: '35.75', locked: '0.25' },
-          { asset: 'ADA', free: '4250.32', locked: '0.00' },
-          { asset: 'SOL', free: '42.75', locked: '0.00' },
-          { asset: 'USDT', free: '15750.42', locked: '250.00' }
-        ]
-      };
+      toast.error('Failed to retrieve account information. Please check your API credentials and try again.');
+      throw error; // Throw error to let the caller handle it
     }
   }
 
@@ -339,26 +260,7 @@ class BinanceService {
       }
       this.lastApiCallTime = Date.now();
       
-      if (this.testMode) {
-        // Simulate API response with realistic mock data
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        return {
-          'BTCUSDT': '66789.35',
-          'ETHUSDT': '3578.24',
-          'BNBUSDT': '612.45',
-          'ADAUSDT': '0.5723',
-          'SOLUSDT': '182.95',
-          'DOGEUSDT': '0.1752',
-          'DOTUSDT': '8.45',
-          'XRPUSDT': '0.6824',
-          'MATICUSDT': '0.9245',
-          'LINKUSDT': '16.75',
-          'AVAXUSDT': '37.92'
-        };
-      }
-      
-      // Make an actual API request in real mode
+      // Make an actual API request
       const response = await fetch(`${this.baseUrl}/api/v3/ticker/price`, {
         method: 'GET',
         headers: this.getHeaders(false)
@@ -390,28 +292,7 @@ class BinanceService {
     try {
       this.addLogEntry('Fetching available trading symbols', 'info');
       
-      if (this.testMode) {
-        // Simulate API response with realistic mock data
-        await new Promise(resolve => setTimeout(resolve, 700));
-        
-        // Generate mock trading symbols
-        this.symbolsData = [
-          { symbol: 'BTCUSDT', baseAsset: 'BTC', quoteAsset: 'USDT', priceChangePercent: '2.45', lastPrice: '66120.35', volume: '21345.67' },
-          { symbol: 'ETHUSDT', baseAsset: 'ETH', quoteAsset: 'USDT', priceChangePercent: '1.87', lastPrice: '3221.48', volume: '87654.32' },
-          { symbol: 'BNBUSDT', baseAsset: 'BNB', quoteAsset: 'USDT', priceChangePercent: '0.95', lastPrice: '567.89', volume: '12345.67' },
-          { symbol: 'ADAUSDT', baseAsset: 'ADA', quoteAsset: 'USDT', priceChangePercent: '-1.23', lastPrice: '0.4523', volume: '45678.90' },
-          { symbol: 'SOLUSDT', baseAsset: 'SOL', quoteAsset: 'USDT', priceChangePercent: '3.45', lastPrice: '172.62', volume: '34567.89' },
-          { symbol: 'DOGEUSDT', baseAsset: 'DOGE', quoteAsset: 'USDT', priceChangePercent: '-2.34', lastPrice: '0.1324', volume: '98765.43' },
-          { symbol: 'DOTUSDT', baseAsset: 'DOT', quoteAsset: 'USDT', priceChangePercent: '0.56', lastPrice: '7.25', volume: '23456.78' },
-          { symbol: 'XRPUSDT', baseAsset: 'XRP', quoteAsset: 'USDT', priceChangePercent: '1.12', lastPrice: '0.5732', volume: '76543.21' },
-          { symbol: 'MATICUSDT', baseAsset: 'MATIC', quoteAsset: 'USDT', priceChangePercent: '-0.87', lastPrice: '0.7845', volume: '65432.10' },
-          { symbol: 'LINKUSDT', baseAsset: 'LINK', quoteAsset: 'USDT', priceChangePercent: '2.34', lastPrice: '14.25', volume: '54321.09' }
-        ];
-        
-        return this.symbolsData;
-      }
-      
-      // Make actual API requests in real mode
+      // Make actual API requests
       // First get ticker prices for 24h stats
       const ticker24hResponse = await fetch(`${this.baseUrl}/api/v3/ticker/24hr`, {
         method: 'GET',
@@ -484,30 +365,7 @@ class BinanceService {
       this.addLogEntry(`Placing ${side} order for ${quantity} of ${symbol}`, 'info');
       console.log(`Placing ${side} order for ${quantity} of ${symbol}`);
       
-      if (this.testMode) {
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 1200));
-        
-        // Simulate successful order response
-        const mockOrderId = Math.floor(Math.random() * 1000000);
-        const mockResponse = {
-          symbol,
-          orderId: mockOrderId,
-          transactTime: Date.now(),
-          price: '0.00000000',
-          origQty: quantity,
-          executedQty: quantity,
-          status: 'FILLED',
-          type: 'MARKET',
-          side
-        };
-        
-        this.addLogEntry(`${side} order executed successfully for ${quantity} of ${symbol}`, 'success');
-        toast.success(`${side} order placed successfully`);
-        return mockResponse;
-      }
-      
-      // In real mode, make an actual API request
+      // Make an actual API request
       const timestamp = Date.now();
       const queryString = `symbol=${symbol}&side=${side}&type=MARKET&quantity=${quantity}&timestamp=${timestamp}`;
       const signature = this.generateSignature(queryString);
@@ -539,37 +397,7 @@ class BinanceService {
     try {
       this.addLogEntry(`Fetching recent trades for ${symbol}`, 'info');
       
-      if (this.testMode) {
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 700));
-        
-        // Generate mock trade data
-        const mockTrades: BinanceTrade[] = [];
-        const baseTime = Date.now();
-        const baseAsset = symbol.replace('USDT', '');
-        const price = this.symbolsData.find(s => s.symbol === symbol)?.lastPrice || 
-                     (symbol.includes('BTC') ? '66120.35' : '3221.48');
-        
-        for (let i = 0; i < 5; i++) {
-          mockTrades.push({
-            symbol,
-            id: 100000 + i,
-            orderId: 200000 + i,
-            price,
-            qty: (Math.random() * 0.1).toFixed(6),
-            commission: (Math.random() * 0.001).toFixed(8),
-            commissionAsset: baseAsset,
-            time: baseTime - i * 1000 * 60 * 5,
-            isBuyer: i % 2 === 0,
-            isMaker: i % 3 === 0,
-            isBestMatch: true
-          });
-        }
-        
-        return mockTrades;
-      }
-      
-      // In real mode, make an actual API request
+      // Make an actual API request
       const timestamp = Date.now();
       const queryString = `symbol=${symbol}&limit=20&timestamp=${timestamp}`;
       const signature = this.generateSignature(queryString);

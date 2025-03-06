@@ -222,7 +222,7 @@ class TradingService {
     // This is where the actual trading logic would be implemented
     // In a real implementation, you would fetch historical data and apply indicators
     
-    // Placeholder implementation - in a real system this would use actual technical analysis
+    // For now this is a placeholder implementation
     console.log(`Analyzing ${strategy.name} for ${strategy.symbol} at price $${currentPrice}`);
     
     // Implement different strategy logics
@@ -230,8 +230,8 @@ class TradingService {
     let reason = 'No signal generated';
     
     if (strategy.name === "RSI + MACD Crossover") {
-      // Simulate RSI + MACD strategy
-      // In a real implementation, you would calculate actual RSI and MACD values
+      // Here you would implement real RSI + MACD strategy logic
+      // This is just a placeholder
       const randomValue = Math.random();
       
       if (randomValue < 0.1) {
@@ -242,7 +242,8 @@ class TradingService {
         reason = 'RSI overbought + MACD bearish crossover detected';
       }
     } else if (strategy.name === "Bollinger Breakout") {
-      // Simulate Bollinger Bands strategy
+      // Here you would implement real Bollinger Bands strategy logic
+      // This is just a placeholder
       const randomValue = Math.random();
       
       if (randomValue < 0.1) {
@@ -272,13 +273,12 @@ class TradingService {
       // Log the signal
       console.log(`Executing ${signal.action} for ${signal.symbol} at $${signal.price}: ${signal.reason}`);
       
-      // In a real implementation, this would execute actual trades
-      // For now, we'll just log it and update the strategy performance
-      // const orderResult = await binanceService.placeMarketOrder(
-      //   signal.symbol,
-      //   signal.action,
-      //   quantity
-      // );
+      // Execute actual trade using Binance API
+      const orderResult = await binanceService.placeMarketOrder(
+        signal.symbol,
+        signal.action,
+        quantity
+      );
       
       // Update strategy statistics
       const strategy = this.getStrategyById(signal.strategy.id);

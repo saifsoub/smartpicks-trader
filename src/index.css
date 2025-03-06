@@ -135,12 +135,17 @@
   }
   
   /* Ensure all table headers have good contrast */
-  th.text-slate-400 {
+  th.text-slate-400, th.text-gray-500, th.text-gray-600 {
     @apply text-gray-100;
   }
   
   /* Fix for dark text on dark backgrounds */
-  .text-black, .text-gray-900 {
+  .text-black, .text-gray-900, .text-gray-800, .text-gray-700 {
+    @apply text-white;
+  }
+  
+  /* Ensure tables have good text contrast */
+  table tbody tr td {
     @apply text-white;
   }
 }

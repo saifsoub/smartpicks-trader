@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, ArrowUp, ArrowDown, DollarSign, AlertTriangle, Settings, Info } from "lucide-react";
+import { RefreshCw, ArrowUp, ArrowDown, DollarSign, AlertTriangle, Settings } from "lucide-react";
 import binanceService, { BinanceBalance } from "@/services/binanceService";
 import { toast } from "sonner";
 
@@ -17,8 +17,6 @@ const PortfolioSummary: React.FC = () => {
   const [totalValue, setTotalValue] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [testMode, setTestMode] = useState(false);
-  const [dataSource, setDataSource] = useState<'real' | 'test'>('real');
   
   useEffect(() => {
     // Check initial connection state and load portfolio
@@ -27,7 +25,7 @@ const PortfolioSummary: React.FC = () => {
     // Refresh portfolio data more frequently (every 30 seconds)
     const interval = setInterval(() => {
       if (isConnected) {
-        loadPortfolio(false);
+        loadPortfolio();
       }
     }, 30000);
     
@@ -39,26 +37,13 @@ const PortfolioSummary: React.FC = () => {
     
     window.addEventListener('binance-credentials-updated', handleCredentialsUpdate);
     
-    // Also listen for test mode changes
-    const handleTestModeUpdate = () => {
-      console.log("Test mode updated, refreshing portfolio");
-      checkConnectionAndLoadPortfolio();
-    };
-    
-    window.addEventListener('binance-test-mode-updated', handleTestModeUpdate);
-    
     return () => {
       clearInterval(interval);
       window.removeEventListener('binance-credentials-updated', handleCredentialsUpdate);
-      window.removeEventListener('binance-test-mode-updated', handleTestModeUpdate);
     };
   }, [isConnected]);
   
   const checkConnectionAndLoadPortfolio = async () => {
-    // Check if test mode is enabled
-    const inTestMode = binanceService.isInTestMode();
-    setTestMode(inTestMode);
-    
     if (!binanceService.hasCredentials()) {
       setIsConnected(false);
       return;
@@ -68,122 +53,55 @@ const PortfolioSummary: React.FC = () => {
     setLoadError(null);
     
     try {
-      // Always set connected to true in test mode
-      if (inTestMode) {
-        setIsConnected(true);
-        await loadPortfolio(true);
-        return;
-      }
-      
-      // For real mode, check connection but be forgiving with errors
+      // Check connection
       try {
         await binanceService.testConnection();
         setIsConnected(true); // Assume connected even if test has issues
-        await loadPortfolio(false);
+        await loadPortfolio();
       } catch (error) {
         console.error("Connection test error:", error);
         // Still set connected if we have credentials, despite errors
         // This helps with CORS issues in browser environment
         setIsConnected(true);
-        await loadPortfolio(false);
+        await loadPortfolio();
       }
     } catch (error) {
       console.error("Failed to test connection:", error);
-      
-      // Still set connected to true in test mode even if error occurs
-      if (inTestMode) {
-        setIsConnected(true);
-        await loadPortfolio(true);
-      } else {
-        setIsConnected(false);
-      }
+      setIsConnected(false);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const loadPortfolio = async (forceTestData: boolean = false) => {
+  const loadPortfolio = async () => {
     try {
       setIsLoading(true);
       setLoadError(null);
       
-      // If we're forcing test data, just load it directly
-      if (forceTestData || testMode) {
-        loadTestData();
-        setDataSource('test');
-        return;
+      // Get account balances
+      const accountInfo = await binanceService.getAccountInfo();
+      
+      if (!accountInfo || !accountInfo.balances) {
+        throw new Error("Invalid account data received");
       }
       
-      // Try to get real account balances
-      try {
-        // Get account balances
-        const accountInfo = await binanceService.getAccountInfo();
-        
-        if (!accountInfo || !accountInfo.balances) {
-          throw new Error("Invalid account data received");
-        }
-        
-        // Get current prices to calculate USD values
-        const prices = await binanceService.getPrices();
-        
-        // Get symbol info for percent changes
-        const symbols = await binanceService.getSymbols();
-        
-        // Process the data with the account info and returned prices/symbols
-        processPortfolioData(accountInfo, prices, symbols);
-        setDataSource('real');
-      } catch (error) {
-        console.error("Failed to load real portfolio data:", error);
-        setLoadError(error instanceof Error ? error.message : "Failed to load real portfolio data");
-        toast.error("Failed to load real balance data, using test data instead");
-        
-        // Use test data when real data fails
-        loadTestData();
-        setDataSource('test');
-      }
+      // Get current prices to calculate USD values
+      const prices = await binanceService.getPrices();
+      
+      // Get symbol info for percent changes
+      const symbols = await binanceService.getSymbols();
+      
+      // Process the data with the account info and returned prices/symbols
+      processPortfolioData(accountInfo, prices, symbols);
     } catch (error) {
-      console.error("Failed to load portfolio:", error);
+      console.error("Failed to load portfolio data:", error);
       setLoadError(error instanceof Error ? error.message : "Failed to load portfolio data");
-      toast.error("Failed to load portfolio data");
+      toast.error("Failed to load portfolio data. Please check your API connection.");
       setBalances([]);
       setTotalValue(0);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // Helper function to load test data
-  const loadTestData = () => {
-    const testData = {
-      balances: [
-        { asset: 'BTC', free: '0.0034', locked: '0.0000' },
-        { asset: 'ETH', free: '0.057', locked: '0.00' },
-        { asset: 'BNB', free: '0.12', locked: '0.00' },
-        { asset: 'USDT', free: '127.42', locked: '0.00' },
-        { asset: 'ADA', free: '55.23', locked: '0.00' },
-        { asset: 'SOL', free: '0.24', locked: '0.00' },
-      ]
-    };
-    
-    // Mock prices for test mode
-    const mockPrices = {
-      'BTCUSDT': '66789.35',
-      'ETHUSDT': '3578.24',
-      'BNBUSDT': '612.45',
-      'ADAUSDT': '0.5723',
-      'SOLUSDT': '182.95',
-    };
-    
-    // Mock symbols for test mode
-    const mockSymbols = [
-      { symbol: 'BTCUSDT', baseAsset: 'BTC', quoteAsset: 'USDT', priceChangePercent: '2.75', lastPrice: '66789.35', volume: '21345.67' },
-      { symbol: 'ETHUSDT', baseAsset: 'ETH', quoteAsset: 'USDT', priceChangePercent: '3.42', lastPrice: '3578.24', volume: '87654.32' },
-      { symbol: 'BNBUSDT', baseAsset: 'BNB', quoteAsset: 'USDT', priceChangePercent: '1.25', lastPrice: '612.45', volume: '12345.67' },
-      { symbol: 'ADAUSDT', baseAsset: 'ADA', quoteAsset: 'USDT', priceChangePercent: '0.85', lastPrice: '0.5723', volume: '45678.90' },
-      { symbol: 'SOLUSDT', baseAsset: 'SOL', quoteAsset: 'USDT', priceChangePercent: '4.65', lastPrice: '182.95', volume: '34567.89' },
-    ];
-    
-    processPortfolioData(testData, mockPrices, mockSymbols);
   };
   
   // Helper function to process portfolio data
@@ -246,7 +164,7 @@ const PortfolioSummary: React.FC = () => {
           <Button 
             variant="ghost" 
             size="sm" 
-            onClick={() => loadPortfolio(false)}
+            onClick={() => loadPortfolio()}
             disabled={isLoading}
             className="text-slate-200 hover:text-white hover:bg-slate-800"
           >
@@ -276,33 +194,22 @@ const PortfolioSummary: React.FC = () => {
           </div>
         ) : (
           <>
-            {testMode && (
-              <div className="mb-4 p-3 rounded-md bg-indigo-900/20 border border-indigo-800">
+            {loadError && (
+              <div className="mb-4 p-3 rounded-md bg-red-900/20 border border-red-800">
                 <div className="flex items-start">
-                  <Info className="h-5 w-5 text-indigo-300 mr-2 mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-indigo-200">
-                    Running in test mode with simulated data. This simulates connection to Binance API with demo data.
-                  </p>
-                </div>
-              </div>
-            )}
-            
-            {dataSource === 'test' && !testMode && (
-              <div className="mb-4 p-3 rounded-md bg-yellow-900/20 border border-yellow-800">
-                <div className="flex items-start">
-                  <AlertTriangle className="h-5 w-5 text-yellow-300 mr-2 mt-0.5 flex-shrink-0" />
+                  <AlertTriangle className="h-5 w-5 text-red-300 mr-2 mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="text-sm text-yellow-200 font-medium">
-                      Displaying test data due to API connection issues
+                    <p className="text-sm text-red-200 font-medium">
+                      Error loading portfolio data
                     </p>
-                    <p className="text-xs text-yellow-300 mt-1">
-                      We couldn't retrieve your real balances from Binance. This could be due to CORS restrictions in the browser.
+                    <p className="text-xs text-red-300 mt-1">
+                      {loadError}
                     </p>
                     <Button 
                       variant="outline" 
                       size="sm"
-                      className="mt-2 border-yellow-800 bg-yellow-900/30 text-yellow-200 hover:bg-yellow-900/50"
-                      onClick={() => loadPortfolio(false)}
+                      className="mt-2 border-red-800 bg-red-900/30 text-red-200 hover:bg-red-900/50"
+                      onClick={() => loadPortfolio()}
                     >
                       <RefreshCw className="mr-2 h-3 w-3" />
                       Try again
@@ -363,34 +270,17 @@ const PortfolioSummary: React.FC = () => {
                   </div>
                 ) : (
                   <div>
-                    {loadError ? (
-                      <div className="p-3 rounded-md bg-red-900/20 border border-red-800 mb-3">
-                        <p className="text-red-200">Error: {loadError}</p>
-                      </div>
-                    ) : null}
                     <p>No assets found in your Binance account</p>
                     <p className="text-sm text-slate-300 mt-1">
-                      {testMode ? 
-                        "Currently in test mode - using simulated data" : 
-                        "Using live Binance API"
-                      }
+                      Using live Binance API
                     </p>
                     <Button 
                       variant="link" 
                       className="text-blue-300 p-0 h-auto mt-3"
-                      onClick={() => loadPortfolio(false)}
+                      onClick={() => loadPortfolio()}
                     >
                       Refresh portfolio
                     </Button>
-                    {!testMode && (
-                      <Button 
-                        variant="link" 
-                        className="text-blue-300 p-0 h-auto mt-3 ml-3"
-                        onClick={() => loadPortfolio(true)}
-                      >
-                        Show sample data
-                      </Button>
-                    )}
                   </div>
                 )}
               </div>
