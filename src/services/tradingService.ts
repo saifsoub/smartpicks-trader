@@ -324,14 +324,14 @@ class TradingService {
     for (const strategy of activeStrategies) {
       try {
         const prices = await binanceService.getPrices();
-        const currentPrice = prices[strategy.symbol];
+        const priceStr = prices[strategy.symbol];
         
-        if (!currentPrice) {
+        if (!priceStr) {
           console.error(`Price not found for symbol ${strategy.symbol}`);
           continue;
         }
 
-        const signal = await this.analyzeStrategy(strategy, currentPrice);
+        const signal = await this.analyzeStrategy(strategy, priceStr);
         
         if (signal.action !== 'HOLD') {
           this.executeTrade(signal);
@@ -792,7 +792,7 @@ class TradingService {
         continue;
       }
       
-      leadingSpanA.push((conversionLine[i] + baseLine[i]) / 2);
+        leadingSpanA.push((conversionLine[i] + baseLine[i]) / 2);
     }
     
     for (let i = 0; i < highPrices.length; i++) {

@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RefreshCw, Clock, Check, AlertTriangle, Info, Trash2, ArrowDownUp } from "lucide-react";
@@ -45,6 +44,9 @@ const TradingActivityLog: React.FC = () => {
     
     window.addEventListener('binance-test-mode-updated', handleTestModeUpdate);
     
+    // Fetch available symbols from binance
+    fetchPopularSymbols();
+    
     // Fetch current price for the selected symbol
     fetchSymbolPrice();
     
@@ -58,6 +60,26 @@ const TradingActivityLog: React.FC = () => {
   useEffect(() => {
     fetchSymbolPrice();
   }, [tradeSymbol]);
+  
+  const fetchPopularSymbols = async () => {
+    try {
+      const symbols = await binanceService.getSymbols();
+      if (symbols && symbols.length > 0) {
+        // Get top 10 symbols by positive price change
+        const topSymbols = symbols
+          .filter(s => s.symbol.endsWith('USDT'))
+          .sort((a, b) => parseFloat(b.priceChangePercent) - parseFloat(a.priceChangePercent))
+          .slice(0, 10)
+          .map(s => s.symbol);
+          
+        if (topSymbols.length > 0) {
+          setPopularSymbols(topSymbols);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching symbols:", error);
+    }
+  };
 
   const fetchSymbolPrice = async () => {
     try {
