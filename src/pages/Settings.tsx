@@ -129,10 +129,16 @@ const Settings = () => {
             toast.success("Connection to Binance API successful");
             setConnectionStatus('success');
             setConnectedMessage("Connected to Binance API (Live Trading Mode)");
+            
+            // Force trigger an event after successful test
+            window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
           } else {
             toast.warning("API keys saved but connection test couldn't be completed. We'll proceed assuming your keys are valid.");
             setConnectionStatus('success');
             setConnectedMessage("API keys saved - connection status unverified");
+            
+            // Still trigger event
+            window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
           }
         } catch (connectionError) {
           console.error("Connection test error:", connectionError);
@@ -141,6 +147,9 @@ const Settings = () => {
           toast.warning("API keys saved but connection test couldn't be completed due to browser security restrictions. We'll proceed assuming your keys are valid.");
           setConnectionStatus('success');
           setConnectedMessage("API keys saved - connection status unverified");
+          
+          // Still trigger event
+          window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
         }
       } else {
         toast.error("Failed to save API keys");

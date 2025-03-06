@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, ArrowUp, ArrowDown, DollarSign, AlertTriangle, Settings } from "lucide-react";
+import { RefreshCw, ArrowUp, ArrowDown, DollarSign, AlertTriangle, Settings, Info } from "lucide-react";
 import binanceService, { BinanceBalance } from "@/services/binanceService";
 import { toast } from "sonner";
 
@@ -16,12 +17,13 @@ const PortfolioSummary: React.FC = () => {
   const [totalValue, setTotalValue] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string | null>(null);
   
   useEffect(() => {
     // Check initial connection state and load portfolio
     checkConnectionAndLoadPortfolio();
     
-    // Refresh portfolio data more frequently (every 30 seconds)
+    // Refresh portfolio data frequently (every 30 seconds)
     const interval = setInterval(() => {
       if (isConnected) {
         loadPortfolio();
@@ -43,8 +45,11 @@ const PortfolioSummary: React.FC = () => {
   }, [isConnected]);
   
   const checkConnectionAndLoadPortfolio = async () => {
+    setDebugInfo(`Checking connection... Has credentials: ${binanceService.hasCredentials()}`);
+    
     if (!binanceService.hasCredentials()) {
       setIsConnected(false);
+      setDebugInfo("No credentials found");
       return;
     }
     
@@ -53,20 +58,20 @@ const PortfolioSummary: React.FC = () => {
     
     try {
       // Check connection
-      try {
-        await binanceService.testConnection();
-        setIsConnected(true); // Assume connected even if test has issues
-        await loadPortfolio();
-      } catch (error) {
-        console.error("Connection test error:", error);
-        // Still set connected if we have credentials, despite errors
-        // This helps with CORS issues in browser environment
-        setIsConnected(true);
-        await loadPortfolio();
-      }
+      setDebugInfo("Testing connection...");
+      const testResult = await binanceService.testConnection();
+      setDebugInfo(`Connection test result: ${testResult}`);
+      
+      // Even if test fails, we'll try to load data
+      setIsConnected(true);
+      await loadPortfolio();
     } catch (error) {
       console.error("Failed to test connection:", error);
-      setIsConnected(false);
+      setDebugInfo(`Connection test error: ${error instanceof Error ? error.message : String(error)}`);
+      
+      // Still try to load portfolio even if connection test fails
+      setIsConnected(true);
+      await loadPortfolio();
     } finally {
       setIsLoading(false);
     }
@@ -76,33 +81,38 @@ const PortfolioSummary: React.FC = () => {
     try {
       setIsLoading(true);
       setLoadError(null);
+      setDebugInfo("Loading portfolio data...");
       
       // Get account balances
       const accountInfo = await binanceService.getAccountInfo();
+      setDebugInfo(`Account info received with ${accountInfo?.balances?.length || 0} balances`);
       
-      if (!accountInfo || !accountInfo.balances) {
+      if (!accountInfo || !accountInfo.balances || accountInfo.balances.length === 0) {
         console.warn("Invalid account data received or empty balances:", accountInfo);
-        setLoadError("Unable to load portfolio data. Your account may be empty or there was an API issue.");
+        setLoadError("No balances found in your account or there was an API issue.");
         setBalances([]);
         setTotalValue(0);
         return;
       }
       
-      console.log("Account info received:", accountInfo);
-      
       // Get current prices to calculate USD values
+      setDebugInfo("Fetching prices...");
       const prices = await binanceService.getPrices();
-      console.log("Prices received:", prices);
+      setDebugInfo(`Prices received for ${Object.keys(prices).length} symbols`);
       
       // Get symbol info for percent changes
+      setDebugInfo("Fetching symbols info...");
       const symbols = await binanceService.getSymbols();
-      console.log("Symbols received:", symbols);
+      setDebugInfo(`Symbol info received for ${symbols.length} symbols`);
       
-      // Process the data with the account info and returned prices/symbols
+      // Process the data
+      setDebugInfo("Processing portfolio data...");
       processPortfolioData(accountInfo, prices, symbols);
+      setDebugInfo("Portfolio data processed successfully");
     } catch (error) {
       console.error("Failed to load portfolio data:", error);
       setLoadError(error instanceof Error ? error.message : "Failed to load portfolio data");
+      setDebugInfo(`Error loading portfolio: ${error instanceof Error ? error.message : String(error)}`);
       toast.error("Failed to load portfolio data. Please check your API connection.");
       setBalances([]);
       setTotalValue(0);
@@ -147,6 +157,8 @@ const PortfolioSummary: React.FC = () => {
         })
         .sort((a: EnhancedBalance, b: EnhancedBalance) => b.usdValue - a.usdValue);
       
+      console.log("Processed balances:", significantBalances);
+      
       // Calculate total portfolio value
       const portfolioTotal = significantBalances.reduce(
         (sum: number, balance: EnhancedBalance) => sum + balance.usdValue, 
@@ -157,6 +169,7 @@ const PortfolioSummary: React.FC = () => {
       setTotalValue(portfolioTotal);
     } catch (err) {
       console.error("Error processing portfolio data:", err);
+      setDebugInfo(`Error processing data: ${err instanceof Error ? err.message : String(err)}`);
       setBalances([]);
       setTotalValue(0);
     }
@@ -200,6 +213,17 @@ const PortfolioSummary: React.FC = () => {
           </div>
         ) : (
           <>
+            {debugInfo && (
+              <div className="mb-4 p-2 rounded-md bg-slate-800 border border-slate-700 text-xs text-slate-300">
+                <div className="flex items-start">
+                  <Info className="h-4 w-4 text-blue-300 mr-1 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-mono">{debugInfo}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {loadError && (
               <div className="mb-4 p-3 rounded-md bg-red-900/20 border border-red-800">
                 <div className="flex items-start">
@@ -278,7 +302,7 @@ const PortfolioSummary: React.FC = () => {
                   <div>
                     <p>No assets found in your Binance account</p>
                     <p className="text-sm text-slate-300 mt-1">
-                      Using live Binance API
+                      {binanceService.isInTestMode() ? "Using test data mode" : "Using live Binance API"}
                     </p>
                     <Button 
                       variant="link" 
