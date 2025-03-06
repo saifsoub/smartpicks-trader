@@ -5,6 +5,15 @@ import { toast } from 'sonner';
 // Trading signals
 type TradingSignal = 'BUY' | 'SELL' | 'HOLD';
 
+// Trading bot settings interface
+interface BotSettings {
+  tradingPairs: string[];
+  riskLevel: number;
+  useTrailingStopLoss: boolean;
+  useTakeProfit: boolean;
+  useDynamicPositionSizing: boolean;
+}
+
 // Strategy interface for use throughout the application
 export interface Strategy {
   id: string;
@@ -359,12 +368,209 @@ class VolumeStrategy implements TradingStrategy {
   }
 }
 
+// New Divergence Strategy for spotting reversals
+class DivergenceStrategy implements TradingStrategy {
+  name = 'RSI Divergence';
+  description = 'Detects price/RSI divergences for potential reversals';
+  
+  async analyze(data: any): Promise<TradingSignal> {
+    try {
+      // Calculate RSI
+      const rsi = this.calculateRSI(data, 14);
+      
+      // Need enough data points
+      if (rsi.length < 10) return 'HOLD';
+      
+      // Extract price data (close prices)
+      const closePrices = data.slice(-rsi.length).map((candle: any) => parseFloat(candle[4]));
+      
+      // Look for bullish divergence
+      // Price making lower lows but RSI making higher lows
+      let bullishDivergence = false;
+      if (closePrices[closePrices.length - 1] < closePrices[closePrices.length - 3] &&
+          rsi[rsi.length - 1] > rsi[rsi.length - 3]) {
+        bullishDivergence = true;
+      }
+      
+      // Look for bearish divergence
+      // Price making higher highs but RSI making lower highs
+      let bearishDivergence = false;
+      if (closePrices[closePrices.length - 1] > closePrices[closePrices.length - 3] &&
+          rsi[rsi.length - 1] < rsi[rsi.length - 3]) {
+        bearishDivergence = true;
+      }
+      
+      if (bullishDivergence) {
+        // Confirm with oversold condition for higher probability
+        if (rsi[rsi.length - 1] < 40) {
+          return 'BUY';
+        }
+      }
+      
+      if (bearishDivergence) {
+        // Confirm with overbought condition for higher probability
+        if (rsi[rsi.length - 1] > 70) {
+          return 'SELL';
+        }
+      }
+      
+      return 'HOLD';
+    } catch (error) {
+      console.error('Error in Divergence strategy analysis:', error);
+      return 'HOLD';
+    }
+  }
+  
+  // Reuse RSI calculation from RSI strategy
+  private calculateRSI(data: any[], period: number): number[] {
+    const rsi: number[] = [];
+    const gains: number[] = [];
+    const losses: number[] = [];
+    
+    // Calculate price changes
+    for (let i = 1; i < data.length; i++) {
+      const change = parseFloat(data[i][4]) - parseFloat(data[i - 1][4]);
+      gains.push(change > 0 ? change : 0);
+      losses.push(change < 0 ? Math.abs(change) : 0);
+    }
+    
+    // Need at least 'period + 1' data points to calculate first RSI
+    if (data.length <= period + 1) {
+      return rsi;
+    }
+    
+    // Calculate initial average gain and loss
+    let avgGain = gains.slice(0, period).reduce((sum, gain) => sum + gain, 0) / period;
+    let avgLoss = losses.slice(0, period).reduce((sum, loss) => sum + loss, 0) / period;
+    
+    // Calculate first RSI
+    let rs = avgGain / (avgLoss === 0 ? 0.001 : avgLoss); // Avoid division by zero
+    rsi.push(100 - (100 / (1 + rs)));
+    
+    // Calculate remaining RSIs
+    for (let i = period; i < gains.length; i++) {
+      avgGain = ((avgGain * (period - 1)) + gains[i]) / period;
+      avgLoss = ((avgLoss * (period - 1)) + losses[i]) / period;
+      
+      rs = avgGain / (avgLoss === 0 ? 0.001 : avgLoss);
+      rsi.push(100 - (100 / (1 + rs)));
+    }
+    
+    return rsi;
+  }
+}
+
+// New Breakout Strategy
+class BreakoutStrategy implements TradingStrategy {
+  name = 'Support/Resistance Breakout';
+  description = 'Detects breakouts from key support/resistance levels';
+  
+  async analyze(data: any): Promise<TradingSignal> {
+    try {
+      if (data.length < 30) return 'HOLD';
+      
+      // Extract high and low prices
+      const highs = data.map((candle: any) => parseFloat(candle[2]));
+      const lows = data.map((candle: any) => parseFloat(candle[3]));
+      const closes = data.map((candle: any) => parseFloat(candle[4]));
+      const volumes = data.map((candle: any) => parseFloat(candle[5]));
+      
+      // Identify potential resistance levels (recent highs)
+      // We'll use a simple approach here - in a real strategy, this would be more sophisticated
+      const recentData = data.slice(-20);
+      const recentHighs = recentData.map((candle: any) => parseFloat(candle[2]));
+      const maxHigh = Math.max(...recentHighs.slice(0, -1)); // Excluding most recent candle
+      
+      // Identify potential support levels (recent lows)
+      const recentLows = recentData.map((candle: any) => parseFloat(candle[3]));
+      const minLow = Math.min(...recentLows.slice(0, -1)); // Excluding most recent candle
+      
+      // Get most recent close
+      const currentClose = closes[closes.length - 1];
+      const previousClose = closes[closes.length - 2];
+      
+      // Get recent average volume (for confirmation)
+      const avgVolume = volumes.slice(-10, -1).reduce((sum, vol) => sum + vol, 0) / 9;
+      const currentVolume = volumes[volumes.length - 1];
+      const volumeIncrease = currentVolume > avgVolume * 1.3; // 30% above average
+      
+      // Check for resistance breakout (bullish)
+      if (previousClose < maxHigh && currentClose > maxHigh && volumeIncrease) {
+        return 'BUY';
+      }
+      
+      // Check for support breakdown (bearish)
+      if (previousClose > minLow && currentClose < minLow && volumeIncrease) {
+        return 'SELL';
+      }
+      
+      return 'HOLD';
+    } catch (error) {
+      console.error('Error in Breakout strategy analysis:', error);
+      return 'HOLD';
+    }
+  }
+}
+
+// New Profit-Taking Strategy
+class ProfitTakingStrategy implements TradingStrategy {
+  name = 'Profit Taking';
+  description = 'Implements profit-taking rules based on price movement';
+  
+  async analyze(data: any): Promise<TradingSignal> {
+    try {
+      if (data.length < 10) return 'HOLD';
+      
+      // Extract price data
+      const closes = data.map((candle: any) => parseFloat(candle[4]));
+      const currentClose = closes[closes.length - 1];
+      
+      // Simple implementation for example purposes
+      // In a real strategy, this would check current positions and their entry prices
+      
+      // Calculate short-term momentum (example using 3-period ROC)
+      const roc = ((currentClose / closes[closes.length - 4]) - 1) * 100;
+      
+      // If we've seen strong positive momentum that's now slowing, take profits
+      if (roc > 3 && roc < 5) {
+        // Check if momentum is decreasing
+        const previousRoc = ((closes[closes.length - 2] / closes[closes.length - 5]) - 1) * 100;
+        if (roc < previousRoc) {
+          return 'SELL'; // Take profits
+        }
+      }
+      
+      // Check for potential reversal patterns
+      // This is simplified; real strategies would use more complex reversal patterns
+      const lastThreeCloses = closes.slice(-3);
+      if (lastThreeCloses[0] < lastThreeCloses[1] && lastThreeCloses[2] < lastThreeCloses[1]) {
+        // Potential bearish reversal (higher high followed by lower low)
+        return 'SELL'; // Take profits
+      }
+      
+      return 'HOLD';
+    } catch (error) {
+      console.error('Error in Profit Taking strategy analysis:', error);
+      return 'HOLD';
+    }
+  }
+}
+
 class TradingService {
   private isRunning: boolean = false;
   private strategies: TradingStrategy[] = [];
   private tradingInterval: ReturnType<typeof setInterval> | null = null;
   private tradingPairs: string[] = ['BTCUSDT', 'ETHUSDT'];
-  private positions: Record<string, { inPosition: boolean, entryPrice: number | null }> = {};
+  private positions: Record<string, { inPosition: boolean, entryPrice: number | null, stopLoss: number | null, takeProfit: number | null }> = {};
+  
+  // Bot settings with defaults for risk management
+  private botSettings: BotSettings = {
+    tradingPairs: ['BTCUSDT', 'ETHUSDT'],
+    riskLevel: 50, // 1-100 scale, higher means more aggressive
+    useTrailingStopLoss: false,
+    useTakeProfit: true,
+    useDynamicPositionSizing: true
+  };
   
   private strategyList: Strategy[] = [
     {
@@ -438,11 +644,19 @@ class TradingService {
       new SMAStrategy(),
       new RSIStrategy(),
       new MACDStrategy(),
-      new VolumeStrategy()
+      new VolumeStrategy(),
+      new DivergenceStrategy(),
+      new BreakoutStrategy(),
+      new ProfitTakingStrategy()
     ];
     
     for (const pair of this.tradingPairs) {
-      this.positions[pair] = { inPosition: false, entryPrice: null };
+      this.positions[pair] = { 
+        inPosition: false, 
+        entryPrice: null,
+        stopLoss: null,
+        takeProfit: null
+      };
     }
     
     const wasRunning = localStorage.getItem('botRunning') === 'true';
@@ -488,6 +702,29 @@ class TradingService {
   
   public getMarketSentiment(): Record<string, { score: number; trend: 'bullish' | 'bearish' | 'neutral' }> {
     return {...this.marketSentiment};
+  }
+  
+  public updateBotSettings(settings: Partial<BotSettings>): void {
+    this.botSettings = { ...this.botSettings, ...settings };
+    
+    // Apply trading pairs change if needed
+    if (settings.tradingPairs) {
+      this.tradingPairs = [...settings.tradingPairs];
+      
+      // Initialize position tracking for any new pairs
+      for (const pair of this.tradingPairs) {
+        if (!this.positions[pair]) {
+          this.positions[pair] = { 
+            inPosition: false, 
+            entryPrice: null,
+            stopLoss: null,
+            takeProfit: null
+          };
+        }
+      }
+    }
+    
+    console.log("Bot settings updated:", this.botSettings);
   }
   
   public isBotRunning(): boolean {
@@ -604,11 +841,17 @@ class TradingService {
       const klines = await binanceService.getKlines(pair, timeframe, 100);
       
       const signals: TradingSignal[] = [];
+      const strategyResults: Record<string, TradingSignal> = {};
+      
       for (const strategy of this.strategies) {
         const signal = await strategy.analyze(klines);
         signals.push(signal);
+        strategyResults[strategy.name] = signal;
         console.log(`${strategy.name} signal for ${pair} (${timeframe}): ${signal}`);
       }
+      
+      // Log complete strategy analysis for debugging
+      console.log(`Strategy results for ${pair} (${timeframe}):`, strategyResults);
       
       const finalSignal = this.determineFinalSignal(signals);
       console.log(`Final signal for ${pair} (${timeframe}): ${finalSignal}`);
@@ -630,21 +873,47 @@ class TradingService {
       else holdCount++;
     }
     
-    // More aggressive trading - execute if even just one timeframe has a strong signal
-    if (buyCount >= 1 && sellCount === 0) {
-      return 'BUY';
-    }
+    // Adjust signal thresholds based on risk level
+    const isAggressive = this.botSettings.riskLevel > 65;
+    const isConservative = this.botSettings.riskLevel < 35;
     
-    if (sellCount >= 1 && buyCount === 0) {
-      return 'SELL';
+    // For aggressive settings - trade on fewer confirmations
+    if (isAggressive) {
+      if (buyCount >= 1 && sellCount === 0) {
+        return 'BUY';
+      }
+      
+      if (sellCount >= 1 && buyCount === 0) {
+        return 'SELL';
+      }
+    } 
+    // For moderate settings - need at least 2 timeframes to agree
+    else if (!isConservative) {
+      if (buyCount >= 2 && sellCount === 0) {
+        return 'BUY';
+      }
+      
+      if (sellCount >= 2 && buyCount === 0) {
+        return 'SELL';
+      }
+    }
+    // For conservative settings - need strong agreement
+    else {
+      if (buyCount >= 2 && sellCount === 0 && signals.length >= 3) {
+        return 'BUY';
+      }
+      
+      if (sellCount >= 2 && buyCount === 0 && signals.length >= 3) {
+        return 'SELL';
+      }
     }
     
     // If conflicting signals, go with the majority
-    if (buyCount > sellCount) {
+    if (buyCount > sellCount && buyCount > holdCount) {
       return 'BUY';
     }
     
-    if (sellCount > buyCount) {
+    if (sellCount > buyCount && sellCount > holdCount) {
       return 'SELL';
     }
     
@@ -662,12 +931,27 @@ class TradingService {
       else holdCount++;
     }
     
-    if (buyCount > sellCount && buyCount > holdCount) {
+    // Adjust signal thresholds based on risk level
+    const requiredConfirmations = this.botSettings.riskLevel > 65 ? 1 : 
+                                this.botSettings.riskLevel > 35 ? 2 : 3;
+    
+    if (buyCount >= requiredConfirmations && sellCount === 0) {
       return 'BUY';
     }
     
-    if (sellCount > buyCount && sellCount > holdCount) {
+    if (sellCount >= requiredConfirmations && buyCount === 0) {
       return 'SELL';
+    }
+    
+    // For more aggressive trading with mixed signals
+    if (this.botSettings.riskLevel > 75) {
+      if (buyCount > sellCount && buyCount >= 2) {
+        return 'BUY';
+      }
+      
+      if (sellCount > buyCount && sellCount >= 2) {
+        return 'SELL';
+      }
     }
     
     return 'HOLD';
@@ -698,22 +982,55 @@ class TradingService {
       if (signal === 'BUY') {
         console.log(`Executing BUY order for ${pair} at $${price}`);
         
-        // Increase position size slightly for better profitability
-        const quantity = '0.0015';
+        // Calculate position size based on risk level and whether dynamic sizing is enabled
+        let quantity = '0.0015'; // Default size
+        
+        if (this.botSettings.useDynamicPositionSizing) {
+          // Scale position size based on risk level (0.001 to 0.003)
+          const baseSize = 0.001;
+          const riskMultiplier = this.botSettings.riskLevel / 50; // 1.0 at 50% risk
+          quantity = (baseSize * riskMultiplier * 1.5).toFixed(4);
+          console.log(`Dynamic position sizing: ${quantity} based on risk level ${this.botSettings.riskLevel}%`);
+        }
         
         await binanceService.placeMarketOrder(pair, 'BUY', quantity);
         
         position.inPosition = true;
         position.entryPrice = parseFloat(price);
         
+        // Set stop loss and take profit levels
+        if (position.entryPrice) {
+          // Calculate stop loss (1-5% below entry depending on risk level)
+          const stopLossPercent = 5 - (this.botSettings.riskLevel / 25); // Lower risk = larger stop (safer)
+          position.stopLoss = position.entryPrice * (1 - stopLossPercent/100);
+          
+          // Calculate take profit (2-8% above entry depending on risk level)
+          const takeProfitPercent = 2 + (this.botSettings.riskLevel / 20); // Higher risk = larger target
+          position.takeProfit = position.entryPrice * (1 + takeProfitPercent/100);
+          
+          console.log(`Set stop loss at $${position.stopLoss.toFixed(2)} (${stopLossPercent.toFixed(1)}% below entry)`);
+          console.log(`Set take profit at $${position.takeProfit.toFixed(2)} (${takeProfitPercent.toFixed(1)}% above entry)`);
+        }
+        
         // Update UI statistics - increment trades count
         this.updateTradeStatistics(true);
         
         await notificationService.notifyTrade(pair, signal, price);
+        
+        toast.success(`Bought ${pair} at $${parseFloat(price).toLocaleString()}`);
       } else if (signal === 'SELL') {
         console.log(`Executing SELL order for ${pair} at $${price}`);
         
+        // Use the same quantity from the buy
         const quantity = '0.0015';
+        
+        if (this.botSettings.useDynamicPositionSizing) {
+          // Use the same quantity calculation logic as BUY
+          const baseSize = 0.001;
+          const riskMultiplier = this.botSettings.riskLevel / 50;
+          const dynamicQuantity = (baseSize * riskMultiplier * 1.5).toFixed(4);
+          console.log(`Dynamic position sizing for sell: ${dynamicQuantity}`);
+        }
         
         await binanceService.placeMarketOrder(pair, 'SELL', quantity);
         
@@ -723,11 +1040,19 @@ class TradingService {
           console.log(`Closed position with ${percentChange.toFixed(2)}% ${priceDiff >= 0 ? 'profit' : 'loss'}`);
           
           // Update profit/loss statistics
-          this.updateTradeStatistics(false, percentChange >= 0, percentChange);
+          this.updateTradeStatistics(false, priceDiff >= 0, percentChange);
+          
+          if (priceDiff >= 0) {
+            toast.success(`Sold ${pair} for ${percentChange.toFixed(2)}% profit`);
+          } else {
+            toast.info(`Sold ${pair} with ${Math.abs(percentChange).toFixed(2)}% loss`);
+          }
         }
         
         position.inPosition = false;
         position.entryPrice = null;
+        position.stopLoss = null;
+        position.takeProfit = null;
         
         await notificationService.notifyTrade(pair, signal, price);
       }
@@ -754,17 +1079,24 @@ class TradingService {
       
       // Update win rate if this is a completed trade
       if (!isNewTrade) {
-        const wins = Math.round((parseInt(stats.winRate) / 100) * (stats.totalTrades - 1)) || 0;
-        const newWins = isWin ? wins + 1 : wins;
-        const newWinRate = ((newWins / stats.totalTrades) * 100).toFixed(0) + "%";
+        const totalCompletedTrades = stats.totalTrades;
+        let winCount = Math.round((parseInt(stats.winRate) / 100) * (totalCompletedTrades - 1)) || 0;
+        winCount = isWin ? winCount + 1 : winCount;
+        
+        // Calculate new win rate
+        const newWinRate = totalCompletedTrades > 0 ? 
+          ((winCount / totalCompletedTrades) * 100).toFixed(0) + "%" : "0%";
         stats.winRate = newWinRate;
         
         // Update profit/loss (convert existing value from string to number)
         const currentPL = parseFloat(stats.profitLoss.replace('$', ''));
-        // Assuming a fixed dollar amount per percentage for demonstration
-        const tradePL = percentChange * 2; // Each percentage point is worth $2
+        // Use actual percentage change and a position size multiplier
+        const positionSize = 100; // For demonstration purposes - $100 position size
+        const tradePL = (percentChange / 100) * positionSize;
         const newPL = (currentPL + tradePL).toFixed(2);
         stats.profitLoss = `$${newPL}`;
+        
+        console.log(`Updated statistics - Win rate: ${stats.winRate}, P/L: ${stats.profitLoss}`);
       }
       
       // Save updated statistics
@@ -774,6 +1106,58 @@ class TradingService {
       window.dispatchEvent(new CustomEvent('bot-statistics-updated'));
     } catch (error) {
       console.error('Error updating trade statistics:', error);
+    }
+  }
+  
+  private async checkPositions(): Promise<void> {
+    if (!this.isRunning) return;
+    
+    try {
+      // Get current prices
+      const prices = await binanceService.getPrices();
+      
+      for (const pair of this.tradingPairs) {
+        const position = this.positions[pair];
+        
+        // Skip if not in a position
+        if (!position.inPosition || !position.entryPrice) continue;
+        
+        const currentPrice = parseFloat(prices[pair]);
+        
+        // Check take profit
+        if (this.botSettings.useTakeProfit && position.takeProfit && currentPrice >= position.takeProfit) {
+          console.log(`Take profit triggered for ${pair} at $${currentPrice}`);
+          await this.executeTrade(pair, 'SELL', currentPrice.toString());
+          continue;
+        }
+        
+        // Check stop loss
+        if (position.stopLoss) {
+          // For trailing stop loss
+          if (this.botSettings.useTrailingStopLoss) {
+            // Update stop loss if price moves in favorable direction
+            if (currentPrice > position.entryPrice * 1.01) { // 1% profit buffer before trailing
+              // Calculate new stop loss (at X% below current price)
+              const trailingPercent = 3 - (this.botSettings.riskLevel / 50); // Tighter for higher risk
+              const newStopLoss = currentPrice * (1 - trailingPercent/100);
+              
+              // Only update if new stop loss is higher than current one
+              if (newStopLoss > position.stopLoss) {
+                console.log(`Updating trailing stop loss for ${pair} from $${position.stopLoss.toFixed(2)} to $${newStopLoss.toFixed(2)}`);
+                position.stopLoss = newStopLoss;
+              }
+            }
+          }
+          
+          // Check if stop loss is hit
+          if (currentPrice <= position.stopLoss) {
+            console.log(`Stop loss triggered for ${pair} at $${currentPrice}`);
+            await this.executeTrade(pair, 'SELL', currentPrice.toString());
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking positions:', error);
     }
   }
 }
