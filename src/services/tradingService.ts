@@ -345,8 +345,8 @@ class TradingService {
     }
   }
 
-  private async analyzeStrategy(strategy: Strategy, currentPrice: string): Promise<TradeSignal> {
-    console.log(`Analyzing ${strategy.name} for ${strategy.symbol} at price $${currentPrice}`);
+  private async analyzeStrategy(strategy: Strategy, price: string): Promise<TradeSignal> {
+    console.log(`Analyzing ${strategy.name} for ${strategy.symbol} at price $${price}`);
     
     let action: 'BUY' | 'SELL' | 'HOLD' = 'HOLD';
     let reason = 'No signal generated';
@@ -362,6 +362,7 @@ class TradingService {
       const highPrices = klines.map(kline => parseFloat(kline[2]));
       const lowPrices = klines.map(kline => parseFloat(kline[3]));
       const volumes = klines.map(kline => parseFloat(kline[5]));
+      const currentPrice = parseFloat(price);
       
       switch (strategy.name) {
         case "RSI + MACD Crossover": {
@@ -539,7 +540,7 @@ class TradingService {
       strategy,
       symbol: strategy.symbol,
       action,
-      price: currentPrice,
+      price,
       reason,
       timestamp: new Date()
     };

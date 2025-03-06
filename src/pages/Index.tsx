@@ -1,9 +1,10 @@
-
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
   ArrowUpDown, Bell, Settings, Brain, TrendingUp, LineChart, 
-  BadgeDollarSign, BarChart4, Robot, Zap, AlertTriangle,
+  BadgeDollarSign, BarChart4, Bot, Zap, AlertTriangle,
   ArrowUpRight, ArrowDownRight, Gauge, MessageSquare, AreaChart
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -319,7 +320,7 @@ const Index = () => {
                 {/* AI Strategy Recommendations */}
                 <div className="mt-4 p-4 rounded-lg bg-indigo-900/20 border border-indigo-800">
                   <div className="flex items-center mb-3">
-                    <Robot className="h-5 w-5 text-indigo-300 mr-2" />
+                    <Bot className="h-5 w-5 text-indigo-300 mr-2" />
                     <h3 className="text-lg font-medium text-indigo-100">AI Strategy Recommendations</h3>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

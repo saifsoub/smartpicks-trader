@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -18,43 +17,40 @@ const Settings = () => {
   const [connectionStatus, setConnectionStatus] = useState<'untested' | 'success' | 'error'>('untested');
   const [connectedMessage, setConnectedMessage] = useState("");
   
-  // Binance API settings
   const [apiKey, setApiKey] = useState("");
   const [secretKey, setSecretKey] = useState("");
   
-  // Notification settings
   const [telegramEnabled, setTelegramEnabled] = useState(false);
   const [telegramChatId, setTelegramChatId] = useState("");
   const [tradeNotifications, setTradeNotifications] = useState(true);
   const [dailySummary, setDailySummary] = useState(true);
+  const [marketAlerts, setMarketAlerts] = useState(true);
+  const [priceAlertThreshold, setPriceAlertThreshold] = useState(5);
   
-  // Load saved values on component mount and check connection
   useEffect(() => {
     loadSavedSettings();
     checkConnection();
   }, []);
   
   const loadSavedSettings = () => {
-    // Load Binance credentials if available
     const savedCredentials = localStorage.getItem('binanceCredentials');
     if (savedCredentials) {
       const credentials = JSON.parse(savedCredentials);
       setApiKey(credentials.apiKey || "");
-      // Don't show the actual secret key for security
       if (credentials.secretKey) {
         setSecretKey("••••••••••••••••••••••••••••••••");
       }
     }
     
-    // Load notification settings
     const settings = notificationService.getSettings();
     setTelegramEnabled(settings.telegramEnabled);
     setTelegramChatId(settings.telegramChatId);
     setTradeNotifications(settings.tradeNotificationsEnabled);
     setDailySummary(settings.dailySummaryEnabled);
+    setMarketAlerts(settings.marketAlertEnabled);
+    setPriceAlertThreshold(settings.priceAlertThreshold);
   };
   
-  // Check connection status immediately on page load
   const checkConnection = async () => {
     if (!binanceService.hasCredentials()) {
       setConnectionStatus('untested');
@@ -75,8 +71,6 @@ const Settings = () => {
     } catch (error) {
       console.error("Error testing connection:", error);
       setConnectionStatus('error');
-      
-      // More specific error message
       if (error instanceof Error) {
         setConnectedMessage(`Connection error: ${error.message}`);
       } else {
@@ -87,7 +81,6 @@ const Settings = () => {
     }
   };
   
-  // Save Binance API credentials
   const handleSaveApiKeys = async () => {
     if (!apiKey) {
       toast.error("API Key is required");
@@ -102,7 +95,6 @@ const Settings = () => {
     setConnectionStatus('untested');
     
     try {
-      // Validate key formats - basic length check
       if (apiKey.length < 20) {
         toast.error("API Key appears to be invalid (too short)");
         setConnectionStatus('error');
@@ -111,7 +103,6 @@ const Settings = () => {
         return;
       }
       
-      // Save credentials first
       const success = binanceService.saveCredentials({
         apiKey,
         secretKey: secretKey === "••••••••••••••••••••••••••••••••" 
@@ -123,32 +114,23 @@ const Settings = () => {
         toast.success("API keys saved successfully");
         
         try {
-          // Test connection
           const connectionTest = await binanceService.testConnection();
           if (connectionTest) {
             toast.success("Connection to Binance API successful");
             setConnectionStatus('success');
             setConnectedMessage("Connected to Binance API (Live Trading Mode)");
-            
-            // Force trigger an event after successful test
             window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
           } else {
             toast.warning("API keys saved but connection test couldn't be completed. We'll proceed assuming your keys are valid.");
             setConnectionStatus('success');
             setConnectedMessage("API keys saved - connection status unverified");
-            
-            // Still trigger event
             window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
           }
         } catch (connectionError) {
           console.error("Connection test error:", connectionError);
-          
-          // In case of CORS issues, still allow the user to proceed
           toast.warning("API keys saved but connection test couldn't be completed due to browser security restrictions. We'll proceed assuming your keys are valid.");
           setConnectionStatus('success');
           setConnectedMessage("API keys saved - connection status unverified");
-          
-          // Still trigger event
           window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
         }
       } else {
@@ -158,12 +140,10 @@ const Settings = () => {
       }
     } catch (error) {
       console.error("Error saving API keys:", error);
-      
       let errorMessage = "An error occurred while saving API keys";
       if (error instanceof Error) {
         errorMessage = error.message;
       }
-      
       toast.error(errorMessage);
       setConnectionStatus('error');
       setConnectedMessage(errorMessage);
@@ -172,13 +152,14 @@ const Settings = () => {
     }
   };
   
-  // Save notification settings and handle Telegram testing
   const handleSaveNotificationSettings = () => {
     const settings = {
       telegramEnabled,
       telegramChatId,
       tradeNotificationsEnabled: tradeNotifications,
-      dailySummaryEnabled: dailySummary
+      dailySummaryEnabled: dailySummary,
+      marketAlertEnabled: marketAlerts,
+      priceAlertThreshold: priceAlertThreshold
     };
     
     const success = notificationService.saveSettings(settings);
@@ -189,7 +170,6 @@ const Settings = () => {
     }
   };
   
-  // Test Telegram connection
   const handleTestTelegramConnection = async () => {
     if (!telegramEnabled || !telegramChatId) {
       toast.error("Please enable Telegram notifications and enter a username");
@@ -198,16 +178,16 @@ const Settings = () => {
     
     setIsTesting(true);
     
-    // First save the current settings
     const success = notificationService.saveSettings({
       telegramEnabled,
       telegramChatId,
       tradeNotificationsEnabled: tradeNotifications,
-      dailySummaryEnabled: dailySummary
+      dailySummaryEnabled: dailySummary,
+      marketAlertEnabled: marketAlerts,
+      priceAlertThreshold: priceAlertThreshold
     });
     
     if (success) {
-      // Then test the connection
       await notificationService.testTelegramConnection();
     } else {
       toast.error("Failed to save notification settings");
@@ -218,7 +198,6 @@ const Settings = () => {
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-950 text-white">
-      {/* Header */}
       <header className="border-b border-slate-800 bg-slate-900 px-4 py-3">
         <div className="container mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -236,11 +215,9 @@ const Settings = () => {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="container mx-auto flex-1 p-4">
         <h1 className="mb-6 text-2xl font-bold text-white">Settings</h1>
 
-        {/* Connection Status Banner */}
         {(connectionStatus !== 'untested' || binanceService.hasCredentials()) && (
           <div className={`mb-6 p-4 rounded-lg flex items-center justify-between ${
             connectionStatus === 'success' 
@@ -278,7 +255,6 @@ const Settings = () => {
         )}
 
         <div className="grid gap-6 md:grid-cols-2">
-          {/* API Configuration */}
           <Card className="bg-slate-900 border-slate-800 shadow-lg">
             <CardHeader>
               <CardTitle className="text-white">Binance API Configuration</CardTitle>
@@ -358,7 +334,6 @@ const Settings = () => {
             </CardContent>
           </Card>
 
-          {/* Notification Settings */}
           <Card className="bg-slate-900 border-slate-800 shadow-lg">
             <CardHeader>
               <CardTitle className="text-white">Notification Settings</CardTitle>
@@ -438,6 +413,35 @@ const Settings = () => {
                   onCheckedChange={setDailySummary}
                   disabled={!telegramEnabled}
                 />
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-slate-200">Market Alerts</Label>
+                  <p className="text-xs text-slate-300">Receive market analysis and price alerts</p>
+                </div>
+                <Switch 
+                  checked={marketAlerts}
+                  onCheckedChange={setMarketAlerts}
+                  disabled={!telegramEnabled}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="priceThreshold" className="text-slate-200">Price Alert Threshold (%)</Label>
+                <Input 
+                  id="priceThreshold" 
+                  type="number" 
+                  value={priceAlertThreshold}
+                  onChange={(e) => setPriceAlertThreshold(Number(e.target.value))}
+                  className="bg-slate-800 border-slate-700 text-white"
+                  disabled={!telegramEnabled || !marketAlerts}
+                  min="1"
+                  max="20"
+                />
+                <p className="text-xs text-slate-300">
+                  Minimum price change (%) to trigger an alert
+                </p>
               </div>
               
               <Button 
