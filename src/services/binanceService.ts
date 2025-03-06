@@ -170,6 +170,22 @@ class BinanceService {
     }
   }
 
+  // Generate HTTP headers for API requests
+  private getHeaders(requireAuth: boolean): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    };
+    
+    if (requireAuth) {
+      if (!this.apiKey) {
+        throw new Error('API key not set');
+      }
+      headers['X-MBX-APIKEY'] = this.apiKey;
+    }
+    
+    return headers;
+  }
+
   // Test API connection
   public async testConnection(): Promise<boolean> {
     try {
@@ -200,10 +216,7 @@ class BinanceService {
         // Create listen key request to test API keys
         const response = await fetch(listenKeyUrl, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-MBX-APIKEY': this.apiKey || ''
-          }
+          headers: this.getHeaders(true)
         });
         
         if (response.ok) {
