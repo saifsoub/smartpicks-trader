@@ -67,7 +67,9 @@ const TradingChart: React.FC<TradingChartProps> = ({ symbol: initialSymbol = "BT
       if (refreshInterval) {
         clearInterval(refreshInterval);
       }
-      clearInterval(newInterval);
+      if (newInterval) {
+        clearInterval(newInterval);
+      }
     };
   }, [symbol, interval]);
 
