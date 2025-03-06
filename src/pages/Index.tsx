@@ -1,12 +1,14 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowUpDown, Bell, ChevronDown, Settings } from "lucide-react";
+import { ArrowUpDown, Bell, Settings } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import TradingChart from "@/components/TradingChart";
 import BotStatus from "@/components/BotStatus";
 import ActiveStrategies from "@/components/ActiveStrategies";
 import RecentTrades from "@/components/RecentTrades";
+import TradingActivityLog from "@/components/TradingActivityLog";
+import PortfolioSummary from "@/components/PortfolioSummary";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -51,9 +53,9 @@ const Index = () => {
 
       {/* Main Content */}
       <main className="container mx-auto flex-1 p-4">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {/* Trading Chart - Takes 2/3 of screen on large displays */}
-          <div className="lg:col-span-2">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          {/* Trading Chart - Takes 8/12 of screen on large displays */}
+          <div className="lg:col-span-8">
             <Card className="bg-slate-900 border-slate-800 shadow-lg">
               <CardHeader className="border-b border-slate-800 pb-3">
                 <div className="flex items-center justify-between">
@@ -70,14 +72,20 @@ const Index = () => {
             </Card>
           </div>
 
-          {/* Right sidebar with bot status */}
-          <div className="space-y-6">
+          {/* Right sidebar with bot status and portfolio */}
+          <div className="lg:col-span-4 space-y-6">
             <BotStatus />
+            <PortfolioSummary />
             <ActiveStrategies />
           </div>
 
-          {/* Recent trades - full width */}
-          <div className="lg:col-span-3">
+          {/* Activity log - takes 8/12 of screen */}
+          <div className="lg:col-span-8">
+            <TradingActivityLog />
+          </div>
+          
+          {/* Recent trades - takes 4/12 of screen */}
+          <div className="lg:col-span-4">
             <RecentTrades />
           </div>
         </div>
