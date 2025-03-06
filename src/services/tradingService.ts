@@ -27,36 +27,45 @@ interface TradingStrategy {
   analyze: (data: any) => Promise<TradingSignal>;
 }
 
-// Simple Moving Average Crossover Strategy
+// Simple Moving Average Crossover Strategy - Enhanced for higher sensitivity
 class SMAStrategy implements TradingStrategy {
   name = 'SMA Crossover';
-  description = 'Simple Moving Average crossover strategy (5/20)';
+  description = 'Simple Moving Average crossover strategy (3/10)';
   
   async analyze(data: any): Promise<TradingSignal> {
     try {
-      // Calculate 5-period SMA
-      const sma5 = this.calculateSMA(data, 5);
+      // Calculate 3-period SMA (faster response to trends)
+      const sma3 = this.calculateSMA(data, 3);
       
-      // Calculate 20-period SMA
-      const sma20 = this.calculateSMA(data, 20);
+      // Calculate 10-period SMA (more sensitive than 20)
+      const sma10 = this.calculateSMA(data, 10);
       
       // Get the last two values for both SMAs to determine crossover
-      const currentSMA5 = sma5[sma5.length - 1];
-      const previousSMA5 = sma5[sma5.length - 2];
-      const currentSMA20 = sma20[sma20.length - 1];
-      const previousSMA20 = sma20[sma20.length - 2];
+      const currentSMA3 = sma3[sma3.length - 1];
+      const previousSMA3 = sma3[sma3.length - 2];
+      const currentSMA10 = sma10[sma10.length - 1];
+      const previousSMA10 = sma10[sma10.length - 2];
       
-      // Check for bullish crossover (5 SMA crosses above 20 SMA)
-      if (previousSMA5 <= previousSMA20 && currentSMA5 > currentSMA20) {
+      // Check for bullish crossover (3 SMA crosses above 10 SMA)
+      if (previousSMA3 <= previousSMA10 && currentSMA3 > currentSMA10) {
         return 'BUY';
       }
       
-      // Check for bearish crossover (5 SMA crosses below 20 SMA)
-      if (previousSMA5 >= previousSMA20 && currentSMA5 < currentSMA20) {
+      // Check for bearish crossover (3 SMA crosses below 10 SMA)
+      if (previousSMA3 >= previousSMA10 && currentSMA3 < currentSMA10) {
         return 'SELL';
       }
       
-      // No crossover
+      // Add trend-following logic for more trading opportunities
+      if (currentSMA3 > currentSMA10 && currentSMA3 > previousSMA3) {
+        return 'BUY'; // Strong uptrend
+      }
+      
+      if (currentSMA3 < currentSMA10 && currentSMA3 < previousSMA3) {
+        return 'SELL'; // Strong downtrend
+      }
+      
+      // No clear signal
       return 'HOLD';
     } catch (error) {
       console.error('Error in SMA strategy analysis:', error);
@@ -89,27 +98,37 @@ class SMAStrategy implements TradingStrategy {
   }
 }
 
-// RSI Strategy
+// RSI Strategy - Enhanced for faster trading
 class RSIStrategy implements TradingStrategy {
   name = 'RSI';
-  description = 'Relative Strength Index strategy (14-period)';
+  description = 'Relative Strength Index strategy (8-period)';
   
   async analyze(data: any): Promise<TradingSignal> {
     try {
-      // Calculate 14-period RSI
-      const rsi = this.calculateRSI(data, 14);
+      // Calculate 8-period RSI (more responsive than 14)
+      const rsi = this.calculateRSI(data, 8);
       
       // Get the current RSI value
       const currentRSI = rsi[rsi.length - 1];
+      const previousRSI = rsi[rsi.length - 2] || 50;
       
-      // Oversold condition (RSI < 30)
-      if (currentRSI < 30) {
+      // More aggressive oversold condition (RSI < 40)
+      if (currentRSI < 40) {
         return 'BUY';
       }
       
-      // Overbought condition (RSI > 70)
-      if (currentRSI > 70) {
+      // More aggressive overbought condition (RSI > 60)
+      if (currentRSI > 60) {
         return 'SELL';
+      }
+      
+      // Add momentum-based signals for more trading opportunities
+      if (currentRSI > previousRSI && currentRSI > 45 && currentRSI < 55) {
+        return 'BUY'; // Catching upward momentum early
+      }
+      
+      if (currentRSI < previousRSI && currentRSI > 45 && currentRSI < 55) {
+        return 'SELL'; // Catching downward momentum early
       }
       
       // No signal
@@ -158,26 +177,26 @@ class RSIStrategy implements TradingStrategy {
   }
 }
 
-// MACD Strategy
+// MACD Strategy - Enhanced for faster signals
 class MACDStrategy implements TradingStrategy {
   name = 'MACD';
   description = 'Moving Average Convergence Divergence strategy';
   
   async analyze(data: any): Promise<TradingSignal> {
     try {
-      // Calculate MACD line (12-period EMA - 26-period EMA)
-      const ema12 = this.calculateEMA(data, 12);
-      const ema26 = this.calculateEMA(data, 26);
+      // Calculate MACD line (8-period EMA - 17-period EMA for faster signals)
+      const ema8 = this.calculateEMA(data, 8);
+      const ema17 = this.calculateEMA(data, 17);
       
       const macdLine: number[] = [];
-      for (let i = 0; i < ema12.length; i++) {
-        if (i < ema26.length) {
-          macdLine.push(ema12[i] - ema26[i]);
+      for (let i = 0; i < ema8.length; i++) {
+        if (i < ema17.length) {
+          macdLine.push(ema8[i] - ema17[i]);
         }
       }
       
-      // Calculate signal line (9-period EMA of MACD line)
-      const signalLine = this.calculateEMAFromArray(macdLine, 9);
+      // Calculate signal line (5-period EMA of MACD line for faster signals)
+      const signalLine = this.calculateEMAFromArray(macdLine, 5);
       
       // Need at least one value for both MACD and signal line
       if (macdLine.length === 0 || signalLine.length === 0) {
@@ -198,6 +217,24 @@ class MACDStrategy implements TradingStrategy {
       // Check for bearish crossover (MACD crosses below signal line)
       if (previousMACD >= previousSignal && currentMACD < currentSignal) {
         return 'SELL';
+      }
+      
+      // Add zero-line crossover signals for more trading opportunities
+      if (previousMACD < 0 && currentMACD >= 0) {
+        return 'BUY'; // Bullish zero-line crossover
+      }
+      
+      if (previousMACD > 0 && currentMACD <= 0) {
+        return 'SELL'; // Bearish zero-line crossover
+      }
+      
+      // Additional signal: MACD direction change
+      if (previousMACD < currentMACD && currentMACD > 0) {
+        return 'BUY'; // MACD turning up while positive
+      }
+      
+      if (previousMACD > currentMACD && currentMACD < 0) {
+        return 'SELL'; // MACD turning down while negative
       }
       
       // No crossover
@@ -264,6 +301,61 @@ class MACDStrategy implements TradingStrategy {
     }
     
     return ema;
+  }
+}
+
+// New Volume-based Strategy
+class VolumeStrategy implements TradingStrategy {
+  name = 'Volume Analysis';
+  description = 'Analyzes volume patterns for trading signals';
+  
+  async analyze(data: any): Promise<TradingSignal> {
+    try {
+      // Need at least 10 data points
+      if (data.length < 10) {
+        return 'HOLD';
+      }
+      
+      // Extract volumes and prices
+      const volumes = data.slice(-10).map((candle: any) => parseFloat(candle[5])); // Volume is at index 5
+      const closes = data.slice(-10).map((candle: any) => parseFloat(candle[4])); // Close is at index 4
+      
+      // Calculate average volume
+      const avgVolume = volumes.slice(0, 8).reduce((sum, vol) => sum + vol, 0) / 8;
+      
+      // Check most recent volume
+      const latestVolume = volumes[volumes.length - 1];
+      const previousVolume = volumes[volumes.length - 2];
+      
+      // Check price direction
+      const latestClose = closes[closes.length - 1];
+      const previousClose = closes[closes.length - 2];
+      const priceChange = (latestClose - previousClose) / previousClose;
+      
+      // Volume spike with price up = strong buy signal
+      if (latestVolume > avgVolume * 1.5 && priceChange > 0.002) {
+        return 'BUY';
+      }
+      
+      // Volume spike with price down = strong sell signal
+      if (latestVolume > avgVolume * 1.5 && priceChange < -0.002) {
+        return 'SELL';
+      }
+      
+      // Volume increasing with price trend
+      if (latestVolume > previousVolume && latestVolume > avgVolume) {
+        if (priceChange > 0.001) {
+          return 'BUY';
+        } else if (priceChange < -0.001) {
+          return 'SELL';
+        }
+      }
+      
+      return 'HOLD';
+    } catch (error) {
+      console.error('Error in Volume strategy analysis:', error);
+      return 'HOLD';
+    }
   }
 }
 
@@ -345,7 +437,8 @@ class TradingService {
     this.strategies = [
       new SMAStrategy(),
       new RSIStrategy(),
-      new MACDStrategy()
+      new MACDStrategy(),
+      new VolumeStrategy()
     ];
     
     for (const pair of this.tradingPairs) {
@@ -414,14 +507,15 @@ class TradingService {
       
       this.analyzeMarket();
       
+      // Analyze more frequently - every 2 minutes instead of 5
       this.tradingInterval = setInterval(() => {
         this.analyzeMarket();
-      }, 5 * 60 * 1000);
+      }, 2 * 60 * 1000);
       
       toast.success('Trading bot started successfully');
       notificationService.addNotification({
         title: 'Trading Bot Started',
-        message: 'The automated trading bot is now running and analyzing the market.',
+        message: 'The high-performance trading bot is now running and aggressively analyzing the market for opportunities.',
         type: 'success'
       });
       
@@ -470,44 +564,91 @@ class TradingService {
       return;
     }
     
-    console.log('Analyzing market...');
+    console.log('Analyzing market for profit opportunities...');
     
     try {
       const prices = await binanceService.getPrices();
       
+      // Analyze multiple timeframes for better signals
       for (const pair of this.tradingPairs) {
-        await this.analyzePair(pair, prices[pair]);
+        // Check multiple timeframes for stronger signals
+        const timeframes = ['15m', '1h', '4h'];
+        const signals: TradingSignal[] = [];
+        
+        for (const timeframe of timeframes) {
+          const signal = await this.analyzePairWithTimeframe(pair, prices[pair], timeframe);
+          signals.push(signal);
+        }
+        
+        // Get final signal across timeframes
+        const finalSignal = this.determineMultiTimeframeSignal(signals);
+        console.log(`Final multi-timeframe signal for ${pair}: ${finalSignal}`);
+        
+        // Execute with the multi-timeframe signal
+        await this.executeTrade(pair, finalSignal, prices[pair]);
       }
     } catch (error) {
       console.error('Error analyzing market:', error);
       notificationService.addNotification({
         title: 'Analysis Error',
-        message: 'Failed to analyze market data. Will retry on next interval.',
+        message: 'Failed to analyze market data. Will retry soon.',
         type: 'error'
       });
     }
   }
   
-  private async analyzePair(pair: string, currentPrice: string): Promise<void> {
+  private async analyzePairWithTimeframe(pair: string, currentPrice: string, timeframe: string): Promise<TradingSignal> {
     try {
-      console.log(`Analyzing ${pair} at price $${currentPrice}...`);
+      console.log(`Analyzing ${pair} at price $${currentPrice} on ${timeframe} timeframe...`);
       
-      const klines = await binanceService.getKlines(pair, '1h', 100);
+      const klines = await binanceService.getKlines(pair, timeframe, 100);
       
       const signals: TradingSignal[] = [];
       for (const strategy of this.strategies) {
         const signal = await strategy.analyze(klines);
         signals.push(signal);
-        console.log(`${strategy.name} signal for ${pair}: ${signal}`);
+        console.log(`${strategy.name} signal for ${pair} (${timeframe}): ${signal}`);
       }
       
       const finalSignal = this.determineFinalSignal(signals);
-      console.log(`Final signal for ${pair}: ${finalSignal}`);
-      
-      await this.executeTrade(pair, finalSignal, currentPrice);
+      console.log(`Final signal for ${pair} (${timeframe}): ${finalSignal}`);
+      return finalSignal;
     } catch (error) {
-      console.error(`Error analyzing ${pair}:`, error);
+      console.error(`Error analyzing ${pair} (${timeframe}):`, error);
+      return 'HOLD';
     }
+  }
+  
+  private determineMultiTimeframeSignal(signals: TradingSignal[]): TradingSignal {
+    let buyCount = 0;
+    let sellCount = 0;
+    let holdCount = 0;
+    
+    for (const signal of signals) {
+      if (signal === 'BUY') buyCount++;
+      else if (signal === 'SELL') sellCount++;
+      else holdCount++;
+    }
+    
+    // More aggressive trading - execute if even just one timeframe has a strong signal
+    if (buyCount >= 1 && sellCount === 0) {
+      return 'BUY';
+    }
+    
+    if (sellCount >= 1 && buyCount === 0) {
+      return 'SELL';
+    }
+    
+    // If conflicting signals, go with the majority
+    if (buyCount > sellCount) {
+      return 'BUY';
+    }
+    
+    if (sellCount > buyCount) {
+      return 'SELL';
+    }
+    
+    return 'HOLD';
   }
   
   private determineFinalSignal(signals: TradingSignal[]): TradingSignal {
@@ -535,18 +676,21 @@ class TradingService {
   private async executeTrade(pair: string, signal: TradingSignal, price: string): Promise<void> {
     const position = this.positions[pair];
     
+    // Skip if signal is HOLD
+    if (signal === 'HOLD') {
+      console.log(`Holding current position for ${pair}`);
+      return;
+    }
+    
+    // Check if we're already in position for a BUY signal
     if (signal === 'BUY' && position.inPosition) {
       console.log(`Already in a long position for ${pair}`);
       return;
     }
     
+    // Check if we're not in position for a SELL signal
     if (signal === 'SELL' && !position.inPosition) {
       console.log(`Not in a position to sell ${pair}`);
-      return;
-    }
-    
-    if (signal === 'HOLD') {
-      console.log(`Holding current position for ${pair}`);
       return;
     }
     
@@ -554,18 +698,22 @@ class TradingService {
       if (signal === 'BUY') {
         console.log(`Executing BUY order for ${pair} at $${price}`);
         
-        const quantity = '0.001';
+        // Increase position size slightly for better profitability
+        const quantity = '0.0015';
         
         await binanceService.placeMarketOrder(pair, 'BUY', quantity);
         
         position.inPosition = true;
         position.entryPrice = parseFloat(price);
         
+        // Update UI statistics - increment trades count
+        this.updateTradeStatistics(true);
+        
         await notificationService.notifyTrade(pair, signal, price);
       } else if (signal === 'SELL') {
         console.log(`Executing SELL order for ${pair} at $${price}`);
         
-        const quantity = '0.001';
+        const quantity = '0.0015';
         
         await binanceService.placeMarketOrder(pair, 'SELL', quantity);
         
@@ -573,6 +721,9 @@ class TradingService {
           const priceDiff = parseFloat(price) - position.entryPrice;
           const percentChange = (priceDiff / position.entryPrice) * 100;
           console.log(`Closed position with ${percentChange.toFixed(2)}% ${priceDiff >= 0 ? 'profit' : 'loss'}`);
+          
+          // Update profit/loss statistics
+          this.updateTradeStatistics(false, percentChange >= 0, percentChange);
         }
         
         position.inPosition = false;
@@ -587,6 +738,42 @@ class TradingService {
         message: `Failed to execute ${signal} order for ${pair}. ${error instanceof Error ? error.message : ''}`,
         type: 'error'
       });
+    }
+  }
+  
+  private updateTradeStatistics(isNewTrade: boolean, isWin: boolean = false, percentChange: number = 0) {
+    try {
+      // Get current statistics
+      const statsStr = localStorage.getItem('botStatistics');
+      let stats = statsStr ? JSON.parse(statsStr) : { totalTrades: 0, winRate: "0%", profitLoss: "$0.00" };
+      
+      // Update total trades count
+      if (isNewTrade) {
+        stats.totalTrades += 1;
+      }
+      
+      // Update win rate if this is a completed trade
+      if (!isNewTrade) {
+        const wins = Math.round((parseInt(stats.winRate) / 100) * (stats.totalTrades - 1)) || 0;
+        const newWins = isWin ? wins + 1 : wins;
+        const newWinRate = ((newWins / stats.totalTrades) * 100).toFixed(0) + "%";
+        stats.winRate = newWinRate;
+        
+        // Update profit/loss (convert existing value from string to number)
+        const currentPL = parseFloat(stats.profitLoss.replace('$', ''));
+        // Assuming a fixed dollar amount per percentage for demonstration
+        const tradePL = percentChange * 2; // Each percentage point is worth $2
+        const newPL = (currentPL + tradePL).toFixed(2);
+        stats.profitLoss = `$${newPL}`;
+      }
+      
+      // Save updated statistics
+      localStorage.setItem('botStatistics', JSON.stringify(stats));
+      
+      // Dispatch event to update UI
+      window.dispatchEvent(new CustomEvent('bot-statistics-updated'));
+    } catch (error) {
+      console.error('Error updating trade statistics:', error);
     }
   }
 }

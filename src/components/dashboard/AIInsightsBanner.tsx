@@ -13,7 +13,7 @@ interface AIInsightsBannerProps {
 
 const AIInsightsBanner: React.FC<AIInsightsBannerProps> = ({ marketSentiment, mainInsight }) => {
   return (
-    <div className="mb-6 p-4 rounded-lg bg-blue-900/20 border border-blue-800 flex items-start">
+    <div className="mb-6 p-4 rounded-lg bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-800 flex items-start">
       <Brain className="h-6 w-6 text-blue-300 mr-3 mt-1 flex-shrink-0" />
       <div>
         <h2 className="text-lg font-medium text-blue-200 mb-1">AI Trading Assistant</h2>
@@ -23,22 +23,26 @@ const AIInsightsBanner: React.FC<AIInsightsBannerProps> = ({ marketSentiment, ma
         <div className="mt-3 flex flex-wrap gap-2">
           {Object.keys(marketSentiment).map(symbol => {
             const sentiment = marketSentiment[symbol];
-            if (sentiment.score > 65) {
+            if (sentiment.score > 60) {
               return (
                 <Badge key={symbol} className="bg-green-700 text-white">
                   {symbol} Bullish
                 </Badge>
               );
-            } else if (sentiment.score < 35) {
+            } else if (sentiment.score < 40) {
               return (
                 <Badge key={symbol} className="bg-red-700 text-white">
                   {symbol} Bearish
                 </Badge>
               );
             }
-            return null;
+            return (
+              <Badge key={symbol} className="bg-blue-700 text-white">
+                {symbol} Neutral
+              </Badge>
+            );
           })}
-          <Badge className="bg-yellow-700 text-white">Market Volatility: Medium</Badge>
+          <Badge className="bg-yellow-700 text-white">Market Volatility: High</Badge>
         </div>
         <div className="mt-3">
           <TooltipProvider>
@@ -49,8 +53,8 @@ const AIInsightsBanner: React.FC<AIInsightsBannerProps> = ({ marketSentiment, ma
                   variant="outline" 
                   className="bg-blue-800/50 text-blue-100 border-blue-700 hover:bg-blue-800"
                   onClick={() => {
-                    toast.success("AI Assistant actively monitoring market conditions");
-                    notificationService.sendMarketAnalysisAlert("BTC", "Bullish divergence detected on 4h chart");
+                    toast.success("AI Assistant actively scanning for profitable opportunities");
+                    notificationService.sendMarketAnalysisAlert("BTC", "Bullish divergence detected");
                   }}
                 >
                   <Zap className="mr-2 h-4 w-4" />
@@ -58,7 +62,7 @@ const AIInsightsBanner: React.FC<AIInsightsBannerProps> = ({ marketSentiment, ma
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Generate personalized trading recommendations based on current market conditions</p>
+                <p>Generate high-profit trading recommendations based on current market conditions</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>

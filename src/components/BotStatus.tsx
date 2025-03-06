@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Play, Pause, RefreshCw } from "lucide-react";
+import { Play, Pause, RefreshCw, TrendingUp } from "lucide-react";
 import tradingService from "@/services/tradingService";
 import binanceService from "@/services/binanceService";
 import { toast } from "sonner";
@@ -17,7 +16,6 @@ const BotStatus: React.FC = () => {
   const [profitLoss, setProfitLoss] = useState("$0.00");
   const [startTime, setStartTime] = useState<Date | null>(null);
   
-  // Load bot status on component mount
   useEffect(() => {
     const botRunning = tradingService.isBotRunning();
     setIsActive(botRunning);
@@ -27,24 +25,23 @@ const BotStatus: React.FC = () => {
       if (savedStartTime) {
         setStartTime(new Date(savedStartTime));
       } else {
-        // If the bot is running but we don't have a start time, set it now
         const now = new Date();
         setStartTime(now);
         localStorage.setItem('botStartTime', now.toISOString());
       }
     }
     
-    // Load statistics
-    const savedStats = localStorage.getItem('botStatistics');
-    if (savedStats) {
-      const stats = JSON.parse(savedStats);
-      setTotalTrades(stats.totalTrades || 0);
-      setWinRate(stats.winRate || "0%");
-      setProfitLoss(stats.profitLoss || "$0.00");
-    }
+    const handleStatsUpdate = () => {
+      loadStatistics();
+    };
+    
+    window.addEventListener('bot-statistics-updated', handleStatsUpdate);
+    
+    return () => {
+      window.removeEventListener('bot-statistics-updated', handleStatsUpdate);
+    };
   }, []);
   
-  // Update uptime when the bot is active
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
     
@@ -58,9 +55,8 @@ const BotStatus: React.FC = () => {
         const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
         
         setUptime(`${days}d ${hours}h ${minutes}m`);
-      }, 60000); // Update every minute
+      }, 60000);
       
-      // Initial update
       const now = new Date();
       const diff = now.getTime() - startTime.getTime();
       
@@ -76,24 +72,31 @@ const BotStatus: React.FC = () => {
     };
   }, [isActive, startTime]);
   
+  const loadStatistics = () => {
+    const savedStats = localStorage.getItem('botStatistics');
+    if (savedStats) {
+      const stats = JSON.parse(savedStats);
+      setTotalTrades(stats.totalTrades || 0);
+      setWinRate(stats.winRate || "0%");
+      setProfitLoss(stats.profitLoss || "$0.00");
+    }
+  };
+  
   const toggleBotStatus = async () => {
     setIsLoading(true);
     
     try {
       if (isActive) {
-        // Stop the bot
         tradingService.stopTrading();
         setIsActive(false);
         localStorage.removeItem('botStartTime');
         setStartTime(null);
       } else {
-        // Check if API credentials are set
         if (!binanceService.hasCredentials()) {
           toast.error("Binance API credentials not configured. Please set them in Settings.");
           return;
         }
         
-        // Start the bot
         const success = tradingService.startTrading();
         if (success) {
           setIsActive(true);
@@ -105,6 +108,15 @@ const BotStatus: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const resetStatistics = () => {
+    const defaultStats = { totalTrades: 0, winRate: "0%", profitLoss: "$0.00" };
+    localStorage.setItem('botStatistics', JSON.stringify(defaultStats));
+    setTotalTrades(0);
+    setWinRate("0%");
+    setProfitLoss("$0.00");
+    toast.success("Bot statistics have been reset");
   };
 
   return (
@@ -129,7 +141,9 @@ const BotStatus: React.FC = () => {
           <div className="text-right text-green-400">{winRate}</div>
           
           <div className="text-slate-400">Profit/Loss</div>
-          <div className="text-right text-green-400">{profitLoss}</div>
+          <div className={`text-right ${profitLoss.includes('-') ? 'text-red-400' : 'text-green-400'}`}>
+            {profitLoss}
+          </div>
         </div>
         
         <Button 
@@ -148,6 +162,19 @@ const BotStatus: React.FC = () => {
             <><Play className="mr-2 h-4 w-4" /> Start Bot</>
           )}
         </Button>
+        
+        {isActive && (
+          <div className="flex justify-center">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-slate-400 hover:text-white hover:bg-slate-800 mt-2"
+              onClick={resetStatistics}
+            >
+              <TrendingUp className="h-3 w-3 mr-1" /> Reset Statistics
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
