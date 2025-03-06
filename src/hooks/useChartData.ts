@@ -71,7 +71,7 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
       clearInterval(refreshIntervalRef.current);
     }
     
-    // Create a new interval
+    // Create a new interval and store it properly
     const intervalId = setInterval(() => {
       loadChartData(false);
     }, 60000);
@@ -85,7 +85,7 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
         refreshIntervalRef.current = null;
       }
     };
-  }, [loadChartData]);
+  }, [loadChartData, symbol, interval]);
 
   const formatPrice = (price: number) => {
     return price > 1 
