@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Brain, Zap, TrendingUp, AlertTriangle, ChevronRight, ArrowUp, ArrowDown, BarChart2, Cpu, LineChart } from "lucide-react";
 import { Button } from "@/components/ui/button";
