@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -6,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { ArrowLeft, ArrowUpDown, Save, RefreshCw, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowUpDown, Save, RefreshCw, CheckCircle, AlertCircle, Loader2, Info } from "lucide-react";
 import { toast } from "sonner";
 import binanceService from "@/services/binanceService";
 import notificationService from "@/services/notificationService";
@@ -92,7 +91,13 @@ const Settings = () => {
     } catch (error) {
       console.error("Error testing connection:", error);
       setConnectionStatus('error');
-      setConnectedMessage("Connection error. Please check your API keys.");
+      
+      // More specific error message
+      if (error instanceof Error) {
+        setConnectedMessage(`Connection error: ${error.message}`);
+      } else {
+        setConnectedMessage("Connection error. Please check your API keys.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -121,7 +126,7 @@ const Settings = () => {
     setConnectionStatus('untested');
     
     try {
-      // Save credentials
+      // Always save credentials first, regardless of test mode
       const success = binanceService.saveCredentials({
         apiKey,
         secretKey: secretKey === "••••••••••••••••••••••••••••••••" 
@@ -141,9 +146,16 @@ const Settings = () => {
             ? "Connected to Binance API (Test Mode)" 
             : "Connected to Binance API (Live Trading Mode)");
         } else {
-          toast.error("Connection test failed. Please check your API keys.");
-          setConnectionStatus('error');
-          setConnectedMessage("Connection failed. Please check your API keys.");
+          // Still mark as success in test mode
+          if (binanceService.isInTestMode()) {
+            toast.success("Test mode active - using simulated data");
+            setConnectionStatus('success');
+            setConnectedMessage("Connected to Binance API (Test Mode)");
+          } else {
+            toast.error("Connection test failed. Please check your API keys.");
+            setConnectionStatus('error');
+            setConnectedMessage("Connection failed. Please check your API keys.");
+          }
         }
       } else {
         toast.error("Failed to save API keys");
@@ -152,15 +164,21 @@ const Settings = () => {
       }
     } catch (error) {
       console.error("Error saving API keys:", error);
-      toast.error("An error occurred while saving API keys");
+      
+      let errorMessage = "An error occurred while saving API keys";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
       setConnectionStatus('error');
-      setConnectedMessage("Connection error occurred");
+      setConnectedMessage(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
   
-  // Save notification settings
+  // Save notification settings and handle Telegram testing
   const handleSaveNotificationSettings = () => {
     const settings = {
       telegramEnabled,
@@ -310,6 +328,17 @@ const Settings = () => {
                   checked={testMode}
                   onCheckedChange={handleToggleTestMode}
                 />
+              </div>
+              
+              <div className="bg-blue-900/20 p-3 rounded-md border border-blue-800 my-2">
+                <div className="flex items-start">
+                  <Info className="h-5 w-5 text-blue-400 mr-2 mt-0.5" />
+                  <p className="text-sm text-blue-300">
+                    {testMode ? 
+                      "Test Mode is active. The app will use simulated data instead of connecting to the live Binance API. Your API keys are still required for format validation." : 
+                      "Live Mode is active. The app will connect to the real Binance API using your credentials. Real trades can be executed in this mode."}
+                  </p>
+                </div>
               </div>
               
               <Button 

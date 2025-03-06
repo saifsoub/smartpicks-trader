@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, ArrowUp, ArrowDown, DollarSign, AlertTriangle, Settings } from "lucide-react";
+import { RefreshCw, ArrowUp, ArrowDown, DollarSign, AlertTriangle, Settings, Info } from "lucide-react";
 import binanceService, { BinanceBalance } from "@/services/binanceService";
 import { toast } from "sonner";
 
@@ -23,7 +23,9 @@ const PortfolioSummary: React.FC = () => {
     
     // Refresh portfolio data every minute
     const interval = setInterval(() => {
-      checkConnectionAndLoadPortfolio();
+      if (isConnected) {
+        loadPortfolio();
+      }
     }, 60000);
     
     // Listen for credential updates from settings page
@@ -34,11 +36,20 @@ const PortfolioSummary: React.FC = () => {
     
     window.addEventListener('binance-credentials-updated', handleCredentialsUpdate);
     
+    // Also listen for test mode changes
+    const handleTestModeUpdate = () => {
+      console.log("Test mode updated, refreshing portfolio");
+      checkConnectionAndLoadPortfolio();
+    };
+    
+    window.addEventListener('binance-test-mode-updated', handleTestModeUpdate);
+    
     return () => {
       clearInterval(interval);
       window.removeEventListener('binance-credentials-updated', handleCredentialsUpdate);
+      window.removeEventListener('binance-test-mode-updated', handleTestModeUpdate);
     };
-  }, []);
+  }, [isConnected]);
   
   const checkConnectionAndLoadPortfolio = async () => {
     if (!binanceService.hasCredentials()) {
@@ -49,9 +60,15 @@ const PortfolioSummary: React.FC = () => {
     setIsLoading(true);
     
     try {
-      // First check if we're connected to the real API
+      // Always set connected to true in test mode
+      if (binanceService.isInTestMode()) {
+        setIsConnected(true);
+        loadPortfolio();
+        return;
+      }
+      
+      // Only test connection in real mode
       const testConnection = await binanceService.testConnection();
-      // In test mode or real mode, if connection is successful, we show the UI
       setIsConnected(testConnection);
       
       if (testConnection) {
@@ -64,7 +81,14 @@ const PortfolioSummary: React.FC = () => {
       }
     } catch (error) {
       console.error("Failed to test connection:", error);
-      setIsConnected(false);
+      
+      // Still set connected to true in test mode even if error occurs
+      if (binanceService.isInTestMode()) {
+        setIsConnected(true);
+        loadPortfolio();
+      } else {
+        setIsConnected(false);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -225,9 +249,19 @@ const PortfolioSummary: React.FC = () => {
                         "Using live Binance API"
                       }
                     </p>
+                    {binanceService.isInTestMode() && (
+                      <div className="mt-3 mx-auto max-w-md p-3 rounded-md bg-blue-900/20 border border-blue-800">
+                        <div className="flex items-start">
+                          <Info className="h-5 w-5 text-blue-400 mr-2 mt-0.5 flex-shrink-0" />
+                          <p className="text-sm text-blue-300">
+                            In test mode, simulated assets will be displayed based on predefined test data. Try refreshing to view test assets.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                     <Button 
                       variant="link" 
-                      className="text-blue-400 p-0 h-auto mt-1"
+                      className="text-blue-400 p-0 h-auto mt-3"
                       onClick={checkConnectionAndLoadPortfolio}
                     >
                       Refresh portfolio

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowDown, ArrowUp, RefreshCw, AlertTriangle, Settings } from "lucide-react";
+import { ArrowDown, ArrowUp, RefreshCw, AlertTriangle, Settings, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import binanceService from "@/services/binanceService";
 import { toast } from "sonner";
@@ -35,10 +35,27 @@ const RecentTrades: React.FC = () => {
     
     window.addEventListener('binance-credentials-updated', handleCredentialsUpdate);
     
+    // Also listen for test mode changes
+    const handleTestModeUpdate = () => {
+      console.log("Test mode updated, refreshing trades");
+      checkConnectionAndFetchTrades();
+    };
+    
+    window.addEventListener('binance-test-mode-updated', handleTestModeUpdate);
+    
+    // Setup refresh interval (every 2 minutes)
+    const interval = setInterval(() => {
+      if (isConnected) {
+        fetchTrades();
+      }
+    }, 120000);
+    
     return () => {
       window.removeEventListener('binance-credentials-updated', handleCredentialsUpdate);
+      window.removeEventListener('binance-test-mode-updated', handleTestModeUpdate);
+      clearInterval(interval);
     };
-  }, []);
+  }, [isConnected]);
   
   const checkConnectionAndFetchTrades = async () => {
     if (!binanceService.hasCredentials()) {
@@ -49,8 +66,15 @@ const RecentTrades: React.FC = () => {
     setIsLoading(true);
     
     try {
+      // Always set connected to true in test mode
+      if (binanceService.isInTestMode()) {
+        setIsConnected(true);
+        fetchTrades();
+        return;
+      }
+      
+      // Only test connection in real mode
       const testConnection = await binanceService.testConnection();
-      // In test mode or real mode, if connection is successful, we show the UI
       setIsConnected(testConnection);
       
       if (testConnection) {
@@ -61,7 +85,14 @@ const RecentTrades: React.FC = () => {
       }
     } catch (error) {
       console.error("Failed to test connection:", error);
-      setIsConnected(false);
+      
+      // Still set connected to true in test mode even if error occurs
+      if (binanceService.isInTestMode()) {
+        setIsConnected(true);
+        fetchTrades();
+      } else {
+        setIsConnected(false);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -86,7 +117,7 @@ const RecentTrades: React.FC = () => {
           strategy: "API Trade"
         }));
       
-      setTrades(formattedTrades as Trade[]);
+      setTrades(formattedTrades);
     } catch (error) {
       console.error("Failed to fetch trades:", error);
       toast.error("Failed to load recent trades");
@@ -185,6 +216,23 @@ const RecentTrades: React.FC = () => {
                 "Using live Binance API"
               }
             </p>
+            {binanceService.isInTestMode() && (
+              <div className="mt-3 mx-auto max-w-md p-3 rounded-md bg-blue-900/20 border border-blue-800">
+                <div className="flex items-start">
+                  <Info className="h-5 w-5 text-blue-400 mr-2 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-blue-300">
+                    In test mode, trades might not appear immediately. Try refreshing the component or generating some test trades through the trading interface.
+                  </p>
+                </div>
+              </div>
+            )}
+            <Button 
+              variant="link" 
+              className="text-blue-400 p-0 h-auto mt-3"
+              onClick={checkConnectionAndFetchTrades}
+            >
+              Refresh trades
+            </Button>
           </div>
         )}
       </CardContent>
