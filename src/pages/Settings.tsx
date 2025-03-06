@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -217,7 +216,7 @@ const Settings = () => {
   // Test Telegram connection
   const handleTestTelegramConnection = async () => {
     if (!telegramEnabled || !telegramChatId) {
-      toast.error("Please enable Telegram notifications and enter a chat ID");
+      toast.error("Please enable Telegram notifications and enter a username");
       return;
     }
     
@@ -263,7 +262,7 @@ const Settings = () => {
 
       {/* Main Content */}
       <main className="container mx-auto flex-1 p-4">
-        <h1 className="mb-6 text-2xl font-bold">Settings</h1>
+        <h1 className="mb-6 text-2xl font-bold text-white">Settings</h1>
 
         {/* Connection Status Banner */}
         {(connectionStatus !== 'untested' || binanceService.hasCredentials()) && (
@@ -276,18 +275,18 @@ const Settings = () => {
           }`}>
             <div className="flex items-center">
               {connectionStatus === 'success' ? (
-                <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
+                <CheckCircle className="h-5 w-5 text-green-400 mr-2" />
               ) : connectionStatus === 'error' ? (
-                <AlertCircle className="h-5 w-5 text-red-500 mr-2" />
+                <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
               ) : (
-                <Loader2 className="h-5 w-5 text-blue-500 mr-2 animate-spin" />
+                <Loader2 className="h-5 w-5 text-blue-400 mr-2 animate-spin" />
               )}
               <span className={`font-medium ${
                 connectionStatus === 'success' 
-                  ? 'text-green-500' 
+                  ? 'text-green-400' 
                   : connectionStatus === 'error'
-                    ? 'text-red-500'
-                    : 'text-blue-500'
+                    ? 'text-red-400'
+                    : 'text-blue-400'
               }`}>
                 {connectionStatus === 'success' 
                   ? "Connected"
@@ -296,7 +295,7 @@ const Settings = () => {
                     : "Checking Connection..."}
               </span>
             </div>
-            <div className="text-slate-300">
+            <div className="text-slate-200">
               {connectedMessage}
             </div>
           </div>
@@ -306,12 +305,12 @@ const Settings = () => {
           {/* API Configuration */}
           <Card className="bg-slate-900 border-slate-800 shadow-lg">
             <CardHeader>
-              <CardTitle>Binance API Configuration</CardTitle>
-              <CardDescription>Connect your Binance account to enable trading</CardDescription>
+              <CardTitle className="text-white">Binance API Configuration</CardTitle>
+              <CardDescription className="text-slate-300">Connect your Binance account to enable trading</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="apiKey">API Key</Label>
+                <Label htmlFor="apiKey" className="text-slate-200">API Key</Label>
                 <Input 
                   id="apiKey" 
                   value={apiKey}
@@ -319,12 +318,12 @@ const Settings = () => {
                   placeholder="Enter your Binance API key" 
                   className="bg-slate-800 border-slate-700 text-white"
                 />
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-300">
                   Create API keys in your Binance account with trading permissions
                 </p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="secretKey">Secret Key</Label>
+                <Label htmlFor="secretKey" className="text-slate-200">Secret Key</Label>
                 <Input 
                   id="secretKey" 
                   type="password" 
@@ -333,15 +332,15 @@ const Settings = () => {
                   placeholder="Enter your Binance secret key" 
                   className="bg-slate-800 border-slate-700 text-white"
                 />
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-300">
                   Never share your secret key with anyone
                 </p>
               </div>
               
               <div className="flex items-center justify-between pt-2 pb-2">
                 <div className="space-y-0.5">
-                  <Label>Test Mode</Label>
-                  <p className="text-xs text-slate-400">Use simulated data instead of real trading</p>
+                  <Label className="text-slate-200">Test Mode</Label>
+                  <p className="text-xs text-slate-300">Use simulated data instead of real trading</p>
                 </div>
                 <Switch 
                   checked={testMode}
@@ -351,8 +350,8 @@ const Settings = () => {
               
               <div className="bg-blue-900/20 p-3 rounded-md border border-blue-800 my-2">
                 <div className="flex items-start">
-                  <Info className="h-5 w-5 text-blue-400 mr-2 mt-0.5" />
-                  <p className="text-sm text-blue-300">
+                  <Info className="h-5 w-5 text-blue-300 mr-2 mt-0.5" />
+                  <p className="text-sm text-blue-200">
                     {testMode ? 
                       "Test Mode is active. The app will use simulated data instead of connecting to the live Binance API. Your API keys are still required for format validation." : 
                       "Live Mode is active. The app will connect to the real Binance API using your credentials. Real trades can be executed in this mode."}
@@ -362,15 +361,15 @@ const Settings = () => {
               
               <div className="bg-yellow-900/20 p-3 rounded-md border border-yellow-800 my-2">
                 <div className="flex items-start">
-                  <Info className="h-5 w-5 text-yellow-400 mr-2 mt-0.5" />
-                  <p className="text-sm text-yellow-300">
+                  <Info className="h-5 w-5 text-yellow-300 mr-2 mt-0.5" />
+                  <p className="text-sm text-yellow-200">
                     Due to browser security restrictions (CORS), API connection testing may not work directly from this web app. Make sure your API keys are correct even if the connection test passes.
                   </p>
                 </div>
               </div>
               
               <Button 
-                className="w-full" 
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white" 
                 onClick={handleSaveApiKeys}
                 disabled={isLoading}
               >
@@ -389,7 +388,7 @@ const Settings = () => {
               
               <Button
                 variant="outline"
-                className="w-full mt-2 border-slate-700 text-slate-300"
+                className="w-full mt-2 border-slate-700 text-slate-200"
                 onClick={checkConnection}
                 disabled={isLoading || !binanceService.hasCredentials()}
               >
@@ -398,7 +397,7 @@ const Settings = () => {
               </Button>
               
               <div className="mt-4 pt-2 border-t border-slate-800 text-center">
-                <p className={`text-sm font-medium ${testMode ? 'text-yellow-400' : 'text-green-400'}`}>
+                <p className={`text-sm font-medium ${testMode ? 'text-yellow-300' : 'text-green-300'}`}>
                   {testMode 
                     ? "⚠️ TEST MODE ACTIVE - No real trading will occur" 
                     : "🔴 LIVE TRADING MODE - Real orders will be executed"}
@@ -410,14 +409,14 @@ const Settings = () => {
           {/* Notification Settings */}
           <Card className="bg-slate-900 border-slate-800 shadow-lg">
             <CardHeader>
-              <CardTitle>Notification Settings</CardTitle>
-              <CardDescription>Configure how you receive trading alerts</CardDescription>
+              <CardTitle className="text-white">Notification Settings</CardTitle>
+              <CardDescription className="text-slate-300">Configure how you receive trading alerts</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label>Telegram Notifications</Label>
-                  <p className="text-xs text-slate-400">Receive alerts via Telegram</p>
+                  <Label className="text-slate-200">Telegram Notifications</Label>
+                  <p className="text-xs text-slate-300">Receive alerts via Telegram</p>
                 </div>
                 <Switch 
                   checked={telegramEnabled}
@@ -426,23 +425,32 @@ const Settings = () => {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="telegramId">Telegram Chat ID</Label>
+                <Label htmlFor="telegramId" className="text-slate-200">Telegram Username</Label>
                 <Input 
                   id="telegramId" 
                   value={telegramChatId}
                   onChange={(e) => setTelegramChatId(e.target.value)}
-                  placeholder="Enter your Telegram chat ID" 
-                  className="bg-slate-800 border-slate-700"
+                  placeholder="Enter your Telegram username (e.g., johndoe)" 
+                  className="bg-slate-800 border-slate-700 text-white"
                   disabled={!telegramEnabled}
                 />
-                <p className="text-xs text-slate-400">
-                  Use @userinfobot to find your Telegram chat ID
+                <p className="text-xs text-slate-300">
+                  Simply enter your Telegram username without the @ symbol
                 </p>
+              </div>
+              
+              <div className="bg-blue-900/20 p-3 rounded-md border border-blue-800 my-2">
+                <div className="flex items-start">
+                  <Info className="h-5 w-5 text-blue-300 mr-2 mt-0.5" />
+                  <p className="text-sm text-blue-200">
+                    To receive notifications, you need to start a conversation with our Telegram bot: <a href="https://t.me/TradingBotAI_bot" target="_blank" rel="noopener noreferrer" className="underline">@TradingBotAI_bot</a>
+                  </p>
+                </div>
               </div>
               
               <Button 
                 variant="outline" 
-                className="w-full border-slate-700 hover:bg-slate-800"
+                className="w-full border-slate-700 text-slate-200 hover:bg-slate-800"
                 onClick={handleTestTelegramConnection}
                 disabled={!telegramEnabled || !telegramChatId || isTesting}
               >
@@ -458,8 +466,8 @@ const Settings = () => {
               
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label>Trade Notifications</Label>
-                  <p className="text-xs text-slate-400">Get notified for each trade</p>
+                  <Label className="text-slate-200">Trade Notifications</Label>
+                  <p className="text-xs text-slate-300">Get notified for each trade</p>
                 </div>
                 <Switch 
                   checked={tradeNotifications}
@@ -470,8 +478,8 @@ const Settings = () => {
               
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label>Daily Summary</Label>
-                  <p className="text-xs text-slate-400">Receive daily performance reports</p>
+                  <Label className="text-slate-200">Daily Summary</Label>
+                  <p className="text-xs text-slate-300">Receive daily performance reports</p>
                 </div>
                 <Switch 
                   checked={dailySummary}
@@ -481,7 +489,7 @@ const Settings = () => {
               </div>
               
               <Button 
-                className="w-full"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                 onClick={handleSaveNotificationSettings}
               >
                 Save Notification Settings

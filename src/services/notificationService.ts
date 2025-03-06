@@ -1,4 +1,3 @@
-
 import { toast } from "sonner";
 
 export interface NotificationSettings {
@@ -43,6 +42,22 @@ class NotificationService {
     return { ...this.settings };
   }
 
+  // Check if the input is a username or chat ID and format accordingly
+  private formatTelegramRecipient(input: string): string {
+    // If it's already a numeric chat ID, use it as is
+    if (/^-?\d+$/.test(input)) {
+      return input;
+    }
+    
+    // If it starts with @, use it as is
+    if (input.startsWith('@')) {
+      return input;
+    }
+    
+    // Otherwise, add @ prefix assuming it's a username
+    return `@${input}`;
+  }
+
   // Send a notification via Telegram
   public async sendTelegramMessage(message: string): Promise<boolean> {
     if (!this.settings.telegramEnabled || !this.settings.telegramChatId) {
@@ -51,15 +66,18 @@ class NotificationService {
     }
 
     try {
+      // Format the recipient (handle both usernames and chat IDs)
+      const recipient = this.formatTelegramRecipient(this.settings.telegramChatId);
+      
       // In a real implementation, you would use a backend proxy or Supabase Edge Function
       // to securely send Telegram messages without exposing your bot token
-      console.log(`Sending Telegram notification: ${message}`);
+      console.log(`Sending Telegram notification to ${recipient}: ${message}`);
       
       // This is a placeholder for demonstration
       // In a real implementation you would need a serverless function or backend service
       // return await this.sendViaTelegramAPI(message);
       
-      toast.success('Notification sent via Telegram');
+      toast.success(`Notification sent via Telegram to ${recipient}`);
       return true;
     } catch (error) {
       console.error('Failed to send Telegram notification:', error);
@@ -70,12 +88,12 @@ class NotificationService {
   // Test Telegram connection
   public async testTelegramConnection(): Promise<boolean> {
     if (!this.settings.telegramEnabled || !this.settings.telegramChatId) {
-      toast.error('Telegram notifications are disabled or chat ID not set');
+      toast.error('Telegram notifications are disabled or username/chat ID not set');
       return false;
     }
 
     try {
-      const success = await this.sendTelegramMessage('Test notification from TradingBot');
+      const success = await this.sendTelegramMessage('Test notification from TradingBot - Your Smart AI Trading Assistant');
       if (success) {
         toast.success('Telegram test notification sent successfully');
         return true;

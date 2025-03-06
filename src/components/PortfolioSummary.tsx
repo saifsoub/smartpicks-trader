@@ -16,6 +16,7 @@ const PortfolioSummary: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [totalValue, setTotalValue] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   
   useEffect(() => {
     // Check initial connection state and load portfolio
@@ -58,12 +59,13 @@ const PortfolioSummary: React.FC = () => {
     }
     
     setIsLoading(true);
+    setLoadError(null);
     
     try {
       // Always set connected to true in test mode
       if (binanceService.isInTestMode()) {
         setIsConnected(true);
-        loadPortfolio();
+        await loadPortfolio();
         return;
       }
       
@@ -73,7 +75,7 @@ const PortfolioSummary: React.FC = () => {
       
       if (testConnection) {
         // Only load portfolio if we have a connection
-        loadPortfolio();
+        await loadPortfolio();
       } else {
         setBalances([]);
         setTotalValue(0);
@@ -85,7 +87,7 @@ const PortfolioSummary: React.FC = () => {
       // Still set connected to true in test mode even if error occurs
       if (binanceService.isInTestMode()) {
         setIsConnected(true);
-        loadPortfolio();
+        await loadPortfolio();
       } else {
         setIsConnected(false);
       }
@@ -96,8 +98,32 @@ const PortfolioSummary: React.FC = () => {
 
   const loadPortfolio = async () => {
     try {
+      setIsLoading(true);
+      setLoadError(null);
+      
       // Get account balances
       const accountInfo = await binanceService.getAccountInfo();
+      
+      if (!accountInfo || !accountInfo.balances) {
+        console.log("Using fallback data in test mode");
+        if (binanceService.isInTestMode()) {
+          // Generate test data if we're in test mode
+          const testData = {
+            balances: [
+              { asset: 'BTC', free: '0.12345678', locked: '0.00000000' },
+              { asset: 'ETH', free: '2.34567890', locked: '0.00000000' },
+              { asset: 'BNB', free: '10.5', locked: '0.00' },
+              { asset: 'ADA', free: '1250.45', locked: '0.00' },
+              { asset: 'SOL', free: '15.75', locked: '0.00' },
+              { asset: 'USDT', free: '5000.00', locked: '0.00' },
+            ]
+          };
+          processPortfolioData(testData);
+          return;
+        } else {
+          throw new Error("Invalid account data received");
+        }
+      }
       
       // Get current prices to calculate USD values
       const prices = await binanceService.getPrices();
@@ -105,6 +131,57 @@ const PortfolioSummary: React.FC = () => {
       // Get symbol info for percent changes
       const symbols = await binanceService.getSymbols();
       
+      // Process the data with the account info and returned prices/symbols
+      processPortfolioData(accountInfo, prices, symbols);
+      
+    } catch (error) {
+      console.error("Failed to load portfolio:", error);
+      setLoadError(error instanceof Error ? error.message : "Failed to load portfolio data");
+      toast.error("Failed to load portfolio data");
+      setBalances([]);
+      setTotalValue(0);
+      
+      // If in test mode, still show test data
+      if (binanceService.isInTestMode()) {
+        const testData = {
+          balances: [
+            { asset: 'BTC', free: '0.12345678', locked: '0.00000000' },
+            { asset: 'ETH', free: '2.34567890', locked: '0.00000000' },
+            { asset: 'BNB', free: '10.5', locked: '0.00' },
+            { asset: 'ADA', free: '1250.45', locked: '0.00' },
+            { asset: 'SOL', free: '15.75', locked: '0.00' },
+            { asset: 'USDT', free: '5000.00', locked: '0.00' },
+          ]
+        };
+        
+        // Mock prices for test mode
+        const mockPrices = {
+          'BTCUSDT': '66120.35',
+          'ETHUSDT': '3221.48',
+          'BNBUSDT': '567.89',
+          'ADAUSDT': '0.4523',
+          'SOLUSDT': '172.62',
+        };
+        
+        // Mock symbols for test mode
+        const mockSymbols = [
+          { symbol: 'BTCUSDT', baseAsset: 'BTC', quoteAsset: 'USDT', priceChangePercent: '2.45', lastPrice: '66120.35', volume: '21345.67' },
+          { symbol: 'ETHUSDT', baseAsset: 'ETH', quoteAsset: 'USDT', priceChangePercent: '1.87', lastPrice: '3221.48', volume: '87654.32' },
+          { symbol: 'BNBUSDT', baseAsset: 'BNB', quoteAsset: 'USDT', priceChangePercent: '0.95', lastPrice: '567.89', volume: '12345.67' },
+          { symbol: 'ADAUSDT', baseAsset: 'ADA', quoteAsset: 'USDT', priceChangePercent: '-1.23', lastPrice: '0.4523', volume: '45678.90' },
+          { symbol: 'SOLUSDT', baseAsset: 'SOL', quoteAsset: 'USDT', priceChangePercent: '3.45', lastPrice: '172.62', volume: '34567.89' },
+        ];
+        
+        processPortfolioData(testData, mockPrices, mockSymbols);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Helper function to process portfolio data
+  const processPortfolioData = (accountInfo: any, prices?: Record<string, string>, symbols?: any[]) => {
+    try {
       // Process balances to include USD values and changes
       const significantBalances = accountInfo.balances
         .filter((balance: BinanceBalance) => 
@@ -118,13 +195,15 @@ const PortfolioSummary: React.FC = () => {
             usdValue = parseFloat(balance.free) + parseFloat(balance.locked);
           } else {
             const symbolKey = `${balance.asset}USDT`;
-            if (prices[symbolKey]) {
+            if (prices && prices[symbolKey]) {
               usdValue = (parseFloat(balance.free) + parseFloat(balance.locked)) * parseFloat(prices[symbolKey]);
               
               // Find price change percentage
-              const symbol = symbols.find(s => s.symbol === symbolKey);
-              if (symbol) {
-                priceChangePercent = symbol.priceChangePercent;
+              if (symbols) {
+                const symbol = symbols.find((s: any) => s.symbol === symbolKey);
+                if (symbol) {
+                  priceChangePercent = symbol.priceChangePercent;
+                }
               }
             }
           }
@@ -145,9 +224,8 @@ const PortfolioSummary: React.FC = () => {
       
       setBalances(significantBalances);
       setTotalValue(portfolioTotal);
-    } catch (error) {
-      console.error("Failed to load portfolio:", error);
-      toast.error("Failed to load portfolio data");
+    } catch (err) {
+      console.error("Error processing portfolio data:", err);
       setBalances([]);
       setTotalValue(0);
     }
@@ -163,7 +241,7 @@ const PortfolioSummary: React.FC = () => {
             size="sm" 
             onClick={checkConnectionAndLoadPortfolio}
             disabled={isLoading}
-            className="text-slate-400 hover:text-white"
+            className="text-slate-200 hover:text-white hover:bg-slate-800"
           >
             {isLoading ? (
               <RefreshCw className="h-4 w-4 animate-spin" />
@@ -176,9 +254,9 @@ const PortfolioSummary: React.FC = () => {
       <CardContent className="pt-4">
         {!isConnected ? (
           <div className="text-center py-6">
-            <AlertTriangle className="h-10 w-10 text-yellow-500 mx-auto mb-3" />
-            <p className="text-white font-medium">Not connected to Binance API</p>
-            <p className="text-slate-400 text-sm mt-1">Please configure API credentials in Settings</p>
+            <AlertTriangle className="h-10 w-10 text-yellow-400 mx-auto mb-3" />
+            <p className="text-yellow-100 font-medium">Not connected to Binance API</p>
+            <p className="text-slate-200 text-sm mt-1">Please configure API credentials in Settings</p>
             <Button 
               variant="outline" 
               size="sm"
@@ -193,7 +271,7 @@ const PortfolioSummary: React.FC = () => {
           <>
             {totalValue > 0 && (
               <div className="mb-4 flex items-center justify-between">
-                <span className="text-slate-400">Total Value</span>
+                <span className="text-slate-200">Total Value</span>
                 <div className="flex items-center">
                   <DollarSign className="h-4 w-4 mr-1 text-white" />
                   <span className="text-xl font-bold text-white">{totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
@@ -207,7 +285,7 @@ const PortfolioSummary: React.FC = () => {
                   <div key={index} className="flex items-center justify-between p-2 rounded-md bg-slate-800">
                     <div>
                       <div className="font-medium text-white">{balance.asset}</div>
-                      <div className="text-xs text-slate-300">
+                      <div className="text-xs text-slate-200">
                         {parseFloat(balance.free).toLocaleString('en-US', { maximumFractionDigits: 8 })}
                         {parseFloat(balance.locked) > 0 && 
                           ` (${parseFloat(balance.locked).toLocaleString('en-US', { maximumFractionDigits: 8 })} locked)`
@@ -219,8 +297,8 @@ const PortfolioSummary: React.FC = () => {
                       {parseFloat(balance.priceChangePercent) !== 0 && (
                         <div className={`flex items-center justify-end text-xs ${
                           parseFloat(balance.priceChangePercent) > 0 
-                            ? 'text-green-400' 
-                            : 'text-red-400'
+                            ? 'text-green-300' 
+                            : 'text-red-300'
                         }`}>
                           {parseFloat(balance.priceChangePercent) > 0 
                             ? <ArrowUp className="h-3 w-3 mr-1" /> 
@@ -234,16 +312,21 @@ const PortfolioSummary: React.FC = () => {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-6 text-slate-300">
+              <div className="text-center py-6 text-slate-200">
                 {isLoading ? (
                   <div className="flex flex-col items-center">
-                    <RefreshCw className="h-8 w-8 animate-spin mb-3" />
+                    <RefreshCw className="h-8 w-8 animate-spin mb-3 text-blue-300" />
                     <p>Loading portfolio data...</p>
                   </div>
                 ) : (
                   <div>
+                    {loadError ? (
+                      <div className="p-3 rounded-md bg-red-900/20 border border-red-800 mb-3">
+                        <p className="text-red-200">Error: {loadError}</p>
+                      </div>
+                    ) : null}
                     <p>No assets found in your Binance account</p>
-                    <p className="text-sm text-slate-400 mt-1">
+                    <p className="text-sm text-slate-300 mt-1">
                       {binanceService.isInTestMode() ? 
                         "Currently in test mode - using simulated data" : 
                         "Using live Binance API"
@@ -252,8 +335,8 @@ const PortfolioSummary: React.FC = () => {
                     {binanceService.isInTestMode() && (
                       <div className="mt-3 mx-auto max-w-md p-3 rounded-md bg-blue-900/20 border border-blue-800">
                         <div className="flex items-start">
-                          <Info className="h-5 w-5 text-blue-400 mr-2 mt-0.5 flex-shrink-0" />
-                          <p className="text-sm text-blue-300">
+                          <Info className="h-5 w-5 text-blue-300 mr-2 mt-0.5 flex-shrink-0" />
+                          <p className="text-sm text-blue-200">
                             In test mode, simulated assets will be displayed based on predefined test data. Try refreshing to view test assets.
                           </p>
                         </div>
@@ -261,7 +344,7 @@ const PortfolioSummary: React.FC = () => {
                     )}
                     <Button 
                       variant="link" 
-                      className="text-blue-400 p-0 h-auto mt-3"
+                      className="text-blue-300 p-0 h-auto mt-3"
                       onClick={checkConnectionAndLoadPortfolio}
                     >
                       Refresh portfolio
