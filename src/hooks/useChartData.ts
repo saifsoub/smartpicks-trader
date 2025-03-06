@@ -77,8 +77,9 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
       loadChartData(false);
     };
     
-    // Set up the interval with correct typing
-    refreshIntervalRef.current = setInterval(refreshData, 60000);
+    // Set up the interval with the correct typing
+    // Using NodeJS.Timeout explicitly
+    refreshIntervalRef.current = setInterval(refreshData, 60000) as unknown as NodeJS.Timeout;
     
     return () => {
       if (refreshIntervalRef.current) {
