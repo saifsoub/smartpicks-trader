@@ -77,8 +77,8 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
       loadChartData(false);
     };
     
-    // Set up the interval - fix: remove the second argument from the cast
-    refreshIntervalRef.current = setInterval(refreshData, 60000) as NodeJS.Timeout;
+    // Set up the interval - properly using global window.setInterval
+    refreshIntervalRef.current = window.setInterval(refreshData, 60000);
     
     return () => {
       if (refreshIntervalRef.current) {
