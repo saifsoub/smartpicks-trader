@@ -1,4 +1,3 @@
-
 import { toast } from "sonner";
 import binanceService from "./binanceService";
 
@@ -267,6 +266,11 @@ class TradingService {
 
   private async executeTrade(signal: TradeSignal): Promise<void> {
     try {
+      // Only execute trades for BUY or SELL actions, not HOLD
+      if (signal.action === 'HOLD') {
+        return;
+      }
+      
       // In a production system, you would implement position sizing here
       const quantity = signal.symbol.includes('BTC') ? '0.001' : '0.01';
       

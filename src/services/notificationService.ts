@@ -77,7 +77,7 @@ class NotificationService {
       // In a real implementation you would need a serverless function or backend service
       // return await this.sendViaTelegramAPI(message);
       
-      toast.success(`Notification sent via Telegram to ${recipient}`);
+      toast.success(`Notification sent via Telegram to @Seifbesttrader`);
       return true;
     } catch (error) {
       console.error('Failed to send Telegram notification:', error);
