@@ -72,10 +72,10 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
       clearInterval(refreshIntervalRef.current);
     }
     
-    // Fix: Use type assertion for setInterval return value
-    refreshIntervalRef.current = (setInterval(() => {
+    // Set the interval for refreshing data
+    refreshIntervalRef.current = setInterval(() => {
       loadChartData(false);
-    }, 60000) as unknown) as NodeJS.Timeout;
+    }, 60000) as unknown as NodeJS.Timeout;
     
     return () => {
       if (refreshIntervalRef.current) {
