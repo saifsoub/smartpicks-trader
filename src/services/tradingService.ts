@@ -362,7 +362,7 @@ class TradingService {
       const highPrices = klines.map(kline => parseFloat(kline[2]));
       const lowPrices = klines.map(kline => parseFloat(kline[3]));
       const volumes = klines.map(kline => parseFloat(kline[5]));
-      const currentPrice = parseFloat(price);
+      const currentPriceValue = parseFloat(price);
       
       switch (strategy.name) {
         case "RSI + MACD Crossover": {
@@ -461,12 +461,11 @@ class TradingService {
             highestPrice - (highestPrice - lowestPrice) * level
           );
           
-          const currentPrice = parseFloat(currentPrice);
           const rsiThreshold = strategy.parameters.rsiThreshold || 40;
           
           for (let i = 0; i < fibPrices.length; i++) {
             const fibPrice = fibPrices[i];
-            const priceDeviation = Math.abs(currentPrice - fibPrice) / fibPrice * 100;
+            const priceDeviation = Math.abs(currentPriceValue - fibPrice) / fibPrice * 100;
             
             if (priceDeviation < 1.0 && currentRSI < rsiThreshold) {
               action = 'BUY';

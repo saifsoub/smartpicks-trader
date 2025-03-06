@@ -7,8 +7,6 @@ import {
   BadgeDollarSign, BarChart4, Bot, Zap, AlertTriangle,
   ArrowUpRight, ArrowDownRight, Gauge, MessageSquare, AreaChart
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
 import TradingChart from "@/components/TradingChart";
 import BotStatus from "@/components/BotStatus";
 import ActiveStrategies from "@/components/ActiveStrategies";
