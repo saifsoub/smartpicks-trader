@@ -45,10 +45,8 @@ const TradingChart: React.FC<TradingChartProps> = ({ symbol: initialSymbol = "BT
   ];
 
   useEffect(() => {
-    // Load chart data
     loadChartData();
     
-    // Set up auto-refresh
     const intervalId = setInterval(() => {
       loadChartData(false);
     }, 60000);
@@ -69,7 +67,6 @@ const TradingChart: React.FC<TradingChartProps> = ({ symbol: initialSymbol = "BT
         toast.info(`Loading chart data for ${symbol}...`);
       }
       
-      // Get symbol price information
       const symbols = await binanceService.getSymbols();
       const symbolInfo = symbols.find((s) => s.symbol === symbol);
       
@@ -77,21 +74,18 @@ const TradingChart: React.FC<TradingChartProps> = ({ symbol: initialSymbol = "BT
         setPriceChange(parseFloat(symbolInfo.priceChangePercent));
       }
       
-      // Get current price
       const prices = await binanceService.getPrices();
       if (prices && prices[symbol]) {
         setCurrentPrice(prices[symbol]);
       }
       
-      // Get kline data
       const klines = await binanceService.getKlines(symbol, interval);
       
-      // Transform kline data for the chart
       const formattedData = klines.map((kline: any) => {
         const date = new Date(kline[0]);
         return {
           time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }),
-          price: parseFloat(kline[4]), // close price
+          price: parseFloat(kline[4]),
           open: parseFloat(kline[1]),
           high: parseFloat(kline[2]),
           low: parseFloat(kline[3]),
