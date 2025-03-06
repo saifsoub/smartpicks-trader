@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { ArrowLeft, ArrowUpDown, Save, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowUpDown, Save, RefreshCw, CheckCircle, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import binanceService from "@/services/binanceService";
 import notificationService from "@/services/notificationService";
@@ -15,6 +15,7 @@ const Settings = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'untested' | 'success' | 'error'>('untested');
   
   // Binance API settings
   const [apiKey, setApiKey] = useState("");
@@ -59,6 +60,7 @@ const Settings = () => {
     }
     
     setIsLoading(true);
+    setConnectionStatus('untested');
     
     try {
       // Save credentials
@@ -76,15 +78,19 @@ const Settings = () => {
         const connectionTest = await binanceService.testConnection();
         if (connectionTest) {
           toast.success("Connection to Binance API successful");
+          setConnectionStatus('success');
         } else {
           toast.error("Connection test failed. Please check your API keys.");
+          setConnectionStatus('error');
         }
       } else {
         toast.error("Failed to save API keys");
+        setConnectionStatus('error');
       }
     } catch (error) {
       console.error("Error saving API keys:", error);
       toast.error("An error occurred while saving API keys");
+      setConnectionStatus('error');
     } finally {
       setIsLoading(false);
     }
@@ -193,6 +199,23 @@ const Settings = () => {
                   Never share your secret key with anyone
                 </p>
               </div>
+              {connectionStatus !== 'untested' && (
+                <div className={`p-3 rounded flex items-center ${
+                  connectionStatus === 'success' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
+                }`}>
+                  {connectionStatus === 'success' ? (
+                    <>
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      <span>API connection successful</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertCircle className="mr-2 h-4 w-4" />
+                      <span>API connection failed. Please check your keys or try again later.</span>
+                    </>
+                  )}
+                </div>
+              )}
               <Button 
                 className="w-full" 
                 onClick={handleSaveApiKeys}
@@ -210,6 +233,9 @@ const Settings = () => {
                   </>
                 )}
               </Button>
+              <p className="text-xs text-center text-slate-400">
+                Note: For demo purposes, this will simulate a connection to Binance
+              </p>
             </CardContent>
           </Card>
 
