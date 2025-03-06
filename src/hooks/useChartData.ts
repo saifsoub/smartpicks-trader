@@ -22,7 +22,7 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Define loadChartData with an optional parameter
-  const loadChartData = useCallback(async (showToast: boolean = true) => {
+  const loadChartData = useCallback(async (showToast = true) => {
     try {
       setLoading(true);
       if (showToast) {
@@ -72,7 +72,7 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
       clearInterval(refreshIntervalRef.current);
     }
     
-    // Define the refresh function
+    // Define the refresh function that calls loadChartData without showing toast
     const refreshData = () => {
       loadChartData(false);
     };
