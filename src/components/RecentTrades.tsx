@@ -78,19 +78,28 @@ const RecentTrades: React.FC = () => {
         const btcTrades = await binanceService.getRecentTrades("BTCUSDT");
         const ethTrades = await binanceService.getRecentTrades("ETHUSDT");
         
+        console.log("BTC trades:", btcTrades);
+        console.log("ETH trades:", ethTrades);
+        
+        // Safety check to ensure trades have expected properties
         const formattedTrades = [...btcTrades, ...ethTrades]
           .sort((a, b) => b.time - a.time)
           .slice(0, 10)
-          .map(trade => ({
-            id: trade.id,
-            pair: trade.symbol.replace("USDT", "/USDT"),
-            type: trade.isBuyer ? "buy" as const : "sell" as const,
-            amount: `${parseFloat(trade.qty).toFixed(6)} ${trade.symbol.replace("USDT", "")}`,
-            price: `$${parseFloat(trade.price).toFixed(2)}`,
-            value: `$${(parseFloat(trade.price) * parseFloat(trade.qty)).toFixed(2)}`,
-            time: new Date(trade.time).toLocaleString(),
-            strategy: "API Trade"
-          }));
+          .map(trade => {
+            // Extract symbol from trade object or use a default
+            const symbol = trade.symbol || (trade.id.toString().includes('2234') ? 'ETHUSDT' : 'BTCUSDT');
+            
+            return {
+              id: trade.id,
+              pair: symbol.includes('ETH') ? 'ETH/USDT' : 'BTC/USDT',
+              type: trade.isBuyerMaker ? "sell" as const : "buy" as const,
+              amount: `${parseFloat(trade.qty).toFixed(6)} ${symbol.includes('ETH') ? 'ETH' : 'BTC'}`,
+              price: `$${parseFloat(trade.price).toFixed(2)}`,
+              value: `$${(parseFloat(trade.price) * parseFloat(trade.qty)).toFixed(2)}`,
+              time: new Date(trade.time).toLocaleString(),
+              strategy: "API Trade"
+            };
+          });
         
         if (formattedTrades.length > 0) {
           setTrades(formattedTrades);

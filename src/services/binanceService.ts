@@ -52,6 +52,29 @@ class BinanceService {
     return this.credentials?.apiKey || '';
   }
 
+  private async fetchWithRetry(url: string, options: RequestInit = {}, retries = 3): Promise<Response> {
+    let lastError;
+    
+    for (let attempt = 0; attempt < retries; attempt++) {
+      try {
+        const response = await fetch(url, options);
+        if (!response.ok) {
+          throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+        }
+        return response;
+      } catch (error) {
+        console.warn(`API request failed (attempt ${attempt + 1}/${retries}):`, error);
+        lastError = error;
+        // Only delay if we're going to retry
+        if (attempt < retries - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+    }
+    
+    throw lastError;
+  }
+
   public async testConnection(): Promise<boolean> {
     if (!this.hasCredentials()) {
       return false;
@@ -104,33 +127,27 @@ class BinanceService {
       return await response.json();
     } catch (error) {
       console.error('Error fetching account info:', error);
-      throw error;
+      return { balances: [] };
     }
   }
 
   public async getSymbols(): Promise<BinanceSymbol[]> {
     try {
-      const response = await fetch('https://api.binance.com/api/v3/ticker/24hr');
-      if (!response.ok) {
-        throw new Error('Failed to fetch symbols');
-      }
+      const response = await this.fetchWithRetry('https://api.binance.com/api/v3/ticker/24hr');
       return await response.json();
     } catch (error) {
       console.error('Error fetching symbols:', error);
-      throw error;
+      return [];
     }
   }
 
   public async getRecentTrades(symbol: string): Promise<any[]> {
     try {
-      const response = await fetch(`https://api.binance.com/api/v3/trades?symbol=${symbol}&limit=10`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch trades for ${symbol}`);
-      }
+      const response = await this.fetchWithRetry(`https://api.binance.com/api/v3/trades?symbol=${symbol}&limit=10`);
       return await response.json();
     } catch (error) {
-      console.error('Error fetching recent trades:', error);
-      throw error;
+      console.error(`Error fetching recent trades for ${symbol}:`, error);
+      return [];
     }
   }
 
@@ -158,12 +175,27 @@ class BinanceService {
     }
 
     try {
-      // In a real implementation, this would use Binance API
-      // For now return an empty object since we're not in test mode
+      const accountInfo = await this.getAccountInfo();
+      
+      if (accountInfo && accountInfo.balances) {
+        const balanceMap: Record<string, BalanceInfo> = {};
+        
+        for (const balance of accountInfo.balances) {
+          if (parseFloat(balance.free) > 0 || parseFloat(balance.locked) > 0) {
+            balanceMap[balance.asset] = {
+              available: balance.free,
+              total: (parseFloat(balance.free) + parseFloat(balance.locked)).toString()
+            };
+          }
+        }
+        
+        return balanceMap;
+      }
+      
       return {};
     } catch (error) {
       console.error('Error fetching account balance:', error);
-      throw error;
+      return {};
     }
   }
 

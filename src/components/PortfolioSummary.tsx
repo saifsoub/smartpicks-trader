@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -82,14 +81,22 @@ const PortfolioSummary: React.FC = () => {
       const accountInfo = await binanceService.getAccountInfo();
       
       if (!accountInfo || !accountInfo.balances) {
-        throw new Error("Invalid account data received");
+        console.warn("Invalid account data received or empty balances:", accountInfo);
+        setLoadError("Unable to load portfolio data. Your account may be empty or there was an API issue.");
+        setBalances([]);
+        setTotalValue(0);
+        return;
       }
+      
+      console.log("Account info received:", accountInfo);
       
       // Get current prices to calculate USD values
       const prices = await binanceService.getPrices();
+      console.log("Prices received:", prices);
       
       // Get symbol info for percent changes
       const symbols = await binanceService.getSymbols();
+      console.log("Symbols received:", symbols);
       
       // Process the data with the account info and returned prices/symbols
       processPortfolioData(accountInfo, prices, symbols);
@@ -104,7 +111,6 @@ const PortfolioSummary: React.FC = () => {
     }
   };
   
-  // Helper function to process portfolio data
   const processPortfolioData = (accountInfo: any, prices?: Record<string, string>, symbols?: any[]) => {
     try {
       // Process balances to include USD values and changes
