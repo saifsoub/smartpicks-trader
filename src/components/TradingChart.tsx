@@ -50,7 +50,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ symbol: initialSymbol = "BT
     
     // Set up auto-refresh
     const intervalId = setInterval(() => {
-      loadChartData();
+      loadChartData(false);
     }, 60000);
     
     setRefreshInterval(intervalId);
@@ -60,7 +60,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ symbol: initialSymbol = "BT
         clearInterval(refreshInterval);
       }
     };
-  }, [symbol]);
+  }, [symbol, interval]);
 
   const loadChartData = async (showToast = true) => {
     try {

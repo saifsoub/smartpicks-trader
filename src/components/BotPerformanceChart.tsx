@@ -301,7 +301,10 @@ const BotPerformanceChart: React.FC = () => {
                         color: '#e5e7eb'
                       }}
                       formatter={(value, name) => {
-                        if (name === 'Profit') return [`$${value.toFixed(2)}`, name];
+                        if (name === 'Profit') {
+                          const numValue = typeof value === 'number' ? value : parseFloat(String(value));
+                          return [`$${numValue.toFixed(2)}`, name];
+                        }
                         return [value, name];
                       }}
                     />
