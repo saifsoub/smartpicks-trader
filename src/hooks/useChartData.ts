@@ -72,10 +72,13 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
       clearInterval(refreshIntervalRef.current);
     }
     
-    // Set the interval for refreshing data
-    refreshIntervalRef.current = setInterval(() => {
+    // Set up the interval with proper type casting
+    const intervalId = setInterval(() => {
       loadChartData(false);
-    }, 60000) as unknown as NodeJS.Timeout;
+    }, 60000);
+    
+    // Store the interval ID with proper type casting
+    refreshIntervalRef.current = intervalId as unknown as NodeJS.Timeout;
     
     return () => {
       if (refreshIntervalRef.current) {
@@ -83,7 +86,7 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
         refreshIntervalRef.current = null;
       }
     };
-  }, [loadChartData, symbol, interval]);
+  }, [loadChartData]);
 
   const formatPrice = (price: number) => {
     return price > 1 
