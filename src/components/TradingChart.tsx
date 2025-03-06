@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -58,12 +57,16 @@ const TradingChart: React.FC<TradingChartProps> = ({ symbol: initialSymbol = "BT
       loadChartData(false);
     }, 60000);
     
+    // Store the interval ID
     setRefreshInterval(newInterval);
     
+    // Cleanup function to clear interval when component unmounts or dependencies change
     return () => {
       if (refreshInterval) {
         clearInterval(refreshInterval);
       }
+      // Also clear the new interval we just created
+      clearInterval(newInterval);
     };
   }, [symbol, interval]);
 
