@@ -21,7 +21,7 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
   const [priceChange, setPriceChange] = useState<number | null>(null);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const loadChartData = useCallback(async (showToast = true) => {
+  const loadChartData = useCallback(async (showToast: boolean = true) => {
     try {
       setLoading(true);
       if (showToast) {
@@ -72,12 +72,9 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
     }
     
     // Create a new interval and store it properly
-    const intervalId = setInterval(() => {
+    refreshIntervalRef.current = setInterval(() => {
       loadChartData(false);
     }, 60000);
-    
-    // Store the interval ID in the ref
-    refreshIntervalRef.current = intervalId;
     
     return () => {
       if (refreshIntervalRef.current) {
