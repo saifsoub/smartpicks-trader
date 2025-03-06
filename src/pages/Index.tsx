@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -20,23 +20,55 @@ import AutomatedTradingSetup from "@/components/AutomatedTradingSetup";
 import PerformanceMetrics from "@/components/PerformanceMetrics";
 import AIChatAssistant from "@/components/AIChatAssistant";
 import NewbieGuideDashboard from "@/components/NewbieGuideDashboard";
+import binanceService from "@/services/binanceService";
 
 const Index: React.FC = () => {
   const [dashboardMode, setDashboardMode] = useState<'beginner' | 'advanced'>('beginner');
   const [isSetupMode, setIsSetupMode] = useState(true);
+  const [btcPrice, setBtcPrice] = useState("0.00");
+  const [btcChange, setBtcChange] = useState(0);
+  const [selectedSymbol, setSelectedSymbol] = useState("BTCUSDT");
   const navigate = useNavigate();
   
   const marketSentiment = tradingService.getMarketSentiment();
-  
-  // Mock data for BTC price and change
-  const btcPrice = "67,850.45";
-  const btcChange = 3.72;
   
   const aiInsights = {
     mainInsight: "Bitcoin shows a strong bullish trend with increasing institutional interest. Technical indicators and sentiment analysis suggest further upside potential.",
     technicalAnalysis: "Multiple indicators showing bullish signals with strong support at $65,400. RSI at 62 indicates room for growth before overbought conditions.",
     newsSentiment: "Recent regulatory developments are positive for the market. Social sentiment analysis shows 72% bullish perspectives across major platforms.",
     prediction: "Short-term target of $69,000 with 78% confidence. Momentum indicators suggest strong uptrend continuation."
+  };
+  
+  useEffect(() => {
+    // Load real-time price data when component mounts
+    fetchPriceData();
+    
+    // Set up interval to refresh data
+    const interval = setInterval(fetchPriceData, 30000); // every 30 seconds
+    
+    return () => clearInterval(interval);
+  }, []);
+  
+  const fetchPriceData = async () => {
+    try {
+      // Get current BTC price
+      const prices = await binanceService.getPrices();
+      if (prices && prices["BTCUSDT"]) {
+        setBtcPrice(parseFloat(prices["BTCUSDT"]).toLocaleString('en-US', { 
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2 
+        }));
+      }
+      
+      // Get BTC price change
+      const symbols = await binanceService.getSymbols();
+      const btcSymbol = symbols.find(s => s.symbol === "BTCUSDT");
+      if (btcSymbol) {
+        setBtcChange(parseFloat(btcSymbol.priceChangePercent));
+      }
+    } catch (error) {
+      console.error("Failed to fetch price data:", error);
+    }
   };
   
   const toggleSetupMode = () => {
@@ -147,7 +179,7 @@ const Index: React.FC = () => {
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
               <div className="lg:col-span-2">
-                <TradingChart />
+                <TradingChart symbol={selectedSymbol} />
               </div>
               <div className="space-y-4">
                 <BotStatus />
