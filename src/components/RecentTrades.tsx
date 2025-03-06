@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowDown, ArrowUp, RefreshCw } from "lucide-react";
+import { ArrowDown, ArrowUp, RefreshCw, AlertTriangle, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import binanceService from "@/services/binanceService";
 import { toast } from "sonner";
@@ -18,104 +18,72 @@ interface Trade {
   strategy: string;
 }
 
-// Sample trades for when real data isn't available
-const sampleTrades: Trade[] = [
-  {
-    id: 1,
-    pair: "BTC/USDT",
-    type: "buy",
-    amount: "0.024 BTC",
-    price: "$66,120.35",
-    value: "$1,586.89",
-    time: "10 minutes ago",
-    strategy: "RSI + MACD Crossover"
-  },
-  {
-    id: 2,
-    pair: "ETH/USDT",
-    type: "sell",
-    amount: "0.92 ETH",
-    price: "$3,221.48",
-    value: "$2,963.76",
-    time: "32 minutes ago",
-    strategy: "Bollinger Breakout"
-  },
-  {
-    id: 3,
-    pair: "BTC/USDT",
-    type: "buy",
-    amount: "0.018 BTC",
-    price: "$65,984.12",
-    value: "$1,187.71",
-    time: "54 minutes ago",
-    strategy: "RSI + MACD Crossover"
-  },
-  {
-    id: 4,
-    pair: "SOL/USDT",
-    type: "sell",
-    amount: "8.4 SOL",
-    price: "$172.62",
-    value: "$1,450.01",
-    time: "1 hour ago",
-    strategy: "Bollinger Breakout"
-  }
-];
-
 const RecentTrades: React.FC = () => {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
   
-  // Try to fetch real trades on component mount
+  // Check connection and fetch trades on component mount
   useEffect(() => {
-    if (binanceService.hasCredentials()) {
-      fetchTrades();
-    } else {
-      // Use sample data if no credentials are available
-      setTrades(sampleTrades);
-    }
+    checkConnectionAndFetchTrades();
   }, []);
   
-  const fetchTrades = async () => {
+  const checkConnectionAndFetchTrades = async () => {
+    if (!binanceService.hasCredentials()) {
+      setIsConnected(false);
+      return;
+    }
+    
     setIsLoading(true);
     
     try {
-      if (!binanceService.hasCredentials()) {
-        toast.error("Binance API credentials not configured");
-        setTrades(sampleTrades);
-        return;
+      // First check if we're connected to the real API
+      const testConnection = await binanceService.testConnection();
+      setIsConnected(testConnection && !binanceService.isInTestMode());
+      
+      if (testConnection && !binanceService.isInTestMode()) {
+        // Only fetch trades if we have real connection
+        fetchTrades();
+      } else {
+        setTrades([]);
+        if (!binanceService.isInTestMode()) {
+          toast.error("Not connected to real Binance API");
+        }
       }
-      
+    } catch (error) {
+      console.error("Failed to test connection:", error);
+      setIsConnected(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const fetchTrades = async () => {
+    try {
       // Attempt to get real trades from Binance
-      // For now, we'll use the sample trades since we don't have real API integration
+      const btcTrades = await binanceService.getRecentTrades("BTCUSDT");
+      const ethTrades = await binanceService.getRecentTrades("ETHUSDT");
       
-      // const btcTrades = await binanceService.getRecentTrades("BTCUSDT");
-      // const ethTrades = await binanceService.getRecentTrades("ETHUSDT");
-      // 
-      // // Transform to our trade format
-      // const formattedTrades = [...btcTrades, ...ethTrades]
-      //   .sort((a, b) => b.time - a.time)
-      //   .slice(0, 10)
-      //   .map(trade => ({
-      //     id: trade.id,
-      //     pair: trade.symbol.replace("USDT", "/USDT"),
-      //     type: trade.isBuyer ? "buy" : "sell",
-      //     amount: `${parseFloat(trade.qty).toFixed(6)} ${trade.symbol.replace("USDT", "")}`,
-      //     price: `$${parseFloat(trade.price).toFixed(2)}`,
-      //     value: `$${(parseFloat(trade.price) * parseFloat(trade.qty)).toFixed(2)}`,
-      //     time: new Date(trade.time).toLocaleString(),
-      //     strategy: "Manual Trade" // Real trades wouldn't have a strategy attached
-      //   }));
+      // Transform to our trade format
+      const formattedTrades = [...btcTrades, ...ethTrades]
+        .sort((a, b) => b.time - a.time)
+        .slice(0, 10)
+        .map(trade => ({
+          id: trade.id,
+          pair: trade.symbol.replace("USDT", "/USDT"),
+          type: trade.isBuyer ? "buy" : "sell",
+          amount: `${parseFloat(trade.qty).toFixed(6)} ${trade.symbol.replace("USDT", "")}`,
+          price: `$${parseFloat(trade.price).toFixed(2)}`,
+          value: `$${(parseFloat(trade.price) * parseFloat(trade.qty)).toFixed(2)}`,
+          time: new Date(trade.time).toLocaleString(),
+          strategy: "API Trade" // Real trades wouldn't have a strategy attached
+        }));
       
-      // For now, use sample trades
-      setTrades(sampleTrades);
-      
+      setTrades(formattedTrades);
     } catch (error) {
       console.error("Failed to fetch trades:", error);
       toast.error("Failed to load recent trades");
-      setTrades(sampleTrades);
-    } finally {
-      setIsLoading(false);
+      setTrades([]);
     }
   };
 
@@ -127,7 +95,7 @@ const RecentTrades: React.FC = () => {
           <Button 
             variant="ghost" 
             size="sm" 
-            onClick={fetchTrades}
+            onClick={checkConnectionAndFetchTrades}
             disabled={isLoading}
             className="text-slate-400 hover:text-white"
           >
@@ -140,51 +108,73 @@ const RecentTrades: React.FC = () => {
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-800">
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Pair</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Type</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Amount</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Price</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Value</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Time</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Strategy</th>
-              </tr>
-            </thead>
-            <tbody>
-              {trades.map((trade) => (
-                <tr key={trade.id} className="border-b border-slate-800">
-                  <td className="px-4 py-3 text-sm font-medium">{trade.pair}</td>
-                  <td className="px-4 py-3 text-sm">
-                    <Badge 
-                      className={`flex items-center w-[70px] justify-center ${
-                        trade.type === "buy" 
-                        ? "bg-green-500/10 text-green-500" 
-                        : "bg-red-500/10 text-red-500"
-                      }`}
-                    >
-                      {trade.type === "buy" 
-                        ? <><ArrowDown className="mr-1 h-3 w-3" /> Buy</> 
-                        : <><ArrowUp className="mr-1 h-3 w-3" /> Sell</>
-                      }
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-sm">{trade.amount}</td>
-                  <td className="px-4 py-3 text-sm">{trade.price}</td>
-                  <td className="px-4 py-3 text-sm">{trade.value}</td>
-                  <td className="px-4 py-3 text-sm text-slate-400">{trade.time}</td>
-                  <td className="px-4 py-3 text-sm">
-                    <span className="rounded-full bg-blue-500/10 px-2 py-1 text-xs text-blue-400">
-                      {trade.strategy}
-                    </span>
-                  </td>
+        {!isConnected ? (
+          <div className="text-center py-12">
+            <AlertTriangle className="h-10 w-10 text-yellow-500 mx-auto mb-3" />
+            <p className="text-white font-medium">Not connected to Binance API</p>
+            <p className="text-slate-400 text-sm mt-1">Please configure real API credentials in Settings</p>
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="mt-4 border-slate-700 bg-slate-800 text-white hover:bg-slate-700"
+              onClick={() => window.location.href = '/settings'}
+            >
+              <Settings className="mr-2 h-4 w-4" />
+              Configure API
+            </Button>
+          </div>
+        ) : trades.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-800">
+                  <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Pair</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Type</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Amount</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Price</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Value</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Time</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-slate-400">Type</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {trades.map((trade) => (
+                  <tr key={trade.id} className="border-b border-slate-800">
+                    <td className="px-4 py-3 text-sm font-medium text-white">{trade.pair}</td>
+                    <td className="px-4 py-3 text-sm">
+                      <Badge 
+                        className={`flex items-center w-[70px] justify-center ${
+                          trade.type === "buy" 
+                          ? "bg-green-500/10 text-green-500" 
+                          : "bg-red-500/10 text-red-500"
+                        }`}
+                      >
+                        {trade.type === "buy" 
+                          ? <><ArrowDown className="mr-1 h-3 w-3" /> Buy</> 
+                          : <><ArrowUp className="mr-1 h-3 w-3" /> Sell</>
+                        }
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-white">{trade.amount}</td>
+                    <td className="px-4 py-3 text-sm text-white">{trade.price}</td>
+                    <td className="px-4 py-3 text-sm text-white">{trade.value}</td>
+                    <td className="px-4 py-3 text-sm text-slate-300">{trade.time}</td>
+                    <td className="px-4 py-3 text-sm">
+                      <span className="rounded-full bg-blue-500/10 px-2 py-1 text-xs text-blue-400">
+                        {trade.strategy}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <p className="text-white">No trades found in your Binance account</p>
+            <p className="text-slate-400 text-sm mt-1">Trades will appear here as you make them</p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

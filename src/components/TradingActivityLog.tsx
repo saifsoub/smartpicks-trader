@@ -116,7 +116,7 @@ const TradingActivityLog: React.FC = () => {
                   {getIconForLogType(log.type)}
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm">{log.message}</p>
+                  <p className="text-sm text-white">{log.message}</p>
                   <div className="flex items-center mt-1 text-xs text-slate-400">
                     <Clock className="h-3 w-3 mr-1" />
                     <span>{formatTimestamp(log.timestamp)}</span>
@@ -126,10 +126,10 @@ const TradingActivityLog: React.FC = () => {
             ))}
           </ul>
         ) : (
-          <div className="text-center py-12 text-slate-400">
-            <Info className="h-8 w-8 mx-auto mb-3 opacity-50" />
-            <p>No trading activity logs yet</p>
-            <p className="text-xs mt-1">Logs will appear as the bot operates</p>
+          <div className="text-center py-12">
+            <Info className="h-8 w-8 mx-auto mb-3 text-slate-500 opacity-50" />
+            <p className="text-white">No trading activity logs yet</p>
+            <p className="text-slate-400 text-xs mt-1">Logs will appear as the bot operates</p>
           </div>
         )}
       </CardContent>

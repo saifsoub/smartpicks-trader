@@ -26,7 +26,7 @@ const Index = () => {
             <Button 
               variant="outline" 
               size="sm" 
-              className="border-slate-700 bg-slate-800 hover:bg-slate-700"
+              className="border-slate-700 bg-slate-800 text-white hover:bg-slate-700"
               onClick={() => navigate("/strategies")}
             >
               Strategies
@@ -34,7 +34,7 @@ const Index = () => {
             <Button 
               variant="outline" 
               size="sm"
-              className="border-slate-700 bg-slate-800 hover:bg-slate-700"
+              className="border-slate-700 bg-slate-800 text-white hover:bg-slate-700"
               onClick={() => navigate("/settings")}
             >
               <Settings className="mr-2 h-4 w-4" />

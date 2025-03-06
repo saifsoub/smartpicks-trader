@@ -1,3 +1,4 @@
+
 import { toast } from "sonner";
 import CryptoJS from 'crypto-js';
 
@@ -83,6 +84,17 @@ class BinanceService {
         console.error('Failed to parse trading logs:', error);
       }
     }
+  }
+
+  // Check if we're in test mode
+  public isInTestMode(): boolean {
+    return this.testMode;
+  }
+
+  // Set test mode on/off
+  public setTestMode(isTestMode: boolean): void {
+    this.testMode = isTestMode;
+    this.addLogEntry(`Test mode ${isTestMode ? 'enabled' : 'disabled'}`, 'info');
   }
 
   // Load credentials from localStorage
