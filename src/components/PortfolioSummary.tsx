@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,17 +19,14 @@ const PortfolioSummary: React.FC = () => {
   const [debugInfo, setDebugInfo] = useState<string | null>(null);
   
   useEffect(() => {
-    // Check initial connection state and load portfolio
     checkConnectionAndLoadPortfolio();
     
-    // Refresh portfolio data frequently (every 30 seconds)
     const interval = setInterval(() => {
       if (isConnected) {
         loadPortfolio();
       }
     }, 30000);
     
-    // Listen for credential updates from settings page
     const handleCredentialsUpdate = () => {
       console.log("Credentials updated, refreshing portfolio");
       checkConnectionAndLoadPortfolio();
@@ -57,19 +53,16 @@ const PortfolioSummary: React.FC = () => {
     setLoadError(null);
     
     try {
-      // Check connection
       setDebugInfo("Testing connection...");
       const testResult = await binanceService.testConnection();
       setDebugInfo(`Connection test result: ${testResult}`);
       
-      // Even if test fails, we'll try to load data
       setIsConnected(true);
       await loadPortfolio();
     } catch (error) {
       console.error("Failed to test connection:", error);
       setDebugInfo(`Connection test error: ${error instanceof Error ? error.message : String(error)}`);
       
-      // Still try to load portfolio even if connection test fails
       setIsConnected(true);
       await loadPortfolio();
     } finally {
@@ -83,7 +76,6 @@ const PortfolioSummary: React.FC = () => {
       setLoadError(null);
       setDebugInfo("Loading portfolio data...");
       
-      // Get account balances
       const accountInfo = await binanceService.getAccountInfo();
       setDebugInfo(`Account info received with ${accountInfo?.balances?.length || 0} balances`);
       
@@ -95,17 +87,14 @@ const PortfolioSummary: React.FC = () => {
         return;
       }
       
-      // Get current prices to calculate USD values
       setDebugInfo("Fetching prices...");
       const prices = await binanceService.getPrices();
       setDebugInfo(`Prices received for ${Object.keys(prices).length} symbols`);
       
-      // Get symbol info for percent changes
       setDebugInfo("Fetching symbols info...");
       const symbols = await binanceService.getSymbols();
       setDebugInfo(`Symbol info received for ${symbols.length} symbols`);
       
-      // Process the data
       setDebugInfo("Processing portfolio data...");
       processPortfolioData(accountInfo, prices, symbols);
       setDebugInfo("Portfolio data processed successfully");
@@ -123,7 +112,6 @@ const PortfolioSummary: React.FC = () => {
   
   const processPortfolioData = (accountInfo: any, prices?: Record<string, string>, symbols?: any[]) => {
     try {
-      // Process balances to include USD values and changes
       const significantBalances = accountInfo.balances
         .filter((balance: BinanceBalance) => 
           parseFloat(balance.free) > 0 || parseFloat(balance.locked) > 0
@@ -137,9 +125,10 @@ const PortfolioSummary: React.FC = () => {
           } else {
             const symbolKey = `${balance.asset}USDT`;
             if (prices && prices[symbolKey]) {
-              usdValue = (parseFloat(balance.free) + parseFloat(balance.locked)) * parseFloat(prices[symbolKey]);
+              const price = parseFloat(prices[symbolKey]);
+              const amount = parseFloat(balance.free) + parseFloat(balance.locked);
+              usdValue = amount * price;
               
-              // Find price change percentage
               if (symbols) {
                 const symbol = symbols.find((s: any) => s.symbol === symbolKey);
                 if (symbol) {
@@ -159,7 +148,6 @@ const PortfolioSummary: React.FC = () => {
       
       console.log("Processed balances:", significantBalances);
       
-      // Calculate total portfolio value
       const portfolioTotal = significantBalances.reduce(
         (sum: number, balance: EnhancedBalance) => sum + balance.usdValue, 
         0

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,32 +45,22 @@ const TradingChart: React.FC<TradingChartProps> = ({ symbol: initialSymbol = "BT
   ];
 
   useEffect(() => {
-    // Load data when component mounts or when symbol/interval changes
+    // Load chart data
     loadChartData();
     
-    // Clear any existing interval
-    if (refreshInterval) {
-      clearInterval(refreshInterval);
-    }
-    
-    // Refresh data every minute
-    const newInterval = setInterval(() => {
-      loadChartData(false);
+    // Set up auto-refresh
+    const intervalId = setInterval(() => {
+      loadChartData();
     }, 60000);
     
-    // Store the interval ID
-    setRefreshInterval(newInterval);
+    setRefreshInterval(intervalId);
     
-    // Cleanup function to clear interval when component unmounts or dependencies change
     return () => {
       if (refreshInterval) {
         clearInterval(refreshInterval);
       }
-      if (newInterval) {
-        clearInterval(newInterval);
-      }
     };
-  }, [symbol, interval]);
+  }, [symbol]);
 
   const loadChartData = async (showToast = true) => {
     try {
