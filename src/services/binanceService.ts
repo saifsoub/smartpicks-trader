@@ -8,6 +8,17 @@ export interface BalanceInfo {
   total: string;
 }
 
+export interface BinanceBalance {
+  asset: string;
+  free: string;
+  locked: string;
+}
+
+export interface BinanceSymbol {
+  symbol: string;
+  priceChangePercent: string;
+}
+
 class BinanceService {
   private credentials: BinanceCredentials | null = null;
 
@@ -49,12 +60,7 @@ class BinanceService {
     try {
       console.info('Testing API connection with credentials:', this.getApiKey());
       
-      // Due to CORS restrictions in browser environments,
-      // we can't directly test the Binance API from the client
-      // In a real implementation, this would use a backend proxy or serverless function
-      
       try {
-        // Attempt a simple request that might work in some environments
         const response = await fetch('https://api.binance.com/api/v3/ping', {
           method: 'GET',
           headers: {
@@ -66,8 +72,6 @@ class BinanceService {
       } catch (fetchError) {
         console.error('Fetch error during connection test:', fetchError);
         console.info('Unable to properly test connection due to CORS limitations in browser');
-        
-        // We'll assume the credentials are valid and proceed
         return true;
       }
     } catch (error) {
@@ -76,13 +80,78 @@ class BinanceService {
     }
   }
 
-  // Define isInTestMode method that was missing
   public isInTestMode(): boolean {
-    // We're always in real mode as requested by the user
     return false;
   }
 
-  // Get account balances
+  public async getAccountInfo(): Promise<{ balances: BinanceBalance[] }> {
+    if (!this.hasCredentials()) {
+      throw new Error('API credentials not configured');
+    }
+
+    try {
+      const response = await fetch('https://api.binance.com/api/v3/account', {
+        method: 'GET',
+        headers: {
+          'X-MBX-APIKEY': this.getApiKey()
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch account info');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching account info:', error);
+      throw error;
+    }
+  }
+
+  public async getSymbols(): Promise<BinanceSymbol[]> {
+    try {
+      const response = await fetch('https://api.binance.com/api/v3/ticker/24hr');
+      if (!response.ok) {
+        throw new Error('Failed to fetch symbols');
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching symbols:', error);
+      throw error;
+    }
+  }
+
+  public async getRecentTrades(symbol: string): Promise<any[]> {
+    try {
+      const response = await fetch(`https://api.binance.com/api/v3/trades?symbol=${symbol}&limit=10`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch trades for ${symbol}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching recent trades:', error);
+      throw error;
+    }
+  }
+
+  private tradingLogs: { timestamp: Date; message: string; type: 'info' | 'success' | 'error' }[] = [];
+
+  public getTradingLogs() {
+    return [...this.tradingLogs];
+  }
+
+  public clearTradingLogs() {
+    this.tradingLogs = [];
+  }
+
+  private addTradingLog(message: string, type: 'info' | 'success' | 'error' = 'info') {
+    this.tradingLogs.unshift({ timestamp: new Date(), message, type });
+    // Keep only last 100 logs
+    if (this.tradingLogs.length > 100) {
+      this.tradingLogs.pop();
+    }
+  }
+
   public async getAccountBalance(): Promise<Record<string, BalanceInfo>> {
     if (!this.hasCredentials()) {
       throw new Error('API credentials not configured');
@@ -98,7 +167,6 @@ class BinanceService {
     }
   }
 
-  // Get current prices for all symbols
   public async getPrices(): Promise<Record<string, string>> {
     try {
       const response = await fetch('https://api.binance.com/api/v3/ticker/price');
@@ -124,7 +192,6 @@ class BinanceService {
     }
   }
 
-  // Place a market order
   public async placeMarketOrder(
     symbol: string,
     side: 'BUY' | 'SELL',
@@ -154,7 +221,6 @@ class BinanceService {
     }
   }
 
-  // Get historical klines/candlestick data
   public async getKlines(
     symbol: string,
     interval: string,
