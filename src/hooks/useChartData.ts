@@ -21,7 +21,7 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
   const [priceChange, setPriceChange] = useState<number | null>(null);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Make sure the showToast parameter is properly typed with a default value
+  // Define loadChartData with an optional parameter
   const loadChartData = useCallback(async (showToast: boolean = true) => {
     try {
       setLoading(true);
@@ -72,11 +72,11 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
       clearInterval(refreshIntervalRef.current);
     }
     
-    // Explicitly type the return value of setInterval as NodeJS.Timeout
-    refreshIntervalRef.current = setInterval(() => {
-      // Call with explicit false parameter since it's defined
+    // Fix: Use type assertion for setInterval return value
+    refreshIntervalRef.current = (setInterval(() => {
+      // Use the loadChartData function with just one argument
       loadChartData(false);
-    }, 60000);
+    }, 60000) as unknown) as NodeJS.Timeout;
     
     return () => {
       if (refreshIntervalRef.current) {
