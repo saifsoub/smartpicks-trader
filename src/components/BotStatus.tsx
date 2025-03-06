@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,8 +20,8 @@ const BotStatus: React.FC = () => {
   const [profitLoss, setProfitLoss] = useState("$0.00");
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [activePairs, setActivePairs] = useState<string[]>([]);
   
-  // Advanced settings
   const [tradingPair, setTradingPair] = useState("BTCUSDT");
   const [riskLevel, setRiskLevel] = useState(50);
   const [trailingStopLoss, setTrailingStopLoss] = useState(false);
@@ -85,6 +84,25 @@ const BotStatus: React.FC = () => {
     };
   }, [isActive, startTime]);
   
+  useEffect(() => {
+    const loadActivePairs = async () => {
+      try {
+        const account = await binanceService.getAccountInfo();
+        if (account && account.balances) {
+          const pairs = account.balances
+            .filter(balance => parseFloat(balance.free) > 0 || parseFloat(balance.locked) > 0)
+            .map(balance => `${balance.asset}USDT`)
+            .filter(pair => pair !== 'USDTUSDT');
+          setActivePairs(pairs);
+        }
+      } catch (error) {
+        console.error('Error loading active pairs:', error);
+      }
+    };
+    
+    loadActivePairs();
+  }, []);
+  
   const loadStatistics = () => {
     const savedStats = localStorage.getItem('botStatistics');
     if (savedStats) {
@@ -110,7 +128,6 @@ const BotStatus: React.FC = () => {
           return;
         }
         
-        // Apply settings before starting
         tradingService.updateBotSettings({
           tradingPairs: [tradingPair],
           riskLevel: riskLevel,
@@ -144,7 +161,6 @@ const BotStatus: React.FC = () => {
   };
   
   const saveSettings = () => {
-    // Update trading service with new settings
     tradingService.updateBotSettings({
       tradingPairs: [tradingPair],
       riskLevel: riskLevel,
@@ -200,7 +216,20 @@ const BotStatus: React.FC = () => {
             
             <div className="text-slate-400">Stop Loss</div>
             <div className="text-right text-blue-400">{trailingStopLoss ? 'Trailing' : 'Fixed'}</div>
+            
+            <div className="text-slate-400">Active Pairs</div>
+            <div className="text-right text-blue-400">{activePairs.length}</div>
           </div>
+          
+          {activePairs.length > 0 && (
+            <div className="mt-2 p-2 bg-slate-800/50 rounded text-xs space-y-1">
+              {activePairs.map(pair => (
+                <div key={pair} className="flex justify-between text-slate-300">
+                  <span>{pair}</span>
+                </div>
+              ))}
+            </div>
+          )}
           
           <Button 
             className={isActive 

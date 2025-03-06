@@ -560,12 +560,12 @@ class TradingService {
   private isRunning: boolean = false;
   private strategies: TradingStrategy[] = [];
   private tradingInterval: ReturnType<typeof setInterval> | null = null;
-  private tradingPairs: string[] = ['BTCUSDT', 'ETHUSDT'];
+  private tradingPairs: string[] = [];
   private positions: Record<string, { inPosition: boolean, entryPrice: number | null, stopLoss: number | null, takeProfit: number | null }> = {};
   
   // Bot settings with defaults for risk management
   private botSettings: BotSettings = {
-    tradingPairs: ['BTCUSDT', 'ETHUSDT'],
+    tradingPairs: [],
     riskLevel: 50, // 1-100 scale, higher means more aggressive
     useTrailingStopLoss: false,
     useTakeProfit: true,
@@ -650,18 +650,44 @@ class TradingService {
       new ProfitTakingStrategy()
     ];
     
-    for (const pair of this.tradingPairs) {
-      this.positions[pair] = { 
-        inPosition: false, 
-        entryPrice: null,
-        stopLoss: null,
-        takeProfit: null
-      };
-    }
+    this.initializeTradingPairs();
     
     const wasRunning = localStorage.getItem('botRunning') === 'true';
     if (wasRunning) {
       this.startTrading();
+    }
+  }
+  
+  private async initializeTradingPairs() {
+    try {
+      const account = await binanceService.getAccountInfo();
+      if (account && account.balances) {
+        // Filter balances to only include assets with non-zero balances
+        const activeBalances = account.balances.filter(
+          balance => parseFloat(balance.free) > 0 || parseFloat(balance.locked) > 0
+        );
+        
+        // Convert each asset to a trading pair with USDT
+        this.tradingPairs = activeBalances
+          .map(balance => `${balance.asset}USDT`)
+          .filter(pair => pair !== 'USDTUSDT'); // Exclude USDT itself
+        
+        console.log('Initialized trading pairs from portfolio:', this.tradingPairs);
+        
+        // Initialize positions for all pairs
+        for (const pair of this.tradingPairs) {
+          this.positions[pair] = {
+            inPosition: false,
+            entryPrice: null,
+            stopLoss: null,
+            takeProfit: null
+          };
+        }
+      }
+    } catch (error) {
+      console.error('Error initializing trading pairs:', error);
+      // Fallback to default pairs if initialization fails
+      this.tradingPairs = ['BTCUSDT', 'ETHUSDT'];
     }
   }
   
@@ -714,8 +740,8 @@ class TradingService {
       // Initialize position tracking for any new pairs
       for (const pair of this.tradingPairs) {
         if (!this.positions[pair]) {
-          this.positions[pair] = { 
-            inPosition: false, 
+          this.positions[pair] = {
+            inPosition: false,
             entryPrice: null,
             stopLoss: null,
             takeProfit: null
@@ -738,7 +764,10 @@ class TradingService {
     }
     
     try {
-      console.log('Starting trading bot...');
+      // Refresh trading pairs before starting
+      await this.initializeTradingPairs();
+      
+      console.log('Starting trading bot with pairs:', this.tradingPairs);
       this.isRunning = true;
       localStorage.setItem('botRunning', 'true');
       
