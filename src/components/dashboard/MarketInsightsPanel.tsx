@@ -4,10 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
   Brain, BarChart4, MessageSquare, 
-  AreaChart, Gauge, Bot, TrendingUp, 
-  AlertTriangle, HelpCircle 
+  AreaChart, Bot, TrendingUp, 
+  HelpCircle, ArrowUpRight, ArrowUp, ArrowDownRight
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { toast } from "sonner";
 
 interface MarketInsightsPanelProps {
   aiInsights: {
@@ -37,30 +38,15 @@ const MarketInsightsPanel: React.FC<MarketInsightsPanelProps> = ({
             <div className="flex items-center mb-2">
               <BarChart4 className="h-5 w-5 text-blue-300 mr-2" />
               <h3 className="text-lg font-medium text-blue-100">Technical Analysis</h3>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 ml-1">
-                      <HelpCircle className="h-4 w-4 text-slate-400" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs">
-                    <p>Analysis of price action, volume, and technical indicators</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
             </div>
-            <p className="text-slate-200">{aiInsights.technicalAnalysis}</p>
-            <div className="mt-3 pt-3 border-t border-slate-700">
-              <div className="flex justify-between items-center mb-1 text-xs text-slate-400">
-                <span>Buy Signal Strength</span>
-                <span>{marketSentiment["BTC"]?.score || 50}%</span>
-              </div>
-              <div className="w-full bg-slate-700 rounded-full h-2">
-                <div 
-                  className="bg-green-500 h-2 rounded-full" 
-                  style={{ width: `${marketSentiment["BTC"]?.score || 50}%` }}
-                ></div>
+            <p className="text-slate-200 text-sm">{aiInsights.technicalAnalysis}</p>
+            <div className="mt-3 p-2 bg-blue-900/20 rounded-lg border border-blue-800/30">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-blue-300">BTC Signal</span>
+                <span className="text-sm text-green-300 flex items-center">
+                  <ArrowUp className="h-3 w-3 mr-1" />
+                  Buy
+                </span>
               </div>
             </div>
           </div>
@@ -68,21 +54,9 @@ const MarketInsightsPanel: React.FC<MarketInsightsPanelProps> = ({
           <div className="p-4 rounded-lg bg-slate-800/50 border border-slate-700">
             <div className="flex items-center mb-2">
               <MessageSquare className="h-5 w-5 text-green-300 mr-2" />
-              <h3 className="text-lg font-medium text-green-100">News Sentiment</h3>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 ml-1">
-                      <HelpCircle className="h-4 w-4 text-slate-400" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs">
-                    <p>Analysis of news, social media, and market sentiment</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <h3 className="text-lg font-medium text-green-100">Sentiment</h3>
             </div>
-            <p className="text-slate-200">{aiInsights.newsSentiment}</p>
+            <p className="text-slate-200 text-sm">{aiInsights.newsSentiment}</p>
             <div className="mt-3 grid grid-cols-3 gap-2">
               <div className="bg-green-900/30 p-2 rounded text-center">
                 <div className="text-xs text-green-400">Positive</div>
@@ -103,32 +77,15 @@ const MarketInsightsPanel: React.FC<MarketInsightsPanelProps> = ({
             <div className="flex items-center mb-2">
               <AreaChart className="h-5 w-5 text-yellow-300 mr-2" />
               <h3 className="text-lg font-medium text-yellow-100">AI Predictions</h3>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 ml-1">
-                      <HelpCircle className="h-4 w-4 text-slate-400" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs">
-                    <p>Price predictions based on machine learning models</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
             </div>
-            <p className="text-slate-200">{aiInsights.prediction}</p>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              <div className="relative">
-                <Gauge className="w-full h-12 text-blue-300" />
-                <div className="absolute top-7 left-0 right-0 text-center text-xs font-medium text-blue-200">24h</div>
-              </div>
-              <div className="relative">
-                <Gauge className="w-full h-12 text-purple-300" />
-                <div className="absolute top-7 left-0 right-0 text-center text-xs font-medium text-purple-200">7d</div>
-              </div>
-              <div className="relative">
-                <Gauge className="w-full h-12 text-green-300" />
-                <div className="absolute top-7 left-0 right-0 text-center text-xs font-medium text-green-200">30d</div>
+            <p className="text-slate-200 text-sm">{aiInsights.prediction}</p>
+            <div className="mt-3 p-2 bg-yellow-900/20 rounded-lg border border-yellow-800/30">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-yellow-300">Price Target</span>
+                <span className="text-sm text-green-300 flex items-center">
+                  <ArrowUpRight className="h-3 w-3 mr-1" />
+                  $69,000
+                </span>
               </div>
             </div>
           </div>
@@ -138,7 +95,7 @@ const MarketInsightsPanel: React.FC<MarketInsightsPanelProps> = ({
         <div className="mt-4 p-4 rounded-lg bg-indigo-900/20 border border-indigo-800">
           <div className="flex items-center mb-3">
             <Bot className="h-5 w-5 text-indigo-300 mr-2" />
-            <h3 className="text-lg font-medium text-indigo-100">AI Strategy Recommendations</h3>
+            <h3 className="text-lg font-medium text-indigo-100">AI Trading Strategies</h3>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -152,44 +109,57 @@ const MarketInsightsPanel: React.FC<MarketInsightsPanelProps> = ({
               </Tooltip>
             </TooltipProvider>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex bg-slate-800/70 rounded-lg p-3 border border-slate-700">
-              <div className="flex-shrink-0 mr-3">
-                <div className="h-10 w-10 rounded-full bg-green-700/30 flex items-center justify-center">
-                  <TrendingUp className="h-5 w-5 text-green-400" />
-                </div>
+          
+          <div className="space-y-3">
+            <div className="bg-slate-800/70 rounded-lg p-3 border border-slate-700">
+              <div className="flex items-center justify-between mb-1">
+                <h4 className="font-medium text-green-200 flex items-center">
+                  <ArrowUp className="h-4 w-4 mr-1.5" /> 
+                  Long BTC
+                </h4>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="text-xs h-7 bg-slate-800"
+                  onClick={() => toast.success("Strategy applied")}
+                >
+                  Apply
+                </Button>
               </div>
-              <div>
-                <h4 className="font-medium text-green-200">Long BTC with Bollinger Breakout</h4>
-                <p className="text-xs text-slate-400 mt-1">
-                  Price breaking above upper Bollinger Band with increasing volume suggests strong momentum.
-                </p>
-                <div className="mt-2">
-                  <Button size="sm" variant="outline" className="text-xs h-7 bg-slate-800">
-                    Apply Strategy
-                  </Button>
-                </div>
-              </div>
+              <p className="text-xs text-slate-400">
+                Bollinger Breakout with high volume suggests strong upward momentum.
+              </p>
             </div>
             
-            <div className="flex bg-slate-800/70 rounded-lg p-3 border border-slate-700">
-              <div className="flex-shrink-0 mr-3">
-                <div className="h-10 w-10 rounded-full bg-yellow-700/30 flex items-center justify-center">
-                  <AlertTriangle className="h-5 w-5 text-yellow-400" />
-                </div>
+            <div className="bg-slate-800/70 rounded-lg p-3 border border-slate-700">
+              <div className="flex items-center justify-between mb-1">
+                <h4 className="font-medium text-red-200 flex items-center">
+                  <ArrowDownRight className="h-4 w-4 mr-1.5" /> 
+                  Reduce ETH
+                </h4>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="text-xs h-7 bg-slate-800"
+                  onClick={() => toast.success("Position reviewed")}
+                >
+                  Review
+                </Button>
               </div>
-              <div>
-                <h4 className="font-medium text-yellow-200">Reduce ETH exposure</h4>
-                <p className="text-xs text-slate-400 mt-1">
-                  ETH showing bearish divergence on RSI with decreasing trading volume. Consider reducing position size.
-                </p>
-                <div className="mt-2">
-                  <Button size="sm" variant="outline" className="text-xs h-7 bg-slate-800">
-                    Review Position
-                  </Button>
-                </div>
-              </div>
+              <p className="text-xs text-slate-400">
+                RSI divergence with decreasing volume suggests potential trend reversal.
+              </p>
             </div>
+          </div>
+          
+          <div className="mt-3">
+            <Button 
+              className="w-full bg-indigo-700 hover:bg-indigo-800"
+              onClick={() => toast.success("Generating custom strategy")}
+            >
+              <TrendingUp className="mr-2 h-4 w-4" />
+              Generate Custom Strategy
+            </Button>
           </div>
         </div>
       </CardContent>

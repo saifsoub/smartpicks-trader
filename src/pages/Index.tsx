@@ -3,41 +3,23 @@ import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Brain, Zap, Layout, BarChart2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Brain, Zap, Layout, BarChart2, Bot, Lightbulb, ArrowRight, TrendingUp } from "lucide-react";
+import { toast } from "sonner";
 
 import Header from "@/components/dashboard/Header";
-import PriceDisplay from "@/components/dashboard/PriceDisplay";
-import AIInsightsBanner from "@/components/dashboard/AIInsightsBanner";
-import MarketInsightsPanel from "@/components/dashboard/MarketInsightsPanel";
-import RiskManagementTools from "@/components/RiskManagementTools";
-import BotStatus from "@/components/BotStatus";
+import TradingChart from "@/components/TradingChart";
+import AIInsightsSummary from "@/components/dashboard/AIInsightsSummary";
 import PortfolioSummary from "@/components/PortfolioSummary";
 import RecentTrades from "@/components/RecentTrades";
-import tradingService from "@/services/tradingService";
-import TradingChart from "@/components/TradingChart";
-import AutomatedTradingSetup from "@/components/AutomatedTradingSetup";
-import PerformanceMetrics from "@/components/PerformanceMetrics";
-import AIChatAssistant from "@/components/AIChatAssistant";
-import NewbieGuideDashboard from "@/components/NewbieGuideDashboard";
 import binanceService from "@/services/binanceService";
+import AIChatAssistant from "@/components/AIChatAssistant";
+import BotStatus from "@/components/BotStatus";
 
 const Index: React.FC = () => {
-  const [dashboardMode, setDashboardMode] = useState<'beginner' | 'advanced'>('beginner');
-  const [isSetupMode, setIsSetupMode] = useState(true);
+  const [currentView, setCurrentView] = useState<'dashboard' | 'setup'>('dashboard');
   const [btcPrice, setBtcPrice] = useState("0.00");
   const [btcChange, setBtcChange] = useState(0);
   const [selectedSymbol, setSelectedSymbol] = useState("BTCUSDT");
-  const navigate = useNavigate();
-  
-  const marketSentiment = tradingService.getMarketSentiment();
-  
-  const aiInsights = {
-    mainInsight: "Bitcoin shows a strong bullish trend with increasing institutional interest. Technical indicators and sentiment analysis suggest further upside potential.",
-    technicalAnalysis: "Multiple indicators showing bullish signals with strong support at $65,400. RSI at 62 indicates room for growth before overbought conditions.",
-    newsSentiment: "Recent regulatory developments are positive for the market. Social sentiment analysis shows 72% bullish perspectives across major platforms.",
-    prediction: "Short-term target of $69,000 with 78% confidence. Momentum indicators suggest strong uptrend continuation."
-  };
   
   useEffect(() => {
     // Load real-time price data when component mounts
@@ -71,141 +53,128 @@ const Index: React.FC = () => {
     }
   };
   
-  const toggleSetupMode = () => {
-    setIsSetupMode(!isSetupMode);
-  };
-  
   return (
     <div className="flex flex-col min-h-screen bg-slate-950">
       <Header />
       
       <div className="container mx-auto px-4 py-4 flex-1">
-        <div className="mb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-white">AI Trading Dashboard</h1>
-            <p className="text-slate-400">Your intelligent cryptocurrency trading assistant</p>
+        <div className="mb-6 bg-gradient-to-r from-indigo-900/40 via-blue-900/30 to-purple-900/40 rounded-xl p-6 border border-blue-800/50">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+            <div>
+              <h1 className="text-2xl font-bold text-white">AI Crypto Assistant</h1>
+              <p className="text-blue-300">Your intelligent trading companion</p>
+            </div>
+            
+            <div className="flex flex-wrap gap-2">
+              <Tabs 
+                value={currentView} 
+                onValueChange={(value) => setCurrentView(value as 'dashboard' | 'setup')}
+                className="bg-slate-900/80 border border-slate-800 rounded-lg p-1"
+              >
+                <TabsList className="bg-slate-800/90">
+                  <TabsTrigger value="dashboard" className="data-[state=active]:bg-indigo-800">
+                    <BarChart2 className="h-4 w-4 mr-1.5" />
+                    Dashboard
+                  </TabsTrigger>
+                  <TabsTrigger value="setup" className="data-[state=active]:bg-indigo-800">
+                    <Bot className="h-4 w-4 mr-1.5" />
+                    AI Setup
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
           </div>
           
-          <div className="flex flex-wrap gap-2">
-            <Tabs 
-              value={dashboardMode} 
-              onValueChange={(value) => setDashboardMode(value as 'beginner' | 'advanced')}
-              className="bg-slate-900/80 border border-slate-800 rounded-lg p-1"
-            >
-              <TabsList className="bg-slate-800/90">
-                <TabsTrigger value="beginner" className="data-[state=active]:bg-indigo-800">
-                  <Brain className="h-4 w-4 mr-1.5" />
-                  Beginner Mode
-                </TabsTrigger>
-                <TabsTrigger value="advanced" className="data-[state=active]:bg-indigo-800">
-                  <BarChart2 className="h-4 w-4 mr-1.5" />
-                  Advanced Mode
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+          <div className="flex items-center space-x-4">
+            <div className="bg-indigo-900/40 rounded-lg p-3 flex items-center">
+              <div className="bg-indigo-700 rounded-full p-2 mr-3">
+                <Brain className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <div className="text-white text-sm">Bitcoin</div>
+                <div className="text-xl font-bold text-blue-100">${btcPrice}</div>
+              </div>
+            </div>
             
-            {!isSetupMode && (
-              <Button
-                onClick={toggleSetupMode}
-                className="bg-indigo-700 hover:bg-indigo-800 text-white"
-              >
-                <Zap className="mr-2 h-4 w-4" />
-                Setup Bot
-              </Button>
-            )}
+            <div className="bg-indigo-900/40 rounded-lg p-3 flex items-center">
+              <div className={`${btcChange >= 0 ? 'bg-green-700' : 'bg-red-700'} rounded-full p-2 mr-3`}>
+                <TrendingUp className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <div className="text-white text-sm">24h Change</div>
+                <div className={`text-xl font-bold ${btcChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {btcChange >= 0 ? '+' : ''}{btcChange.toFixed(2)}%
+                </div>
+              </div>
+            </div>
             
-            {isSetupMode && (
-              <Button
-                onClick={toggleSetupMode}
-                className="bg-slate-800 hover:bg-slate-700 text-white"
+            <div className="flex-1 hidden md:block">
+              <Button 
+                className="ml-auto flex bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 float-right"
+                onClick={() => toast.success("AI Assistant activated")}
               >
-                <Layout className="mr-2 h-4 w-4" />
-                View Dashboard
+                <Lightbulb className="mr-2 h-4 w-4" />
+                Get AI Insights
+                <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
-            )}
+            </div>
           </div>
         </div>
         
-        {isSetupMode ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <AutomatedTradingSetup />
-            </div>
-            <div className="space-y-4">
-              <NewbieGuideDashboard />
-              
-              <Card className="bg-slate-900 border-slate-800 shadow-lg">
-                <CardHeader className="border-b border-slate-800 pb-3">
-                  <CardTitle className="text-white">Need Help?</CardTitle>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <p className="text-slate-300 mb-4">
-                    Setting up your first AI trading bot is easy! Follow the setup wizard to get started with automated trading in minutes.
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button 
-                      variant="outline" 
-                      className="bg-slate-800 border-slate-700 text-white hover:bg-slate-700"
-                      onClick={() => navigate("/settings")}
-                    >
-                      API Settings
-                    </Button>
-                    <Button 
-                      className="bg-blue-700 hover:bg-blue-800"
-                      onClick={() => navigate("/strategies")}
-                    >
-                      Trading Strategies
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        ) : (
-          <>
-            <PriceDisplay btcPrice={btcPrice} btcChange={btcChange} />
-            
-            {dashboardMode === 'beginner' ? (
-              <AIInsightsBanner 
-                marketSentiment={marketSentiment} 
-                mainInsight={aiInsights.mainInsight} 
-              />
-            ) : (
-              <MarketInsightsPanel 
-                aiInsights={aiInsights}
-                marketSentiment={marketSentiment}
-              />
-            )}
-            
+        <Tabs defaultValue="overview" className="mb-6">
+          <TabsList className="bg-slate-900/50 border border-slate-800 w-full justify-start p-1 mb-4">
+            <TabsTrigger value="overview" className="data-[state=active]:bg-indigo-800">Overview</TabsTrigger>
+            <TabsTrigger value="chart" className="data-[state=active]:bg-indigo-800">Trading</TabsTrigger>
+            <TabsTrigger value="ai" className="data-[state=active]:bg-indigo-800">AI Tools</TabsTrigger>
+            <TabsTrigger value="portfolio" className="data-[state=active]:bg-indigo-800">Portfolio</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="overview" className="space-y-4 mt-0">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
               <div className="lg:col-span-2">
                 <TradingChart symbol={selectedSymbol} />
               </div>
               <div className="space-y-4">
+                <AIInsightsSummary />
                 <BotStatus />
-                {dashboardMode === 'beginner' && <RiskManagementTools />}
-                {dashboardMode === 'advanced' && <PerformanceMetrics />}
               </div>
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <div className="space-y-4 lg:col-span-2">
+              <div className="lg:col-span-2">
                 <PortfolioSummary />
+              </div>
+              <div>
                 <RecentTrades />
               </div>
-              <div className="lg:col-span-1 h-[500px]">
-                {dashboardMode === 'beginner' ? (
-                  <AIChatAssistant />
-                ) : (
-                  <div className="space-y-4">
-                    <RiskManagementTools />
-                    <NewbieGuideDashboard />
-                  </div>
-                )}
-              </div>
             </div>
-          </>
-        )}
+          </TabsContent>
+          
+          <TabsContent value="chart" className="space-y-4 mt-0">
+            <div className="grid grid-cols-1 gap-4">
+              <TradingChart symbol={selectedSymbol} />
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="ai" className="space-y-4 mt-0">
+            <Card className="bg-slate-900 border-slate-800 shadow-lg">
+              <CardHeader className="border-b border-slate-800 pb-3">
+                <CardTitle className="text-white flex items-center">
+                  <Brain className="h-5 w-5 mr-2 text-indigo-400" />
+                  AI Trading Assistant
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4 h-[500px]">
+                <AIChatAssistant />
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="portfolio" className="space-y-4 mt-0">
+            <PortfolioSummary />
+            <RecentTrades />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ symbol: initialSymbol = "BT
   ];
 
   useEffect(() => {
+    // Load data when component mounts or when symbol/interval changes
     loadChartData();
     
     // Clear any existing interval
@@ -65,7 +67,9 @@ const TradingChart: React.FC<TradingChartProps> = ({ symbol: initialSymbol = "BT
       if (refreshInterval) {
         clearInterval(refreshInterval);
       }
-      clearInterval(newInterval);
+      if (newInterval) {
+        clearInterval(newInterval);
+      }
     };
   }, [symbol, interval]);
 
