@@ -102,11 +102,15 @@
   
   /* Improved text readability for dark mode */
   .text-slate-400 {
-    color: rgb(203 213 225); /* Lighter shade for better visibility */
+    color: rgb(226 232 240); /* Lighter shade for better visibility */
   }
   
   .text-slate-300 {
-    color: rgb(226 232 240); /* Lighter shade for better visibility */
+    color: rgb(241 245 249); /* Lighter shade for better visibility */
+  }
+  
+  .text-slate-200 {
+    color: rgb(248 250 252); /* Lighter shade for better visibility */
   }
   
   /* Additional utility classes for readable text on dark backgrounds */

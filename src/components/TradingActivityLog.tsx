@@ -5,12 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { RefreshCw, Clock, Check, AlertTriangle, Info, Trash2 } from "lucide-react";
 import binanceService from "@/services/binanceService";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 const TradingActivityLog: React.FC = () => {
   const [logs, setLogs] = useState<{timestamp: Date, message: string, type: 'info' | 'success' | 'error'}[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
   
   useEffect(() => {
     // Load logs on mount
@@ -21,7 +20,27 @@ const TradingActivityLog: React.FC = () => {
       loadLogs();
     }, 30000); // Refresh every 30 seconds
     
-    return () => clearInterval(interval);
+    // Listen for credential updates
+    const handleCredentialsUpdate = () => {
+      console.log("Credentials updated, refreshing logs");
+      loadLogs();
+    };
+    
+    window.addEventListener('binance-credentials-updated', handleCredentialsUpdate);
+    
+    // Also listen for test mode changes
+    const handleTestModeUpdate = () => {
+      console.log("Test mode updated, refreshing logs");
+      loadLogs();
+    };
+    
+    window.addEventListener('binance-test-mode-updated', handleTestModeUpdate);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('binance-credentials-updated', handleCredentialsUpdate);
+      window.removeEventListener('binance-test-mode-updated', handleTestModeUpdate);
+    };
   }, []);
   
   const loadLogs = () => {
@@ -31,6 +50,7 @@ const TradingActivityLog: React.FC = () => {
       setLogs(tradingLogs);
     } catch (error) {
       console.error("Failed to load trading logs:", error);
+      toast.error("Failed to load trading logs");
     } finally {
       setIsLoading(false);
     }
@@ -40,10 +60,7 @@ const TradingActivityLog: React.FC = () => {
     if (confirm("Are you sure you want to clear all trading logs? This cannot be undone.")) {
       binanceService.clearTradingLogs();
       setLogs([]);
-      toast({
-        title: "Logs cleared",
-        description: "All trading activity logs have been cleared."
-      });
+      toast.success("All trading activity logs have been cleared");
     }
   };
   
@@ -129,7 +146,19 @@ const TradingActivityLog: React.FC = () => {
           <div className="text-center py-12">
             <Info className="h-8 w-8 mx-auto mb-3 text-slate-500 opacity-50" />
             <p className="text-white">No trading activity logs yet</p>
-            <p className="text-slate-400 text-xs mt-1">Logs will appear as the bot operates</p>
+            <p className="text-slate-400 text-xs mt-1">
+              {binanceService.isInTestMode() 
+                ? "Logs will appear as you interact with the test mode" 
+                : "Logs will appear as the bot operates"
+              }
+            </p>
+            <Button 
+              variant="link" 
+              className="text-blue-300 p-0 h-auto mt-3"
+              onClick={loadLogs}
+            >
+              Refresh logs
+            </Button>
           </div>
         )}
       </CardContent>
