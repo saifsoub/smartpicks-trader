@@ -72,13 +72,12 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
       clearInterval(refreshIntervalRef.current);
     }
     
-    // Create a properly typed refresh function
+    // Create a refresh function that calls loadChartData with false parameter
     const refreshData = () => {
       loadChartData(false);
     };
     
     // Set up the interval with the correct typing
-    // Using NodeJS.Timeout explicitly
     refreshIntervalRef.current = setInterval(refreshData, 60000) as unknown as NodeJS.Timeout;
     
     return () => {
