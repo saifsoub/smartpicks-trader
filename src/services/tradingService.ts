@@ -1,5 +1,6 @@
 import binanceService from './binanceService';
 import notificationService from './notificationService';
+import heartbeatService from './heartbeatService';
 import { toast } from 'sonner';
 
 // Trading signals
@@ -780,6 +781,9 @@ class TradingService {
       this.isRunning = true;
       localStorage.setItem('botRunning', 'true');
       
+      // Start heartbeat monitoring
+      heartbeatService.startBot();
+      
       this.analyzeMarket();
       
       // Analyze more frequently - every 2 minutes instead of 5
@@ -820,6 +824,9 @@ class TradingService {
     console.log('Stopping trading bot...');
     this.isRunning = false;
     localStorage.removeItem('botRunning');
+    
+    // Stop heartbeat monitoring
+    heartbeatService.stopBot();
     
     if (this.tradingInterval) {
       clearInterval(this.tradingInterval);
