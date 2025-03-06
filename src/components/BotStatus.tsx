@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Play, Pause, RefreshCw, TrendingUp, Settings, AlertTriangle } from "lucide-react";
+import { Play, Pause, RefreshCw, TrendingUp, Settings, AlertTriangle, CircleDollarSign, Target } from "lucide-react";
 import tradingService from "@/services/tradingService";
 import binanceService from "@/services/binanceService";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 
 const BotStatus: React.FC = () => {
   const [isActive, setIsActive] = useState(false);
@@ -27,6 +28,12 @@ const BotStatus: React.FC = () => {
   const [trailingStopLoss, setTrailingStopLoss] = useState(false);
   const [takeProfitEnabled, setTakeProfitEnabled] = useState(true);
   const [dynamicPositionSizing, setDynamicPositionSizing] = useState(true);
+  
+  const [monthlyTarget, setMonthlyTarget] = useState(300);
+  const [todayTarget, setTodayTarget] = useState(10);
+  const [monthlyProgress, setMonthlyProgress] = useState(0);
+  const [dailyProgress, setDailyProgress] = useState(0);
+  const [botEfficiency, setBotEfficiency] = useState(0);
   
   useEffect(() => {
     const botRunning = tradingService.isBotRunning();
@@ -103,15 +110,40 @@ const BotStatus: React.FC = () => {
     loadActivePairs();
   }, []);
   
-  const loadStatistics = () => {
-    const savedStats = localStorage.getItem('botStatistics');
-    if (savedStats) {
-      const stats = JSON.parse(savedStats);
-      setTotalTrades(stats.totalTrades || 0);
-      setWinRate(stats.winRate || "0%");
-      setProfitLoss(stats.profitLoss || "$0.00");
+  useEffect(() => {
+    const loadStatistics = () => {
+      const savedStats = localStorage.getItem('botStatistics');
+      if (savedStats) {
+        const stats = JSON.parse(savedStats);
+        setTotalTrades(stats.totalTrades || 0);
+        setWinRate(stats.winRate || "0%");
+        setProfitLoss(stats.profitLoss || "$0.00");
+      }
+    };
+    
+    loadStatistics();
+  }, []);
+  
+  useEffect(() => {
+    const statsStr = localStorage.getItem('botStatistics');
+    if (statsStr) {
+      try {
+        const stats = JSON.parse(statsStr);
+        const profitValue = parseFloat(stats.profitLoss.replace('$', ''));
+        
+        setMonthlyProgress(Math.min((profitValue / monthlyTarget) * 100, 100));
+        
+        const perfHistory = tradingService.getPerformanceHistory('daily');
+        const todayProfit = perfHistory.length > 0 ? perfHistory[perfHistory.length - 1].profit : 0;
+        setDailyProgress(Math.min((todayProfit / todayTarget) * 100, 100));
+        
+        const winRateNum = parseInt(stats.winRate) || 0;
+        setBotEfficiency((winRateNum * 0.85));
+      } catch (error) {
+        console.error('Error parsing bot statistics:', error);
+      }
     }
-  };
+  }, [totalTrades, winRate, profitLoss]);
   
   const toggleBotStatus = async () => {
     setIsLoading(true);
@@ -196,6 +228,44 @@ const BotStatus: React.FC = () => {
       
       {!showSettings ? (
         <CardContent className="pt-4 space-y-4">
+          <div className="flex flex-col space-y-3">
+            <div className="mb-1">
+              <div className="flex justify-between items-center mb-1">
+                <div className="text-xs text-slate-400 flex items-center">
+                  <Target className="h-3 w-3 mr-1" />
+                  Monthly Target: ${monthlyTarget}
+                </div>
+                <div className="text-xs text-slate-400">{Math.round(monthlyProgress)}%</div>
+              </div>
+              <Progress value={monthlyProgress} className="h-2" 
+                indicator={`bg-gradient-to-r ${monthlyProgress > 75 ? 'from-green-500 to-green-400' : 'from-blue-600 to-indigo-500'}`} />
+            </div>
+            
+            <div className="mb-1">
+              <div className="flex justify-between items-center mb-1">
+                <div className="text-xs text-slate-400 flex items-center">
+                  <Target className="h-3 w-3 mr-1" />
+                  Daily Target: ${todayTarget}
+                </div>
+                <div className="text-xs text-slate-400">{Math.round(dailyProgress)}%</div>
+              </div>
+              <Progress value={dailyProgress} className="h-2" 
+                indicator={`bg-gradient-to-r ${dailyProgress > 75 ? 'from-green-500 to-green-400' : 'from-blue-600 to-indigo-500'}`} />
+            </div>
+            
+            <div className="mb-1">
+              <div className="flex justify-between items-center mb-1">
+                <div className="text-xs text-slate-400 flex items-center">
+                  <CircleDollarSign className="h-3 w-3 mr-1" />
+                  Bot Efficiency
+                </div>
+                <div className="text-xs text-slate-400">{Math.round(botEfficiency)}%</div>
+              </div>
+              <Progress value={botEfficiency} className="h-2" 
+                indicator={`bg-gradient-to-r ${botEfficiency > 70 ? 'from-green-500 to-green-400' : botEfficiency > 40 ? 'from-yellow-500 to-amber-400' : 'from-red-500 to-rose-400'}`} />
+            </div>
+          </div>
+          
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div className="text-slate-400">Uptime</div>
             <div className="text-right">{isActive ? uptime : "-"}</div>
@@ -216,20 +286,18 @@ const BotStatus: React.FC = () => {
             
             <div className="text-slate-400">Stop Loss</div>
             <div className="text-right text-blue-400">{trailingStopLoss ? 'Trailing' : 'Fixed'}</div>
-            
-            <div className="text-slate-400">Active Pairs</div>
-            <div className="text-right text-blue-400">{activePairs.length}</div>
           </div>
           
-          {activePairs.length > 0 && (
-            <div className="mt-2 p-2 bg-slate-800/50 rounded text-xs space-y-1">
-              {activePairs.map(pair => (
-                <div key={pair} className="flex justify-between text-slate-300">
-                  <span>{pair}</span>
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="p-2 bg-slate-800/50 rounded text-xs space-y-1 mt-4">
+            <div className="font-medium text-slate-300 mb-1">Active Trading Pairs</div>
+            {activePairs.length > 0 ? activePairs.map(pair => (
+              <div key={pair} className="flex justify-between text-slate-300">
+                <span>{pair}</span>
+              </div>
+            )) : (
+              <div className="text-slate-400">No active pairs</div>
+            )}
+          </div>
           
           <Button 
             className={isActive 

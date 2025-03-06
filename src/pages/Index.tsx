@@ -14,6 +14,7 @@ import RecentTrades from "@/components/RecentTrades";
 import binanceService from "@/services/binanceService";
 import AIChatAssistant from "@/components/AIChatAssistant";
 import BotStatus from "@/components/BotStatus";
+import BotPerformanceChart from "@/components/BotPerformanceChart";
 
 const Index: React.FC = () => {
   const [currentView, setCurrentView] = useState<'dashboard' | 'setup'>('dashboard');
@@ -61,8 +62,8 @@ const Index: React.FC = () => {
         <div className="mb-6 bg-gradient-to-r from-indigo-900/40 via-blue-900/30 to-purple-900/40 rounded-xl p-6 border border-blue-800/50">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
             <div>
-              <h1 className="text-2xl font-bold text-white">AI Crypto Assistant</h1>
-              <p className="text-blue-300">Your intelligent trading companion</p>
+              <h1 className="text-2xl font-bold text-white">AI Trading Bot</h1>
+              <p className="text-blue-300">Your automated trading companion</p>
             </div>
             
             <div className="flex flex-wrap gap-2">
@@ -124,6 +125,7 @@ const Index: React.FC = () => {
         <Tabs defaultValue="overview" className="mb-6">
           <TabsList className="bg-slate-900/50 border border-slate-800 w-full justify-start p-1 mb-4">
             <TabsTrigger value="overview" className="data-[state=active]:bg-indigo-800">Overview</TabsTrigger>
+            <TabsTrigger value="performance" className="data-[state=active]:bg-indigo-800">Bot Performance</TabsTrigger>
             <TabsTrigger value="chart" className="data-[state=active]:bg-indigo-800">Trading</TabsTrigger>
             <TabsTrigger value="ai" className="data-[state=active]:bg-indigo-800">AI Tools</TabsTrigger>
             <TabsTrigger value="portfolio" className="data-[state=active]:bg-indigo-800">Portfolio</TabsTrigger>
@@ -132,11 +134,11 @@ const Index: React.FC = () => {
           <TabsContent value="overview" className="space-y-4 mt-0">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
               <div className="lg:col-span-2">
-                <TradingChart symbol={selectedSymbol} />
+                <BotPerformanceChart />
               </div>
               <div className="space-y-4">
-                <AIInsightsSummary />
                 <BotStatus />
+                <AIInsightsSummary />
               </div>
             </div>
             
@@ -148,6 +150,18 @@ const Index: React.FC = () => {
                 <RecentTrades />
               </div>
             </div>
+          </TabsContent>
+          
+          <TabsContent value="performance" className="space-y-4 mt-0">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-2">
+                <BotPerformanceChart />
+              </div>
+              <div>
+                <BotStatus />
+              </div>
+            </div>
+            <RecentTrades />
           </TabsContent>
           
           <TabsContent value="chart" className="space-y-4 mt-0">
