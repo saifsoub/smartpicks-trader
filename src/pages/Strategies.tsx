@@ -1,57 +1,37 @@
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { ArrowLeft, ArrowUpDown, Plus } from "lucide-react";
-
-const strategies = [
-  {
-    id: 1,
-    name: "RSI + MACD Crossover",
-    description: "Uses RSI oversold/overbought levels combined with MACD crossover signals to identify entry and exit points.",
-    active: true,
-    performance: "+12.4%",
-    trades: 24,
-    winRate: "75%",
-    timeframe: "4h"
-  },
-  {
-    id: 2,
-    name: "Bollinger Breakout",
-    description: "Identifies breakouts from Bollinger Bands to catch trending momentum moves in volatile markets.",
-    active: true,
-    performance: "+8.7%",
-    trades: 16,
-    winRate: "68%",
-    timeframe: "1h"
-  },
-  {
-    id: 3,
-    name: "Moving Average Ribbon",
-    description: "Uses multiple moving averages to identify trend direction and potential reversal points.",
-    active: false,
-    performance: "+6.2%",
-    trades: 12,
-    winRate: "66%",
-    timeframe: "1d"
-  },
-  {
-    id: 4,
-    name: "Volume Profile Strategy",
-    description: "Uses volume profile analysis to identify key support/resistance levels for trading decisions.",
-    active: false,
-    performance: "+4.8%",
-    trades: 8,
-    winRate: "62%",
-    timeframe: "15m"
-  }
-];
+import tradingService from "@/services/tradingService";
+import { toast } from "sonner";
+import { Strategy } from "@/services/tradingService";
 
 const Strategies = () => {
   const navigate = useNavigate();
+  const [strategies, setStrategies] = useState<Strategy[]>([]);
+
+  // Load strategies on component mount
+  useEffect(() => {
+    const loadedStrategies = tradingService.getStrategies();
+    setStrategies(loadedStrategies);
+  }, []);
+
+  // Toggle strategy active status
+  const handleToggleStatus = (id: string) => {
+    tradingService.toggleStrategyStatus(id);
+    
+    // Update local state
+    setStrategies(prev => prev.map(strategy => {
+      if (strategy.id === id) {
+        return { ...strategy, isActive: !strategy.isActive };
+      }
+      return strategy;
+    }));
+  };
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-950 text-white">
@@ -77,7 +57,7 @@ const Strategies = () => {
       <main className="container mx-auto flex-1 p-4">
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-bold">Trading Strategies</h1>
-          <Button>
+          <Button onClick={() => toast.info("New strategy creation coming soon")}>
             <Plus className="mr-2 h-4 w-4" />
             New Strategy
           </Button>
@@ -90,17 +70,20 @@ const Strategies = () => {
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">{strategy.name}</CardTitle>
                   <div className="flex items-center space-x-2">
-                    <Switch checked={strategy.active} />
+                    <Switch 
+                      checked={strategy.isActive} 
+                      onCheckedChange={() => handleToggleStatus(strategy.id)}
+                    />
                   </div>
                 </div>
                 <Badge
                   className={`mt-2 ${
-                    strategy.active
+                    strategy.isActive
                       ? "bg-green-500/10 text-green-500"
                       : "bg-slate-500/10 text-slate-500"
                   }`}
                 >
-                  {strategy.active ? "Active" : "Inactive"}
+                  {strategy.isActive ? "Active" : "Inactive"}
                 </Badge>
               </CardHeader>
               <CardContent>
@@ -115,8 +98,11 @@ const Strategies = () => {
                   <div className="text-slate-400">Win Rate</div>
                   <div className="text-right">{strategy.winRate}</div>
                   
+                  <div className="text-slate-400">Symbol</div>
+                  <div className="text-right">{strategy.symbol}</div>
+                  
                   <div className="text-slate-400">Timeframe</div>
-                  <div className="text-right">{strategy.timeframe}</div>
+                  <div className="text-right">{strategy.interval}</div>
                 </div>
               </CardContent>
               <CardFooter className="pt-0">

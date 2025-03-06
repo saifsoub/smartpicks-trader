@@ -1,10 +1,25 @@
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import binanceService from "@/services/binanceService";
+import { toast } from "sonner";
 
-const recentTrades = [
+interface Trade {
+  id: number;
+  pair: string;
+  type: 'buy' | 'sell';
+  amount: string;
+  price: string;
+  value: string;
+  time: string;
+  strategy: string;
+}
+
+// Sample trades for when real data isn't available
+const sampleTrades: Trade[] = [
   {
     id: 1,
     pair: "BTC/USDT",
@@ -48,10 +63,81 @@ const recentTrades = [
 ];
 
 const RecentTrades: React.FC = () => {
+  const [trades, setTrades] = useState<Trade[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // Try to fetch real trades on component mount
+  useEffect(() => {
+    if (binanceService.hasCredentials()) {
+      fetchTrades();
+    } else {
+      // Use sample data if no credentials are available
+      setTrades(sampleTrades);
+    }
+  }, []);
+  
+  const fetchTrades = async () => {
+    setIsLoading(true);
+    
+    try {
+      if (!binanceService.hasCredentials()) {
+        toast.error("Binance API credentials not configured");
+        setTrades(sampleTrades);
+        return;
+      }
+      
+      // Attempt to get real trades from Binance
+      // For now, we'll use the sample trades since we don't have real API integration
+      
+      // const btcTrades = await binanceService.getRecentTrades("BTCUSDT");
+      // const ethTrades = await binanceService.getRecentTrades("ETHUSDT");
+      // 
+      // // Transform to our trade format
+      // const formattedTrades = [...btcTrades, ...ethTrades]
+      //   .sort((a, b) => b.time - a.time)
+      //   .slice(0, 10)
+      //   .map(trade => ({
+      //     id: trade.id,
+      //     pair: trade.symbol.replace("USDT", "/USDT"),
+      //     type: trade.isBuyer ? "buy" : "sell",
+      //     amount: `${parseFloat(trade.qty).toFixed(6)} ${trade.symbol.replace("USDT", "")}`,
+      //     price: `$${parseFloat(trade.price).toFixed(2)}`,
+      //     value: `$${(parseFloat(trade.price) * parseFloat(trade.qty)).toFixed(2)}`,
+      //     time: new Date(trade.time).toLocaleString(),
+      //     strategy: "Manual Trade" // Real trades wouldn't have a strategy attached
+      //   }));
+      
+      // For now, use sample trades
+      setTrades(sampleTrades);
+      
+    } catch (error) {
+      console.error("Failed to fetch trades:", error);
+      toast.error("Failed to load recent trades");
+      setTrades(sampleTrades);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <Card className="bg-slate-900 border-slate-800 shadow-lg">
       <CardHeader className="border-b border-slate-800 pb-3">
-        <CardTitle className="text-white">Recent Trades</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-white">Recent Trades</CardTitle>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={fetchTrades}
+            disabled={isLoading}
+            className="text-slate-400 hover:text-white"
+          >
+            {isLoading ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="p-0">
         <div className="overflow-x-auto">
@@ -68,7 +154,7 @@ const RecentTrades: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {recentTrades.map((trade) => (
+              {trades.map((trade) => (
                 <tr key={trade.id} className="border-b border-slate-800">
                   <td className="px-4 py-3 text-sm font-medium">{trade.pair}</td>
                   <td className="px-4 py-3 text-sm">

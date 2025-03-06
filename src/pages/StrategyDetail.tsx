@@ -1,58 +1,36 @@
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ArrowLeft, ArrowUpDown, Edit, Trash } from "lucide-react";
-
-// Mocked strategy data (in a real app, this would come from an API)
-const getStrategyById = (id: string) => {
-  const strategies = [
-    {
-      id: "1",
-      name: "RSI + MACD Crossover",
-      description: "Uses RSI oversold/overbought levels combined with MACD crossover signals to identify entry and exit points.",
-      active: true,
-      performance: "+12.4%",
-      trades: 24,
-      winRate: "75%",
-      timeframe: "4h",
-      parameters: [
-        { name: "RSI Period", value: 14 },
-        { name: "RSI Oversold", value: 30 },
-        { name: "RSI Overbought", value: 70 },
-        { name: "MACD Fast", value: 12 },
-        { name: "MACD Slow", value: 26 },
-        { name: "MACD Signal", value: 9 }
-      ]
-    },
-    {
-      id: "2",
-      name: "Bollinger Breakout",
-      description: "Identifies breakouts from Bollinger Bands to catch trending momentum moves in volatile markets.",
-      active: true,
-      performance: "+8.7%",
-      trades: 16,
-      winRate: "68%",
-      timeframe: "1h",
-      parameters: [
-        { name: "BB Period", value: 20 },
-        { name: "BB Deviation", value: 2 },
-        { name: "Entry Threshold", value: "2.5%" },
-        { name: "Exit Threshold", value: "1.0%" },
-        { name: "Stop Loss", value: "2.0%" },
-        { name: "Take Profit", value: "4.0%" }
-      ]
-    }
-  ];
-  
-  return strategies.find(s => s.id === id);
-};
+import tradingService from "@/services/tradingService";
+import { Strategy } from "@/services/tradingService";
+import { toast } from "sonner";
 
 const StrategyDetail: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const strategy = getStrategyById(id || "");
+  const [strategy, setStrategy] = useState<Strategy | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
+  // Load strategy details on component mount or id change
+  useEffect(() => {
+    if (id) {
+      const foundStrategy = tradingService.getStrategyById(id);
+      setStrategy(foundStrategy || null);
+    }
+  }, [id]);
+
+  // Handle strategy deletion
+  const handleDeleteStrategy = () => {
+    if (id) {
+      tradingService.deleteStrategy(id);
+      toast.success("Strategy deleted successfully");
+      navigate("/strategies");
+    }
+  };
 
   if (!strategy) {
     return (
@@ -90,14 +68,46 @@ const StrategyDetail: React.FC = () => {
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-bold">{strategy.name}</h1>
           <div className="flex gap-2">
-            <Button variant="outline" className="border-slate-700 bg-slate-800 hover:bg-slate-700">
+            <Button 
+              variant="outline" 
+              className="border-slate-700 bg-slate-800 hover:bg-slate-700"
+              onClick={() => toast.info("Strategy editing coming soon")}
+            >
               <Edit className="mr-2 h-4 w-4" />
               Edit Strategy
             </Button>
-            <Button variant="destructive">
-              <Trash className="mr-2 h-4 w-4" />
-              Delete
-            </Button>
+            
+            <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+              <DialogTrigger asChild>
+                <Button variant="destructive">
+                  <Trash className="mr-2 h-4 w-4" />
+                  Delete
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="bg-slate-900 border-slate-800">
+                <DialogHeader>
+                  <DialogTitle>Delete Strategy</DialogTitle>
+                  <DialogDescription>
+                    Are you sure you want to delete this strategy? This action cannot be undone.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setShowDeleteDialog(false)}
+                    className="border-slate-700 bg-slate-800 hover:bg-slate-700"
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    variant="destructive" 
+                    onClick={handleDeleteStrategy}
+                  >
+                    Delete Strategy
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
@@ -116,11 +126,15 @@ const StrategyDetail: React.FC = () => {
               <div className="grid grid-cols-2 gap-y-3">
                 <div>
                   <h3 className="text-sm text-slate-400">Status</h3>
-                  <p className="mt-1">{strategy.active ? "Active" : "Inactive"}</p>
+                  <p className="mt-1">{strategy.isActive ? "Active" : "Inactive"}</p>
+                </div>
+                <div>
+                  <h3 className="text-sm text-slate-400">Symbol</h3>
+                  <p className="mt-1">{strategy.symbol}</p>
                 </div>
                 <div>
                   <h3 className="text-sm text-slate-400">Timeframe</h3>
-                  <p className="mt-1">{strategy.timeframe}</p>
+                  <p className="mt-1">{strategy.interval}</p>
                 </div>
                 <div>
                   <h3 className="text-sm text-slate-400">Total Trades</h3>
@@ -134,6 +148,16 @@ const StrategyDetail: React.FC = () => {
                   <h3 className="text-sm text-slate-400">Performance</h3>
                   <p className="mt-1 text-green-400">{strategy.performance}</p>
                 </div>
+                {strategy.lastExecuted && (
+                  <>
+                    <div>
+                      <h3 className="text-sm text-slate-400">Last Executed</h3>
+                      <p className="mt-1">
+                        {new Date(strategy.lastExecuted).toLocaleString()}
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -145,10 +169,10 @@ const StrategyDetail: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="divide-y divide-slate-800">
-                {strategy.parameters.map((param, index) => (
+                {Object.entries(strategy.parameters).map(([name, value], index) => (
                   <div key={index} className="flex justify-between py-3">
-                    <span className="text-slate-400">{param.name}</span>
-                    <span>{param.value}</span>
+                    <span className="text-slate-400">{name}</span>
+                    <span>{value}</span>
                   </div>
                 ))}
               </div>
