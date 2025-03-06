@@ -1,3 +1,4 @@
+
 import { toast } from "sonner";
 
 export interface NotificationSettings {
@@ -5,6 +6,8 @@ export interface NotificationSettings {
   telegramChatId: string;
   tradeNotificationsEnabled: boolean;
   dailySummaryEnabled: boolean;
+  marketAlertEnabled: boolean;
+  priceAlertThreshold: number;
 }
 
 class NotificationService {
@@ -12,7 +15,9 @@ class NotificationService {
     telegramEnabled: false,
     telegramChatId: '',
     tradeNotificationsEnabled: true,
-    dailySummaryEnabled: true
+    dailySummaryEnabled: true,
+    marketAlertEnabled: true,
+    priceAlertThreshold: 5 // Default 5% price movement alert
   };
 
   constructor() {
@@ -31,15 +36,29 @@ class NotificationService {
     try {
       this.settings = settings;
       localStorage.setItem('notificationSettings', JSON.stringify(settings));
+      toast.success("Notification settings saved");
       return true;
     } catch (error) {
       console.error('Failed to save notification settings:', error);
+      toast.error("Failed to save notification settings");
       return false;
     }
   }
 
   public getSettings(): NotificationSettings {
     return { ...this.settings };
+  }
+
+  public async testTelegramSetup(): Promise<boolean> {
+    if (!this.settings.telegramEnabled) {
+      toast.info("To enable Telegram notifications, please follow these steps:");
+      toast.info("1. Create a Telegram bot using BotFather (@BotFather)");
+      toast.info("2. Get your Chat ID by messaging @userinfobot");
+      toast.info("3. Enter the bot token and chat ID in Settings");
+      return false;
+    }
+    
+    return await this.testTelegramConnection();
   }
 
   // Check if the input is a username or chat ID and format accordingly
@@ -77,7 +96,11 @@ class NotificationService {
       // In a real implementation you would need a serverless function or backend service
       // return await this.sendViaTelegramAPI(message);
       
-      toast.success(`Notification sent via Telegram to @Seifbesttrader`);
+      // For now just show a toast
+      toast.success(`Would send message to Telegram: "${message}"`, {
+        description: "To actually send Telegram messages, set up a Supabase Edge Function",
+        duration: 5000
+      });
       return true;
     } catch (error) {
       console.error('Failed to send Telegram notification:', error);
@@ -125,6 +148,40 @@ class NotificationService {
     }
 
     const message = `📊 Daily Summary:\n• Trades: ${totalTrades}\n• Win Rate: ${winRate}\n• Profit/Loss: ${profit}`;
+    this.sendTelegramMessage(message);
+  }
+
+  // Send market analysis notification
+  public sendMarketAnalysisAlert(symbol: string, analysis: string, confidence: number): void {
+    if (!this.settings.marketAlertEnabled) {
+      return;
+    }
+    
+    const emoji = confidence > 80 ? "🔥" : confidence > 60 ? "👍" : "ℹ️";
+    const message = `${emoji} AI Market Analysis for ${symbol}:\n${analysis}\nConfidence: ${confidence}%`;
+    this.sendTelegramMessage(message);
+  }
+  
+  // Send price alert notification
+  public sendPriceAlert(symbol: string, currentPrice: string, percentChange: number, timeframe: string): void {
+    if (!this.settings.marketAlertEnabled || Math.abs(percentChange) < this.settings.priceAlertThreshold) {
+      return;
+    }
+    
+    const direction = percentChange > 0 ? "increased" : "decreased";
+    const emoji = percentChange > 0 ? "🚀" : "📉";
+    
+    const message = `${emoji} Price Alert: ${symbol} has ${direction} by ${Math.abs(percentChange).toFixed(2)}% in the last ${timeframe} to ${currentPrice}`;
+    this.sendTelegramMessage(message);
+  }
+  
+  // Send AI strategy recommendation
+  public sendStrategyRecommendation(strategy: string, symbol: string, reason: string): void {
+    if (!this.settings.marketAlertEnabled) {
+      return;
+    }
+    
+    const message = `💡 AI Strategy Recommendation:\nApply "${strategy}" strategy to ${symbol}\nReason: ${reason}`;
     this.sendTelegramMessage(message);
   }
 }
