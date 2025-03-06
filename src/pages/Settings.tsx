@@ -21,6 +21,7 @@ const Settings = () => {
   // Binance API settings
   const [apiKey, setApiKey] = useState("");
   const [secretKey, setSecretKey] = useState("");
+  const [testMode, setTestMode] = useState(true);
   
   // Notification settings
   const [telegramEnabled, setTelegramEnabled] = useState(false);
@@ -32,6 +33,17 @@ const Settings = () => {
   useEffect(() => {
     loadSavedSettings();
     checkConnection();
+    
+    // Listen for test mode updates
+    const handleTestModeUpdate = () => {
+      setTestMode(binanceService.isInTestMode());
+    };
+    
+    window.addEventListener('binance-test-mode-updated', handleTestModeUpdate);
+    
+    return () => {
+      window.removeEventListener('binance-test-mode-updated', handleTestModeUpdate);
+    };
   }, []);
   
   const loadSavedSettings = () => {
@@ -45,6 +57,9 @@ const Settings = () => {
         setSecretKey("••••••••••••••••••••••••••••••••");
       }
     }
+    
+    // Load test mode setting
+    setTestMode(binanceService.isInTestMode());
     
     // Load notification settings
     const settings = notificationService.getSettings();
@@ -69,7 +84,7 @@ const Settings = () => {
         setConnectionStatus('success');
         setConnectedMessage(binanceService.isInTestMode() 
           ? "Connected to Binance API (Test Mode)" 
-          : "Connected to Binance API (Live Mode)");
+          : "Connected to Binance API (Live Trading Mode)");
       } else {
         setConnectionStatus('error');
         setConnectedMessage("Connection failed. Please check your API keys.");
@@ -81,6 +96,14 @@ const Settings = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+  
+  // Toggle between test mode and real trading
+  const handleToggleTestMode = (isTestMode: boolean) => {
+    setTestMode(isTestMode);
+    binanceService.setTestMode(isTestMode);
+    toast.success(isTestMode ? "Switched to test mode" : "Switched to live trading mode");
+    checkConnection();
   };
   
   // Save Binance API credentials
@@ -116,10 +139,7 @@ const Settings = () => {
           setConnectionStatus('success');
           setConnectedMessage(binanceService.isInTestMode() 
             ? "Connected to Binance API (Test Mode)" 
-            : "Connected to Binance API (Live Mode)");
-          
-          // Force refresh binance service state by dispatching a global event
-          window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
+            : "Connected to Binance API (Live Trading Mode)");
         } else {
           toast.error("Connection test failed. Please check your API keys.");
           setConnectionStatus('error');
@@ -281,6 +301,17 @@ const Settings = () => {
                 </p>
               </div>
               
+              <div className="flex items-center justify-between pt-2 pb-2">
+                <div className="space-y-0.5">
+                  <Label>Test Mode</Label>
+                  <p className="text-xs text-slate-400">Use simulated data instead of real trading</p>
+                </div>
+                <Switch 
+                  checked={testMode}
+                  onCheckedChange={handleToggleTestMode}
+                />
+              </div>
+              
               <Button 
                 className="w-full" 
                 onClick={handleSaveApiKeys}
@@ -309,11 +340,11 @@ const Settings = () => {
                 Test Connection Again
               </Button>
               
-              <div className="mt-4 text-xs text-center text-slate-400">
-                <p>
-                  {binanceService.isInTestMode() 
-                    ? "Currently in test mode - using simulated data" 
-                    : "Using live Binance API - real trading enabled"}
+              <div className="mt-4 pt-2 border-t border-slate-800 text-center">
+                <p className={`text-sm font-medium ${testMode ? 'text-yellow-400' : 'text-green-400'}`}>
+                  {testMode 
+                    ? "⚠️ TEST MODE ACTIVE - No real trading will occur" 
+                    : "🔴 LIVE TRADING MODE - Real orders will be executed"}
                 </p>
               </div>
             </CardContent>

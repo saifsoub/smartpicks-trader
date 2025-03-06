@@ -1,3 +1,4 @@
+
 import { toast } from "sonner";
 import CryptoJS from 'crypto-js';
 
@@ -61,7 +62,7 @@ class BinanceService {
   private apiKey: string | null = null;
   private secretKey: string | null = null;
   private baseUrl = 'https://api.binance.com';
-  private testMode = true; // Set to false for real trading
+  private testMode = true; // Default to test mode for safety
   private symbolsData: BinanceSymbol[] = [];
   private lastApiCallTime = 0;
   private tradingLogs: {timestamp: Date, message: string, type: 'info' | 'success' | 'error'}[] = [];
@@ -93,7 +94,11 @@ class BinanceService {
   // Set test mode on/off
   public setTestMode(isTestMode: boolean): void {
     this.testMode = isTestMode;
+    localStorage.setItem('binanceTestMode', isTestMode.toString());
     this.addLogEntry(`Test mode ${isTestMode ? 'enabled' : 'disabled'}`, 'info');
+    
+    // Notify the UI that test mode has changed
+    window.dispatchEvent(new CustomEvent('binance-test-mode-updated'));
   }
 
   // Load credentials from localStorage
@@ -110,6 +115,12 @@ class BinanceService {
         this.secretKey = null;
       }
     }
+    
+    // Load test mode setting
+    const testMode = localStorage.getItem('binanceTestMode');
+    if (testMode !== null) {
+      this.testMode = testMode === 'true';
+    }
   }
 
   // Save credentials to localStorage
@@ -121,6 +132,9 @@ class BinanceService {
       
       // Add log entry
       this.addLogEntry('API credentials updated', 'info');
+      
+      // Dispatch an event to let components know credentials have been updated
+      window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
       
       return true;
     } catch (error) {

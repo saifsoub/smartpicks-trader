@@ -50,15 +50,14 @@ const RecentTrades: React.FC = () => {
     
     try {
       const testConnection = await binanceService.testConnection();
-      setIsConnected(testConnection && !binanceService.isInTestMode());
+      // In test mode or real mode, if connection is successful, we show the UI
+      setIsConnected(testConnection);
       
-      if (testConnection && !binanceService.isInTestMode()) {
+      if (testConnection) {
         fetchTrades();
       } else {
         setTrades([]);
-        if (!binanceService.isInTestMode()) {
-          toast.error("Not connected to real Binance API");
-        }
+        toast.error("Failed to connect to Binance API");
       }
     } catch (error) {
       console.error("Failed to test connection:", error);
@@ -87,7 +86,7 @@ const RecentTrades: React.FC = () => {
           strategy: "API Trade"
         }));
       
-      setTrades(formattedTrades);
+      setTrades(formattedTrades as Trade[]);
     } catch (error) {
       console.error("Failed to fetch trades:", error);
       toast.error("Failed to load recent trades");
@@ -120,7 +119,7 @@ const RecentTrades: React.FC = () => {
           <div className="text-center py-12">
             <AlertTriangle className="h-10 w-10 text-yellow-500 mx-auto mb-3" />
             <p className="text-white font-medium">Not connected to Binance API</p>
-            <p className="text-slate-400 text-sm mt-1">Please configure real API credentials in Settings</p>
+            <p className="text-slate-400 text-sm mt-1">Please configure API credentials in Settings</p>
             <Button 
               variant="outline" 
               size="sm"
@@ -180,7 +179,12 @@ const RecentTrades: React.FC = () => {
         ) : (
           <div className="text-center py-12">
             <p className="text-white">No trades found in your Binance account</p>
-            <p className="text-slate-400 text-sm mt-1">Trades will appear here as you make them</p>
+            <p className="text-slate-400 text-sm mt-1">
+              {binanceService.isInTestMode() ? 
+                "Currently in test mode - using simulated data" : 
+                "Using live Binance API"
+              }
+            </p>
           </div>
         )}
       </CardContent>

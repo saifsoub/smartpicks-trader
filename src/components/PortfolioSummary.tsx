@@ -18,7 +18,7 @@ const PortfolioSummary: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
   
   useEffect(() => {
-    // Check initial connection state
+    // Check initial connection state and load portfolio
     checkConnectionAndLoadPortfolio();
     
     // Refresh portfolio data every minute
@@ -51,17 +51,16 @@ const PortfolioSummary: React.FC = () => {
     try {
       // First check if we're connected to the real API
       const testConnection = await binanceService.testConnection();
-      setIsConnected(testConnection && !binanceService.isInTestMode());
+      // In test mode or real mode, if connection is successful, we show the UI
+      setIsConnected(testConnection);
       
-      if (testConnection && !binanceService.isInTestMode()) {
-        // Only load portfolio if we have real connection
+      if (testConnection) {
+        // Only load portfolio if we have a connection
         loadPortfolio();
       } else {
         setBalances([]);
         setTotalValue(0);
-        if (!binanceService.isInTestMode()) {
-          toast.error("Not connected to real Binance API");
-        }
+        toast.error("Failed to connect to Binance API");
       }
     } catch (error) {
       console.error("Failed to test connection:", error);
@@ -155,7 +154,7 @@ const PortfolioSummary: React.FC = () => {
           <div className="text-center py-6">
             <AlertTriangle className="h-10 w-10 text-yellow-500 mx-auto mb-3" />
             <p className="text-white font-medium">Not connected to Binance API</p>
-            <p className="text-slate-400 text-sm mt-1">Please configure real API credentials in Settings</p>
+            <p className="text-slate-400 text-sm mt-1">Please configure API credentials in Settings</p>
             <Button 
               variant="outline" 
               size="sm"
@@ -220,6 +219,12 @@ const PortfolioSummary: React.FC = () => {
                 ) : (
                   <div>
                     <p>No assets found in your Binance account</p>
+                    <p className="text-sm text-slate-400 mt-1">
+                      {binanceService.isInTestMode() ? 
+                        "Currently in test mode - using simulated data" : 
+                        "Using live Binance API"
+                      }
+                    </p>
                     <Button 
                       variant="link" 
                       className="text-blue-400 p-0 h-auto mt-1"
