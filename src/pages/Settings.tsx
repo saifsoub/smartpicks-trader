@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { ArrowLeft, ArrowUpDown, Save, RefreshCw, CheckCircle, AlertCircle } from "lucide-react";
+import { ArrowLeft, ArrowUpDown, Save, RefreshCw, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import binanceService from "@/services/binanceService";
 import notificationService from "@/services/notificationService";
@@ -16,6 +16,7 @@ const Settings = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'untested' | 'success' | 'error'>('untested');
+  const [connectedMessage, setConnectedMessage] = useState("");
   
   // Binance API settings
   const [apiKey, setApiKey] = useState("");
@@ -27,8 +28,13 @@ const Settings = () => {
   const [tradeNotifications, setTradeNotifications] = useState(true);
   const [dailySummary, setDailySummary] = useState(true);
   
-  // Load saved values on component mount
+  // Load saved values on component mount and check connection
   useEffect(() => {
+    loadSavedSettings();
+    checkConnection();
+  }, []);
+  
+  const loadSavedSettings = () => {
     // Load Binance credentials if available
     const savedCredentials = localStorage.getItem('binanceCredentials');
     if (savedCredentials) {
@@ -46,7 +52,36 @@ const Settings = () => {
     setTelegramChatId(settings.telegramChatId);
     setTradeNotifications(settings.tradeNotificationsEnabled);
     setDailySummary(settings.dailySummaryEnabled);
-  }, []);
+  };
+  
+  // Check connection status immediately on page load
+  const checkConnection = async () => {
+    if (!binanceService.hasCredentials()) {
+      setConnectionStatus('untested');
+      setConnectedMessage("No API credentials configured");
+      return;
+    }
+    
+    try {
+      setIsLoading(true);
+      const connectionTest = await binanceService.testConnection();
+      if (connectionTest) {
+        setConnectionStatus('success');
+        setConnectedMessage(binanceService.isInTestMode() 
+          ? "Connected to Binance API (Test Mode)" 
+          : "Connected to Binance API (Live Mode)");
+      } else {
+        setConnectionStatus('error');
+        setConnectedMessage("Connection failed. Please check your API keys.");
+      }
+    } catch (error) {
+      console.error("Error testing connection:", error);
+      setConnectionStatus('error');
+      setConnectedMessage("Connection error. Please check your API keys.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   // Save Binance API credentials
   const handleSaveApiKeys = async () => {
@@ -79,18 +114,27 @@ const Settings = () => {
         if (connectionTest) {
           toast.success("Connection to Binance API successful");
           setConnectionStatus('success');
+          setConnectedMessage(binanceService.isInTestMode() 
+            ? "Connected to Binance API (Test Mode)" 
+            : "Connected to Binance API (Live Mode)");
+          
+          // Force refresh binance service state by dispatching a global event
+          window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
         } else {
           toast.error("Connection test failed. Please check your API keys.");
           setConnectionStatus('error');
+          setConnectedMessage("Connection failed. Please check your API keys.");
         }
       } else {
         toast.error("Failed to save API keys");
         setConnectionStatus('error');
+        setConnectedMessage("Failed to save API keys");
       }
     } catch (error) {
       console.error("Error saving API keys:", error);
       toast.error("An error occurred while saving API keys");
       setConnectionStatus('error');
+      setConnectedMessage("Connection error occurred");
     } finally {
       setIsLoading(false);
     }
@@ -164,6 +208,43 @@ const Settings = () => {
       <main className="container mx-auto flex-1 p-4">
         <h1 className="mb-6 text-2xl font-bold">Settings</h1>
 
+        {/* Connection Status Banner */}
+        {(connectionStatus !== 'untested' || binanceService.hasCredentials()) && (
+          <div className={`mb-6 p-4 rounded-lg flex items-center justify-between ${
+            connectionStatus === 'success' 
+              ? 'bg-green-900/20 border border-green-800' 
+              : connectionStatus === 'error'
+                ? 'bg-red-900/20 border border-red-800'
+                : 'bg-blue-900/20 border border-blue-800'
+          }`}>
+            <div className="flex items-center">
+              {connectionStatus === 'success' ? (
+                <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
+              ) : connectionStatus === 'error' ? (
+                <AlertCircle className="h-5 w-5 text-red-500 mr-2" />
+              ) : (
+                <Loader2 className="h-5 w-5 text-blue-500 mr-2 animate-spin" />
+              )}
+              <span className={`font-medium ${
+                connectionStatus === 'success' 
+                  ? 'text-green-500' 
+                  : connectionStatus === 'error'
+                    ? 'text-red-500'
+                    : 'text-blue-500'
+              }`}>
+                {connectionStatus === 'success' 
+                  ? "Connected"
+                  : connectionStatus === 'error'
+                    ? "Connection Failed"
+                    : "Checking Connection..."}
+              </span>
+            </div>
+            <div className="text-slate-300">
+              {connectedMessage}
+            </div>
+          </div>
+        )}
+
         <div className="grid gap-6 md:grid-cols-2">
           {/* API Configuration */}
           <Card className="bg-slate-900 border-slate-800 shadow-lg">
@@ -179,7 +260,7 @@ const Settings = () => {
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   placeholder="Enter your Binance API key" 
-                  className="bg-slate-800 border-slate-700"
+                  className="bg-slate-800 border-slate-700 text-white"
                 />
                 <p className="text-xs text-slate-400">
                   Create API keys in your Binance account with trading permissions
@@ -193,29 +274,13 @@ const Settings = () => {
                   value={secretKey}
                   onChange={(e) => setSecretKey(e.target.value)}
                   placeholder="Enter your Binance secret key" 
-                  className="bg-slate-800 border-slate-700"
+                  className="bg-slate-800 border-slate-700 text-white"
                 />
                 <p className="text-xs text-slate-400">
                   Never share your secret key with anyone
                 </p>
               </div>
-              {connectionStatus !== 'untested' && (
-                <div className={`p-3 rounded flex items-center ${
-                  connectionStatus === 'success' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
-                }`}>
-                  {connectionStatus === 'success' ? (
-                    <>
-                      <CheckCircle className="mr-2 h-4 w-4" />
-                      <span>API connection successful</span>
-                    </>
-                  ) : (
-                    <>
-                      <AlertCircle className="mr-2 h-4 w-4" />
-                      <span>API connection failed. Please check your keys or try again later.</span>
-                    </>
-                  )}
-                </div>
-              )}
+              
               <Button 
                 className="w-full" 
                 onClick={handleSaveApiKeys}
@@ -233,9 +298,24 @@ const Settings = () => {
                   </>
                 )}
               </Button>
-              <p className="text-xs text-center text-slate-400">
-                Note: For demo purposes, this will simulate a connection to Binance
-              </p>
+              
+              <Button
+                variant="outline"
+                className="w-full mt-2 border-slate-700 text-slate-300"
+                onClick={checkConnection}
+                disabled={isLoading || !binanceService.hasCredentials()}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                Test Connection Again
+              </Button>
+              
+              <div className="mt-4 text-xs text-center text-slate-400">
+                <p>
+                  {binanceService.isInTestMode() 
+                    ? "Currently in test mode - using simulated data" 
+                    : "Using live Binance API - real trading enabled"}
+                </p>
+              </div>
             </CardContent>
           </Card>
 

@@ -1,4 +1,3 @@
-
 import { toast } from "sonner";
 import CryptoJS from 'crypto-js';
 
@@ -101,9 +100,15 @@ class BinanceService {
   private loadCredentials() {
     const savedCredentials = localStorage.getItem('binanceCredentials');
     if (savedCredentials) {
-      const { apiKey, secretKey } = JSON.parse(savedCredentials);
-      this.apiKey = apiKey;
-      this.secretKey = secretKey;
+      try {
+        const { apiKey, secretKey } = JSON.parse(savedCredentials);
+        this.apiKey = apiKey;
+        this.secretKey = secretKey;
+      } catch (error) {
+        console.error('Failed to parse saved credentials:', error);
+        this.apiKey = null;
+        this.secretKey = null;
+      }
     }
   }
 
@@ -126,7 +131,7 @@ class BinanceService {
 
   // Check if credentials are set
   public hasCredentials(): boolean {
-    return !!(this.apiKey && this.secretKey);
+    return !!(this.apiKey && this.secretKey && this.apiKey.length > 0 && this.secretKey.length > 0);
   }
 
   // Generate signature for private endpoints

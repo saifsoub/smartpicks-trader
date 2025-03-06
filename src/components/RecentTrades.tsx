@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +24,20 @@ const RecentTrades: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
   
   useEffect(() => {
+    // Initial check and fetch
     checkConnectionAndFetchTrades();
+    
+    // Listen for credential updates from settings page
+    const handleCredentialsUpdate = () => {
+      console.log("Credentials updated, refreshing trades");
+      checkConnectionAndFetchTrades();
+    };
+    
+    window.addEventListener('binance-credentials-updated', handleCredentialsUpdate);
+    
+    return () => {
+      window.removeEventListener('binance-credentials-updated', handleCredentialsUpdate);
+    };
   }, []);
   
   const checkConnectionAndFetchTrades = async () => {

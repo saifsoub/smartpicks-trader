@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ const PortfolioSummary: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
   
   useEffect(() => {
+    // Check initial connection state
     checkConnectionAndLoadPortfolio();
     
     // Refresh portfolio data every minute
@@ -24,7 +26,18 @@ const PortfolioSummary: React.FC = () => {
       checkConnectionAndLoadPortfolio();
     }, 60000);
     
-    return () => clearInterval(interval);
+    // Listen for credential updates from settings page
+    const handleCredentialsUpdate = () => {
+      console.log("Credentials updated, refreshing portfolio");
+      checkConnectionAndLoadPortfolio();
+    };
+    
+    window.addEventListener('binance-credentials-updated', handleCredentialsUpdate);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('binance-credentials-updated', handleCredentialsUpdate);
+    };
   }, []);
   
   const checkConnectionAndLoadPortfolio = async () => {
