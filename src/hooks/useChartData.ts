@@ -74,7 +74,6 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
     
     // Fix: Use type assertion for setInterval return value
     refreshIntervalRef.current = (setInterval(() => {
-      // Use the loadChartData function with just one argument
       loadChartData(false);
     }, 60000) as unknown) as NodeJS.Timeout;
     
