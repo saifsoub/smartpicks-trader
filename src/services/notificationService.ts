@@ -190,6 +190,24 @@ class NotificationService {
     }
   }
 
+  public testTelegramSetup(): void {
+    if (this.hasTelegramCredentials()) {
+      this.testTelegramConnection()
+        .then(success => {
+          if (success) {
+            console.log('Telegram connection test successful');
+          } else {
+            console.error('Telegram connection test failed');
+          }
+        })
+        .catch(error => {
+          console.error('Error testing Telegram connection:', error);
+        });
+    } else {
+      console.log('Telegram credentials not set up yet');
+    }
+  }
+
   public async sendMarketAnalysisAlert(symbol: string, analysis: string): Promise<boolean> {
     // Add to notifications
     this.addNotification({

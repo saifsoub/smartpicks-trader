@@ -50,7 +50,7 @@ const AIInsightsBanner: React.FC<AIInsightsBannerProps> = ({ marketSentiment, ma
                   className="bg-blue-800/50 text-blue-100 border-blue-700 hover:bg-blue-800"
                   onClick={() => {
                     toast.success("AI Assistant actively monitoring market conditions");
-                    notificationService.sendMarketAnalysisAlert("BTC", "Bullish divergence detected on 4h chart", 78);
+                    notificationService.sendMarketAnalysisAlert("BTC", "Bullish divergence detected on 4h chart");
                   }}
                 >
                   <Zap className="mr-2 h-4 w-4" />

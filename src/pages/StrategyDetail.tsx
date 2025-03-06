@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -172,7 +171,7 @@ const StrategyDetail: React.FC = () => {
                 {Object.entries(strategy.parameters).map(([name, value], index) => (
                   <div key={index} className="flex justify-between py-3">
                     <span className="text-slate-400">{name}</span>
-                    <span>{value}</span>
+                    <span>{String(value)}</span>
                   </div>
                 ))}
               </div>

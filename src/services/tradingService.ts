@@ -5,6 +5,21 @@ import { toast } from 'sonner';
 // Trading signals
 type TradingSignal = 'BUY' | 'SELL' | 'HOLD';
 
+// Strategy interface for use throughout the application
+export interface Strategy {
+  id: string;
+  name: string;
+  description: string;
+  isActive: boolean;
+  symbol: string;
+  interval: string;
+  performance: string;
+  trades: number;
+  winRate: string;
+  parameters: Record<string, string | number>;
+  lastExecuted?: string;
+}
+
 // Trading strategy interface
 interface TradingStrategy {
   name: string;
@@ -259,24 +274,127 @@ class TradingService {
   private tradingPairs: string[] = ['BTCUSDT', 'ETHUSDT'];
   private positions: Record<string, { inPosition: boolean, entryPrice: number | null }> = {};
   
+  private strategyList: Strategy[] = [
+    {
+      id: '1',
+      name: 'RSI + MACD Crossover',
+      description: 'Combines RSI oversold conditions with MACD bullish crossovers for entry signals',
+      isActive: true,
+      symbol: 'BTCUSDT',
+      interval: '4h',
+      performance: '+5.2%',
+      trades: 14,
+      winRate: '71%',
+      parameters: {
+        'RSI Period': 14,
+        'RSI Oversold': 30,
+        'MACD Fast': 12,
+        'MACD Slow': 26,
+        'MACD Signal': 9
+      },
+      lastExecuted: new Date(Date.now() - 35 * 60000).toISOString()
+    },
+    {
+      id: '2',
+      name: 'Bollinger Breakout',
+      description: 'Detects price breakouts from Bollinger Bands with volume confirmation',
+      isActive: true,
+      symbol: 'ETHUSDT',
+      interval: '1h',
+      performance: '+3.8%',
+      trades: 28,
+      winRate: '64%',
+      parameters: {
+        'BB Period': 20,
+        'BB Deviation': 2,
+        'Volume Threshold': '1.5x',
+        'Stop Loss': '2%',
+        'Take Profit': '4%'
+      },
+      lastExecuted: new Date(Date.now() - 120 * 60000).toISOString()
+    },
+    {
+      id: '3',
+      name: 'Swing Trading Strategy',
+      description: 'Identifies swing trading opportunities using multiple timeframe analysis',
+      isActive: false,
+      symbol: 'SOLUSDT',
+      interval: '1d',
+      performance: '+8.7%',
+      trades: 6,
+      winRate: '83%',
+      parameters: {
+        'EMA Short': 9,
+        'EMA Long': 21,
+        'RSI Period': 14,
+        'Stochastic Period': 14,
+        'Confirmation Candles': 2
+      }
+    }
+  ];
+  
+  private marketSentiment: Record<string, { score: number; trend: 'bullish' | 'bearish' | 'neutral' }> = {
+    'BTC': { score: 72, trend: 'bullish' },
+    'ETH': { score: 65, trend: 'bullish' },
+    'SOL': { score: 58, trend: 'neutral' },
+    'BNB': { score: 45, trend: 'neutral' },
+    'XRP': { score: 32, trend: 'bearish' }
+  };
+  
   constructor() {
-    // Initialize strategies
     this.strategies = [
       new SMAStrategy(),
       new RSIStrategy(),
       new MACDStrategy()
     ];
     
-    // Initialize positions
     for (const pair of this.tradingPairs) {
       this.positions[pair] = { inPosition: false, entryPrice: null };
     }
     
-    // Check if bot was running before page refresh
     const wasRunning = localStorage.getItem('botRunning') === 'true';
     if (wasRunning) {
       this.startTrading();
     }
+  }
+  
+  public getStrategies(): Strategy[] {
+    return [...this.strategyList];
+  }
+  
+  public getActiveStrategies(): Strategy[] {
+    return this.strategyList.filter(strategy => strategy.isActive);
+  }
+  
+  public getStrategyById(id: string): Strategy | undefined {
+    return this.strategyList.find(strategy => strategy.id === id);
+  }
+  
+  public toggleStrategyStatus(id: string): boolean {
+    const strategy = this.strategyList.find(strategy => strategy.id === id);
+    if (strategy) {
+      strategy.isActive = !strategy.isActive;
+      
+      toast.success(`Strategy ${strategy.isActive ? 'activated' : 'deactivated'}`);
+      
+      window.dispatchEvent(new CustomEvent('strategy-updated'));
+      
+      return true;
+    }
+    return false;
+  }
+  
+  public deleteStrategy(id: string): boolean {
+    const initialLength = this.strategyList.length;
+    this.strategyList = this.strategyList.filter(strategy => strategy.id !== id);
+    
+    window.dispatchEvent(new CustomEvent('strategy-updated'));
+    
+    return this.strategyList.length < initialLength;
+  }
+  
+  public getMarketSentiment(): Record<string, { score: number; trend: 'bullish' | 'bearish' | 'neutral' }> {
+    return {...this.marketSentiment};
   }
   
   public isBotRunning(): boolean {
@@ -294,15 +412,12 @@ class TradingService {
       this.isRunning = true;
       localStorage.setItem('botRunning', 'true');
       
-      // Run initial analysis
       this.analyzeMarket();
       
-      // Set interval for continuous analysis (every 5 minutes)
       this.tradingInterval = setInterval(() => {
         this.analyzeMarket();
       }, 5 * 60 * 1000);
       
-      // Notify user
       toast.success('Trading bot started successfully');
       notificationService.addNotification({
         title: 'Trading Bot Started',
@@ -316,7 +431,6 @@ class TradingService {
       this.isRunning = false;
       localStorage.removeItem('botRunning');
       
-      // Notify user
       toast.error('Failed to start trading bot');
       notificationService.addNotification({
         title: 'Trading Bot Error',
@@ -343,7 +457,6 @@ class TradingService {
       this.tradingInterval = null;
     }
     
-    // Notify user
     toast.info('Trading bot stopped');
     notificationService.addNotification({
       title: 'Trading Bot Stopped',
@@ -360,10 +473,8 @@ class TradingService {
     console.log('Analyzing market...');
     
     try {
-      // Get current prices
       const prices = await binanceService.getPrices();
       
-      // Analyze each trading pair
       for (const pair of this.tradingPairs) {
         await this.analyzePair(pair, prices[pair]);
       }
@@ -381,10 +492,8 @@ class TradingService {
     try {
       console.log(`Analyzing ${pair} at price $${currentPrice}...`);
       
-      // Get historical data for analysis
       const klines = await binanceService.getKlines(pair, '1h', 100);
       
-      // Run each strategy and collect signals
       const signals: TradingSignal[] = [];
       for (const strategy of this.strategies) {
         const signal = await strategy.analyze(klines);
@@ -392,11 +501,9 @@ class TradingService {
         console.log(`${strategy.name} signal for ${pair}: ${signal}`);
       }
       
-      // Determine final signal based on majority
       const finalSignal = this.determineFinalSignal(signals);
       console.log(`Final signal for ${pair}: ${finalSignal}`);
       
-      // Execute trade based on signal
       await this.executeTrade(pair, finalSignal, currentPrice);
     } catch (error) {
       console.error(`Error analyzing ${pair}:`, error);
@@ -414,24 +521,20 @@ class TradingService {
       else holdCount++;
     }
     
-    // If majority says buy
     if (buyCount > sellCount && buyCount > holdCount) {
       return 'BUY';
     }
     
-    // If majority says sell
     if (sellCount > buyCount && sellCount > holdCount) {
       return 'SELL';
     }
     
-    // Otherwise hold
     return 'HOLD';
   }
   
   private async executeTrade(pair: string, signal: TradingSignal, price: string): Promise<void> {
     const position = this.positions[pair];
     
-    // Don't trade if we're already in the right position
     if (signal === 'BUY' && position.inPosition) {
       console.log(`Already in a long position for ${pair}`);
       return;
@@ -448,52 +551,34 @@ class TradingService {
     }
     
     try {
-      // Execute the trade
       if (signal === 'BUY') {
         console.log(`Executing BUY order for ${pair} at $${price}`);
         
-        // In a real implementation, this would calculate position size based on account balance
-        const quantity = '0.001'; // Example quantity
+        const quantity = '0.001';
         
-        // Place the order
         await binanceService.placeMarketOrder(pair, 'BUY', quantity);
         
-        // Update position
         position.inPosition = true;
         position.entryPrice = parseFloat(price);
         
-        // Notify about the trade
-        if (signal !== "HOLD") {
-          await notificationService.notifyTrade(pair, signal, price);
-        } else {
-          console.log(`HOLD signal for ${pair} at price ${price}`);
-        }
+        await notificationService.notifyTrade(pair, signal, price);
       } else if (signal === 'SELL') {
         console.log(`Executing SELL order for ${pair} at $${price}`);
         
-        // In a real implementation, this would sell the entire position
-        const quantity = '0.001'; // Example quantity
+        const quantity = '0.001';
         
-        // Place the order
         await binanceService.placeMarketOrder(pair, 'SELL', quantity);
         
-        // Calculate profit/loss
         if (position.entryPrice) {
           const priceDiff = parseFloat(price) - position.entryPrice;
           const percentChange = (priceDiff / position.entryPrice) * 100;
           console.log(`Closed position with ${percentChange.toFixed(2)}% ${priceDiff >= 0 ? 'profit' : 'loss'}`);
         }
         
-        // Update position
         position.inPosition = false;
         position.entryPrice = null;
         
-        // Notify about the trade
-        if (signal !== "HOLD") {
-          await notificationService.notifyTrade(pair, signal, price);
-        } else {
-          console.log(`HOLD signal for ${pair} at price ${price}`);
-        }
+        await notificationService.notifyTrade(pair, signal, price);
       }
     } catch (error) {
       console.error(`Error executing trade for ${pair}:`, error);
