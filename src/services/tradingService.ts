@@ -1,821 +1,508 @@
-import { toast } from "sonner";
-import binanceService from "./binanceService";
-import notificationService from "./notificationService";
+import binanceService from './binanceService';
+import notificationService from './notificationService';
+import { toast } from 'sonner';
 
-export interface Strategy {
-  id: string;
+// Trading signals
+type TradingSignal = 'BUY' | 'SELL' | 'HOLD';
+
+// Trading strategy interface
+interface TradingStrategy {
   name: string;
   description: string;
-  isActive: boolean;
-  symbol: string;
-  interval: string;
-  parameters: Record<string, any>;
-  lastExecuted?: Date;
-  performance?: string;
-  trades?: number;
-  winRate?: string;
+  analyze: (data: any) => Promise<TradingSignal>;
 }
 
-export interface TradeSignal {
-  strategy: Strategy;
-  symbol: string;
-  action: 'BUY' | 'SELL' | 'HOLD';
-  price: string;
-  reason: string;
-  timestamp: Date;
+// Simple Moving Average Crossover Strategy
+class SMAStrategy implements TradingStrategy {
+  name = 'SMA Crossover';
+  description = 'Simple Moving Average crossover strategy (5/20)';
+  
+  async analyze(data: any): Promise<TradingSignal> {
+    try {
+      // Calculate 5-period SMA
+      const sma5 = this.calculateSMA(data, 5);
+      
+      // Calculate 20-period SMA
+      const sma20 = this.calculateSMA(data, 20);
+      
+      // Get the last two values for both SMAs to determine crossover
+      const currentSMA5 = sma5[sma5.length - 1];
+      const previousSMA5 = sma5[sma5.length - 2];
+      const currentSMA20 = sma20[sma20.length - 1];
+      const previousSMA20 = sma20[sma20.length - 2];
+      
+      // Check for bullish crossover (5 SMA crosses above 20 SMA)
+      if (previousSMA5 <= previousSMA20 && currentSMA5 > currentSMA20) {
+        return 'BUY';
+      }
+      
+      // Check for bearish crossover (5 SMA crosses below 20 SMA)
+      if (previousSMA5 >= previousSMA20 && currentSMA5 < currentSMA20) {
+        return 'SELL';
+      }
+      
+      // No crossover
+      return 'HOLD';
+    } catch (error) {
+      console.error('Error in SMA strategy analysis:', error);
+      return 'HOLD';
+    }
+  }
+  
+  private calculateSMA(data: any[], period: number): number[] {
+    const sma: number[] = [];
+    
+    // Need at least 'period' data points to calculate SMA
+    if (data.length < period) {
+      return sma;
+    }
+    
+    // Calculate initial SMA
+    let sum = 0;
+    for (let i = 0; i < period; i++) {
+      sum += parseFloat(data[i][4]); // Close price
+    }
+    sma.push(sum / period);
+    
+    // Calculate remaining SMAs
+    for (let i = period; i < data.length; i++) {
+      sum = sum - parseFloat(data[i - period][4]) + parseFloat(data[i][4]);
+      sma.push(sum / period);
+    }
+    
+    return sma;
+  }
 }
 
-export interface SignalHistory {
-  id: string;
-  strategyId: string;
-  symbol: string;
-  action: 'BUY' | 'SELL';
-  price: string;
-  timestamp: Date;
-  profit?: string;
-  successful?: boolean;
+// RSI Strategy
+class RSIStrategy implements TradingStrategy {
+  name = 'RSI';
+  description = 'Relative Strength Index strategy (14-period)';
+  
+  async analyze(data: any): Promise<TradingSignal> {
+    try {
+      // Calculate 14-period RSI
+      const rsi = this.calculateRSI(data, 14);
+      
+      // Get the current RSI value
+      const currentRSI = rsi[rsi.length - 1];
+      
+      // Oversold condition (RSI < 30)
+      if (currentRSI < 30) {
+        return 'BUY';
+      }
+      
+      // Overbought condition (RSI > 70)
+      if (currentRSI > 70) {
+        return 'SELL';
+      }
+      
+      // No signal
+      return 'HOLD';
+    } catch (error) {
+      console.error('Error in RSI strategy analysis:', error);
+      return 'HOLD';
+    }
+  }
+  
+  private calculateRSI(data: any[], period: number): number[] {
+    const rsi: number[] = [];
+    const gains: number[] = [];
+    const losses: number[] = [];
+    
+    // Calculate price changes
+    for (let i = 1; i < data.length; i++) {
+      const change = parseFloat(data[i][4]) - parseFloat(data[i - 1][4]);
+      gains.push(change > 0 ? change : 0);
+      losses.push(change < 0 ? Math.abs(change) : 0);
+    }
+    
+    // Need at least 'period + 1' data points to calculate first RSI
+    if (data.length <= period + 1) {
+      return rsi;
+    }
+    
+    // Calculate initial average gain and loss
+    let avgGain = gains.slice(0, period).reduce((sum, gain) => sum + gain, 0) / period;
+    let avgLoss = losses.slice(0, period).reduce((sum, loss) => sum + loss, 0) / period;
+    
+    // Calculate first RSI
+    let rs = avgGain / (avgLoss === 0 ? 0.001 : avgLoss); // Avoid division by zero
+    rsi.push(100 - (100 / (1 + rs)));
+    
+    // Calculate remaining RSIs
+    for (let i = period; i < gains.length; i++) {
+      avgGain = ((avgGain * (period - 1)) + gains[i]) / period;
+      avgLoss = ((avgLoss * (period - 1)) + losses[i]) / period;
+      
+      rs = avgGain / (avgLoss === 0 ? 0.001 : avgLoss);
+      rsi.push(100 - (100 / (1 + rs)));
+    }
+    
+    return rsi;
+  }
+}
+
+// MACD Strategy
+class MACDStrategy implements TradingStrategy {
+  name = 'MACD';
+  description = 'Moving Average Convergence Divergence strategy';
+  
+  async analyze(data: any): Promise<TradingSignal> {
+    try {
+      // Calculate MACD line (12-period EMA - 26-period EMA)
+      const ema12 = this.calculateEMA(data, 12);
+      const ema26 = this.calculateEMA(data, 26);
+      
+      const macdLine: number[] = [];
+      for (let i = 0; i < ema12.length; i++) {
+        if (i < ema26.length) {
+          macdLine.push(ema12[i] - ema26[i]);
+        }
+      }
+      
+      // Calculate signal line (9-period EMA of MACD line)
+      const signalLine = this.calculateEMAFromArray(macdLine, 9);
+      
+      // Need at least one value for both MACD and signal line
+      if (macdLine.length === 0 || signalLine.length === 0) {
+        return 'HOLD';
+      }
+      
+      // Get the last two values for both lines to determine crossover
+      const currentMACD = macdLine[macdLine.length - 1];
+      const previousMACD = macdLine[macdLine.length - 2];
+      const currentSignal = signalLine[signalLine.length - 1];
+      const previousSignal = signalLine[signalLine.length - 2];
+      
+      // Check for bullish crossover (MACD crosses above signal line)
+      if (previousMACD <= previousSignal && currentMACD > currentSignal) {
+        return 'BUY';
+      }
+      
+      // Check for bearish crossover (MACD crosses below signal line)
+      if (previousMACD >= previousSignal && currentMACD < currentSignal) {
+        return 'SELL';
+      }
+      
+      // No crossover
+      return 'HOLD';
+    } catch (error) {
+      console.error('Error in MACD strategy analysis:', error);
+      return 'HOLD';
+    }
+  }
+  
+  private calculateEMA(data: any[], period: number): number[] {
+    const ema: number[] = [];
+    
+    // Need at least 'period' data points to calculate EMA
+    if (data.length < period) {
+      return ema;
+    }
+    
+    // Calculate initial SMA
+    let sum = 0;
+    for (let i = 0; i < period; i++) {
+      sum += parseFloat(data[i][4]); // Close price
+    }
+    const sma = sum / period;
+    ema.push(sma);
+    
+    // Calculate multiplier
+    const multiplier = 2 / (period + 1);
+    
+    // Calculate remaining EMAs
+    for (let i = period; i < data.length; i++) {
+      const currentPrice = parseFloat(data[i][4]);
+      const currentEMA = (currentPrice - ema[ema.length - 1]) * multiplier + ema[ema.length - 1];
+      ema.push(currentEMA);
+    }
+    
+    return ema;
+  }
+  
+  private calculateEMAFromArray(data: number[], period: number): number[] {
+    const ema: number[] = [];
+    
+    // Need at least 'period' data points to calculate EMA
+    if (data.length < period) {
+      return ema;
+    }
+    
+    // Calculate initial SMA
+    let sum = 0;
+    for (let i = 0; i < period; i++) {
+      sum += data[i];
+    }
+    const sma = sum / period;
+    ema.push(sma);
+    
+    // Calculate multiplier
+    const multiplier = 2 / (period + 1);
+    
+    // Calculate remaining EMAs
+    for (let i = period; i < data.length; i++) {
+      const currentValue = data[i];
+      const currentEMA = (currentValue - ema[ema.length - 1]) * multiplier + ema[ema.length - 1];
+      ema.push(currentEMA);
+    }
+    
+    return ema;
+  }
 }
 
 class TradingService {
-  private strategies: Strategy[] = [];
-  private isRunning = false;
-  private executionInterval: ReturnType<typeof setInterval> | null = null;
-  private signalHistory: SignalHistory[] = [];
-  private marketSentiment: Record<string, { score: number; trend: 'bullish' | 'bearish' | 'neutral' }> = {};
-
+  private isRunning: boolean = false;
+  private strategies: TradingStrategy[] = [];
+  private tradingInterval: ReturnType<typeof setInterval> | null = null;
+  private tradingPairs: string[] = ['BTCUSDT', 'ETHUSDT'];
+  private positions: Record<string, { inPosition: boolean, entryPrice: number | null }> = {};
+  
   constructor() {
-    this.loadStrategies();
-    this.loadSignalHistory();
-    this.initializeMarketSentiment();
-  }
-
-  private loadStrategies() {
-    const savedStrategies = localStorage.getItem('tradingStrategies');
-    if (savedStrategies) {
-      this.strategies = JSON.parse(savedStrategies);
-    } else {
-      this.strategies = [
-        {
-          id: "1",
-          name: "RSI + MACD Crossover",
-          description: "Uses RSI oversold/overbought levels combined with MACD crossover signals to identify entry and exit points.",
-          isActive: true,
-          symbol: "BTCUSDT",
-          interval: "4h",
-          parameters: {
-            rsiPeriod: 14,
-            rsiOversold: 30,
-            rsiOverbought: 70,
-            macdFast: 12,
-            macdSlow: 26,
-            macdSignal: 9
-          },
-          performance: "+12.4%",
-          trades: 24,
-          winRate: "75%"
-        },
-        {
-          id: "2",
-          name: "Bollinger Breakout",
-          description: "Identifies breakouts from Bollinger Bands to catch trending momentum moves in volatile markets.",
-          isActive: true,
-          symbol: "ETHUSDT",
-          interval: "1h",
-          parameters: {
-            bbPeriod: 20,
-            bbDeviation: 2,
-            entryThreshold: 2.5,
-            exitThreshold: 1.0,
-            stopLoss: 2.0,
-            takeProfit: 4.0
-          },
-          performance: "+8.7%",
-          trades: 16,
-          winRate: "68%"
-        },
-        {
-          id: "3",
-          name: "VWAP Mean Reversion",
-          description: "Uses Volume Weighted Average Price (VWAP) to identify mean reversion opportunities when price deviates too far from VWAP.",
-          isActive: true,
-          symbol: "SOLUSDT",
-          interval: "2h",
-          parameters: {
-            vwapPeriod: 24,
-            deviationThreshold: 3.5,
-            profitTarget: 2.0,
-            stopLoss: 1.5,
-            lookbackPeriods: 3
-          },
-          performance: "+15.2%",
-          trades: 18,
-          winRate: "78%"
-        },
-        {
-          id: "4",
-          name: "Fibonacci Retracement + RSI",
-          description: "Combines Fibonacci retracement levels with RSI to identify optimal entry points during pullbacks in a trend.",
-          isActive: false,
-          symbol: "BTCUSDT",
-          interval: "1d",
-          parameters: {
-            fibLevels: [0.382, 0.5, 0.618],
-            rsiPeriod: 14,
-            rsiThreshold: 40,
-            trendPeriod: 50,
-            stopLoss: 5.0,
-            takeProfit: 15.0
-          },
-          performance: "+23.8%",
-          trades: 7,
-          winRate: "85%"
-        },
-        {
-          id: "5",
-          name: "Ichimoku Cloud Breakout",
-          description: "Uses the Ichimoku Cloud indicator to identify trend direction and potential breakout points.",
-          isActive: false,
-          symbol: "ETHUSDT",
-          interval: "12h",
-          parameters: {
-            conversionPeriod: 9,
-            basePeriod: 26,
-            laggingSpan2Period: 52,
-            displacement: 26,
-            stopLoss: 4.0,
-            takeProfit: 12.0
-          },
-          performance: "+18.3%",
-          trades: 9,
-          winRate: "77%"
-        }
-      ];
-      this.saveStrategies();
-    }
-  }
-
-  private loadSignalHistory() {
-    const savedHistory = localStorage.getItem('signalHistory');
-    if (savedHistory) {
-      this.signalHistory = JSON.parse(savedHistory);
-    }
-  }
-
-  private saveSignalHistory() {
-    localStorage.setItem('signalHistory', JSON.stringify(this.signalHistory));
-  }
-
-  private saveStrategies() {
-    localStorage.setItem('tradingStrategies', JSON.stringify(this.strategies));
-  }
-
-  private initializeMarketSentiment() {
-    this.marketSentiment = {
-      "BTC": { score: 75, trend: 'bullish' },
-      "ETH": { score: 68, trend: 'bullish' },
-      "SOL": { score: 82, trend: 'bullish' },
-      "BNB": { score: 55, trend: 'neutral' },
-      "XRP": { score: 42, trend: 'bearish' }
-    };
+    // Initialize strategies
+    this.strategies = [
+      new SMAStrategy(),
+      new RSIStrategy(),
+      new MACDStrategy()
+    ];
     
-    setInterval(() => this.updateMarketSentiment(), 15 * 60 * 1000);
-  }
-
-  private updateMarketSentiment() {
-    Object.keys(this.marketSentiment).forEach(symbol => {
-      const currentScore = this.marketSentiment[symbol].score;
-      let newScore = currentScore + (Math.random() * 10 - 5);
-      newScore = Math.max(0, Math.min(100, newScore));
-      
-      let trend: 'bullish' | 'bearish' | 'neutral' = 'neutral';
-      if (newScore > 65) trend = 'bullish';
-      else if (newScore < 35) trend = 'bearish';
-      
-      this.marketSentiment[symbol] = { score: newScore, trend };
-    });
+    // Initialize positions
+    for (const pair of this.tradingPairs) {
+      this.positions[pair] = { inPosition: false, entryPrice: null };
+    }
     
-    if (this.marketSentiment["BTC"].score > 85) {
-      notificationService.sendTelegramMessage("🔔 Strong bullish signal for BTC detected by AI - consider increasing position size");
-    } else if (this.marketSentiment["BTC"].score < 20) {
-      notificationService.sendTelegramMessage("⚠️ Strong bearish signal for BTC detected by AI - consider reducing exposure");
+    // Check if bot was running before page refresh
+    const wasRunning = localStorage.getItem('botRunning') === 'true';
+    if (wasRunning) {
+      this.startTrading();
     }
   }
-
-  public getMarketSentiment(): Record<string, { score: number; trend: 'bullish' | 'bearish' | 'neutral' }> {
-    return { ...this.marketSentiment };
-  }
-
-  public getStrategies(): Strategy[] {
-    return [...this.strategies];
-  }
-
-  public getActiveStrategies(): Strategy[] {
-    return this.strategies.filter(strategy => strategy.isActive);
-  }
-
-  public getStrategyById(id: string): Strategy | undefined {
-    return this.strategies.find(strategy => strategy.id === id);
-  }
-
-  public getSignalHistory(): SignalHistory[] {
-    return [...this.signalHistory];
-  }
-
-  public addStrategy(strategy: Omit<Strategy, 'id'>): Strategy {
-    const newStrategy = {
-      ...strategy,
-      id: Date.now().toString(),
-      trades: 0,
-      performance: "0.0%",
-      winRate: "0%"
-    };
-    
-    this.strategies.push(newStrategy);
-    this.saveStrategies();
-    toast.success(`Strategy "${newStrategy.name}" has been added`);
-    
-    notificationService.sendTelegramMessage(`New strategy "${newStrategy.name}" added for ${newStrategy.symbol}`);
-    
-    return newStrategy;
-  }
-
-  public updateStrategy(updatedStrategy: Strategy): void {
-    const index = this.strategies.findIndex(s => s.id === updatedStrategy.id);
-    if (index !== -1) {
-      this.strategies[index] = updatedStrategy;
-      this.saveStrategies();
-      toast.success(`Strategy "${updatedStrategy.name}" has been updated`);
-    } else {
-      toast.error("Strategy not found");
-    }
-  }
-
-  public deleteStrategy(id: string): void {
-    const index = this.strategies.findIndex(s => s.id === id);
-    if (index !== -1) {
-      const name = this.strategies[index].name;
-      this.strategies.splice(index, 1);
-      this.saveStrategies();
-      toast.success(`Strategy "${name}" has been deleted`);
-    } else {
-      toast.error("Strategy not found");
-    }
-  }
-
-  public toggleStrategyStatus(id: string): void {
-    const strategy = this.strategies.find(s => s.id === id);
-    if (strategy) {
-      strategy.isActive = !strategy.isActive;
-      this.saveStrategies();
-      toast.success(`Strategy "${strategy.name}" is now ${strategy.isActive ? 'active' : 'inactive'}`);
-      
-      if (strategy.isActive) {
-        notificationService.sendTelegramMessage(`Strategy "${strategy.name}" activated for ${strategy.symbol}`);
-      }
-    } else {
-      toast.error("Strategy not found");
-    }
-  }
-
-  public startTrading(): boolean {
-    if (!binanceService.hasCredentials()) {
-      toast.error("Binance API credentials not configured");
-      return false;
-    }
-
-    const activeStrategies = this.getActiveStrategies();
-    if (activeStrategies.length === 0) {
-      toast.error("No active strategies to execute");
-      return false;
-    }
-
-    if (this.isRunning) {
-      toast.info("Trading bot is already running");
-      return true;
-    }
-
-    this.isRunning = true;
-    this.executionInterval = setInterval(() => this.executeStrategies(), 60000);
-    toast.success("Trading bot started successfully");
-    
-    notificationService.sendTelegramMessage("🤖 Trading bot started successfully!");
-    
-    return true;
-  }
-
-  public stopTrading(): void {
-    if (this.executionInterval) {
-      clearInterval(this.executionInterval);
-      this.executionInterval = null;
-    }
-    this.isRunning = false;
-    toast.info("Trading bot stopped");
-    
-    notificationService.sendTelegramMessage("🛑 Trading bot has been stopped");
-  }
-
+  
   public isBotRunning(): boolean {
     return this.isRunning;
   }
-
-  private async executeStrategies(): Promise<void> {
-    const activeStrategies = this.getActiveStrategies();
-    
-    for (const strategy of activeStrategies) {
-      try {
-        const prices = await binanceService.getPrices();
-        const priceStr = prices[strategy.symbol];
-        
-        if (!priceStr) {
-          console.error(`Price not found for symbol ${strategy.symbol}`);
-          continue;
-        }
-
-        const signal = await this.analyzeStrategy(strategy, priceStr);
-        
-        if (signal.action !== 'HOLD') {
-          this.executeTrade(signal);
-        }
-        
-        strategy.lastExecuted = new Date();
-        this.saveStrategies();
-      } catch (error) {
-        console.error(`Error executing strategy ${strategy.name}:`, error);
-      }
+  
+  public startTrading(): boolean {
+    if (this.isRunning) {
+      console.log('Trading bot is already running');
+      return true;
     }
-  }
-
-  private async analyzeStrategy(strategy: Strategy, price: string): Promise<TradeSignal> {
-    console.log(`Analyzing ${strategy.name} for ${strategy.symbol} at price $${price}`);
-    
-    let action: 'BUY' | 'SELL' | 'HOLD' = 'HOLD';
-    let reason = 'No signal generated';
     
     try {
-      const klines = await binanceService.getKlines(strategy.symbol, strategy.interval, 100);
+      console.log('Starting trading bot...');
+      this.isRunning = true;
+      localStorage.setItem('botRunning', 'true');
       
-      if (!klines || klines.length === 0) {
-        throw new Error('Failed to get historical data for analysis');
+      // Run initial analysis
+      this.analyzeMarket();
+      
+      // Set interval for continuous analysis (every 5 minutes)
+      this.tradingInterval = setInterval(() => {
+        this.analyzeMarket();
+      }, 5 * 60 * 1000);
+      
+      // Notify user
+      toast.success('Trading bot started successfully');
+      notificationService.addNotification({
+        title: 'Trading Bot Started',
+        message: 'The automated trading bot is now running and analyzing the market.',
+        type: 'success'
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to start trading bot:', error);
+      this.isRunning = false;
+      localStorage.removeItem('botRunning');
+      
+      // Notify user
+      toast.error('Failed to start trading bot');
+      notificationService.addNotification({
+        title: 'Trading Bot Error',
+        message: 'Failed to start the trading bot. Please check the console for details.',
+        type: 'error'
+      });
+      
+      return false;
+    }
+  }
+  
+  public stopTrading(): void {
+    if (!this.isRunning) {
+      console.log('Trading bot is not running');
+      return;
+    }
+    
+    console.log('Stopping trading bot...');
+    this.isRunning = false;
+    localStorage.removeItem('botRunning');
+    
+    if (this.tradingInterval) {
+      clearInterval(this.tradingInterval);
+      this.tradingInterval = null;
+    }
+    
+    // Notify user
+    toast.info('Trading bot stopped');
+    notificationService.addNotification({
+      title: 'Trading Bot Stopped',
+      message: 'The automated trading bot has been stopped.',
+      type: 'info'
+    });
+  }
+  
+  private async analyzeMarket(): Promise<void> {
+    if (!this.isRunning) {
+      return;
+    }
+    
+    console.log('Analyzing market...');
+    
+    try {
+      // Get current prices
+      const prices = await binanceService.getPrices();
+      
+      // Analyze each trading pair
+      for (const pair of this.tradingPairs) {
+        await this.analyzePair(pair, prices[pair]);
       }
-
-      const closePrices = klines.map(kline => parseFloat(kline[4]));
-      const highPrices = klines.map(kline => parseFloat(kline[2]));
-      const lowPrices = klines.map(kline => parseFloat(kline[3]));
-      const volumes = klines.map(kline => parseFloat(kline[5]));
-      const currentPriceValue = parseFloat(price);
+    } catch (error) {
+      console.error('Error analyzing market:', error);
+      notificationService.addNotification({
+        title: 'Analysis Error',
+        message: 'Failed to analyze market data. Will retry on next interval.',
+        type: 'error'
+      });
+    }
+  }
+  
+  private async analyzePair(pair: string, currentPrice: string): Promise<void> {
+    try {
+      console.log(`Analyzing ${pair} at price $${currentPrice}...`);
       
-      switch (strategy.name) {
-        case "RSI + MACD Crossover": {
-          const rsiPeriod = strategy.parameters.rsiPeriod || 14;
-          const rsiValues = this.calculateRSI(closePrices, rsiPeriod);
-          const currentRSI = rsiValues[rsiValues.length - 1];
-          
-          const { macdLine, signalLine } = this.calculateMACD(
-            closePrices,
-            strategy.parameters.macdFast || 12,
-            strategy.parameters.macdSlow || 26,
-            strategy.parameters.macdSignal || 9
-          );
-          
-          const prevMACD = macdLine[macdLine.length - 2];
-          const currentMACD = macdLine[macdLine.length - 1];
-          const prevSignal = signalLine[signalLine.length - 2];
-          const currentSignal = signalLine[signalLine.length - 1];
-          
-          if (currentRSI < (strategy.parameters.rsiOversold || 30) && 
-              prevMACD < prevSignal && 
-              currentMACD > currentSignal) {
-            action = 'BUY';
-            reason = `RSI oversold (${currentRSI.toFixed(2)}) with bullish MACD crossover`;
-          } 
-          else if (currentRSI > (strategy.parameters.rsiOverbought || 70) && 
-                  prevMACD > prevSignal && 
-                  currentMACD < currentSignal) {
-            action = 'SELL';
-            reason = `RSI overbought (${currentRSI.toFixed(2)}) with bearish MACD crossover`;
-          }
-          break;
+      // Get historical data for analysis
+      const klines = await binanceService.getKlines(pair, '1h', 100);
+      
+      // Run each strategy and collect signals
+      const signals: TradingSignal[] = [];
+      for (const strategy of this.strategies) {
+        const signal = await strategy.analyze(klines);
+        signals.push(signal);
+        console.log(`${strategy.name} signal for ${pair}: ${signal}`);
+      }
+      
+      // Determine final signal based on majority
+      const finalSignal = this.determineFinalSignal(signals);
+      console.log(`Final signal for ${pair}: ${finalSignal}`);
+      
+      // Execute trade based on signal
+      await this.executeTrade(pair, finalSignal, currentPrice);
+    } catch (error) {
+      console.error(`Error analyzing ${pair}:`, error);
+    }
+  }
+  
+  private determineFinalSignal(signals: TradingSignal[]): TradingSignal {
+    let buyCount = 0;
+    let sellCount = 0;
+    let holdCount = 0;
+    
+    for (const signal of signals) {
+      if (signal === 'BUY') buyCount++;
+      else if (signal === 'SELL') sellCount++;
+      else holdCount++;
+    }
+    
+    // If majority says buy
+    if (buyCount > sellCount && buyCount > holdCount) {
+      return 'BUY';
+    }
+    
+    // If majority says sell
+    if (sellCount > buyCount && sellCount > holdCount) {
+      return 'SELL';
+    }
+    
+    // Otherwise hold
+    return 'HOLD';
+  }
+  
+  private async executeTrade(pair: string, signal: TradingSignal, price: string): Promise<void> {
+    const position = this.positions[pair];
+    
+    // Don't trade if we're already in the right position
+    if (signal === 'BUY' && position.inPosition) {
+      console.log(`Already in a long position for ${pair}`);
+      return;
+    }
+    
+    if (signal === 'SELL' && !position.inPosition) {
+      console.log(`Not in a position to sell ${pair}`);
+      return;
+    }
+    
+    if (signal === 'HOLD') {
+      console.log(`Holding current position for ${pair}`);
+      return;
+    }
+    
+    try {
+      // Execute the trade
+      if (signal === 'BUY') {
+        console.log(`Executing BUY order for ${pair} at $${price}`);
+        
+        // In a real implementation, this would calculate position size based on account balance
+        const quantity = '0.001'; // Example quantity
+        
+        // Place the order
+        await binanceService.placeMarketOrder(pair, 'BUY', quantity);
+        
+        // Update position
+        position.inPosition = true;
+        position.entryPrice = parseFloat(price);
+        
+        // Notify about the trade
+        if (signal !== "HOLD") {
+          await notificationService.notifyTrade(pair, signal, price);
+        } else {
+          console.log(`HOLD signal for ${pair} at price ${price}`);
+        }
+      } else if (signal === 'SELL') {
+        console.log(`Executing SELL order for ${pair} at $${price}`);
+        
+        // In a real implementation, this would sell the entire position
+        const quantity = '0.001'; // Example quantity
+        
+        // Place the order
+        await binanceService.placeMarketOrder(pair, 'SELL', quantity);
+        
+        // Calculate profit/loss
+        if (position.entryPrice) {
+          const priceDiff = parseFloat(price) - position.entryPrice;
+          const percentChange = (priceDiff / position.entryPrice) * 100;
+          console.log(`Closed position with ${percentChange.toFixed(2)}% ${priceDiff >= 0 ? 'profit' : 'loss'}`);
         }
         
-        case "Bollinger Breakout": {
-          const bbPeriod = strategy.parameters.bbPeriod || 20;
-          const bbDeviation = strategy.parameters.bbDeviation || 2;
-          
-          const { upper, middle, lower } = this.calculateBollingerBands(closePrices, bbPeriod, bbDeviation);
-          
-          const currentClose = closePrices[closePrices.length - 1];
-          const previousClose = closePrices[closePrices.length - 2];
-          
-          const currentUpper = upper[upper.length - 1];
-          const currentLower = lower[lower.length - 1];
-          
-          const entryThreshold = strategy.parameters.entryThreshold || 2.5;
-          
-          if (previousClose < currentUpper && currentClose > currentUpper * (1 + entryThreshold / 100)) {
-            action = 'BUY';
-            reason = `Price broke above upper Bollinger Band with momentum`;
-          } 
-          else if (previousClose > currentLower && currentClose < currentLower * (1 - entryThreshold / 100)) {
-            action = 'SELL';
-            reason = `Price broke below lower Bollinger Band with momentum`;
-          }
-          break;
-        }
+        // Update position
+        position.inPosition = false;
+        position.entryPrice = null;
         
-        case "VWAP Mean Reversion": {
-          const vwapPeriod = strategy.parameters.vwapPeriod || 24;
-          
-          const vwap = this.calculateVWAP(closePrices, highPrices, lowPrices, volumes, vwapPeriod);
-          const currentVWAP = vwap[vwap.length - 1];
-          const currentClose = closePrices[closePrices.length - 1];
-          
-          const deviationThreshold = strategy.parameters.deviationThreshold || 3.5;
-          const deviationPercent = Math.abs((currentClose - currentVWAP) / currentVWAP * 100);
-          
-          if (deviationPercent > deviationThreshold && currentClose > currentVWAP &&
-              (!this.marketSentiment[strategy.symbol.replace('USDT', '')] || 
-               this.marketSentiment[strategy.symbol.replace('USDT', '')].score < 80)) {
-            action = 'SELL';
-            reason = `Price ${deviationPercent.toFixed(2)}% above VWAP, expected to revert`;
-          } 
-          else if (deviationPercent > deviationThreshold && currentClose < currentVWAP &&
-                  (!this.marketSentiment[strategy.symbol.replace('USDT', '')] || 
-                   this.marketSentiment[strategy.symbol.replace('USDT', '')].score > 20)) {
-            action = 'BUY';
-            reason = `Price ${deviationPercent.toFixed(2)}% below VWAP, expected to revert`;
-          }
-          break;
-        }
-        
-        case "Fibonacci Retracement + RSI": {
-          const rsiPeriod = strategy.parameters.rsiPeriod || 14;
-          const rsiValues = this.calculateRSI(closePrices, rsiPeriod);
-          const currentRSI = rsiValues[rsiValues.length - 1];
-          
-          const slicedPrices = closePrices.slice(-100);
-          const highestPrice = Math.max(...slicedPrices);
-          const lowestPrice = Math.min(...slicedPrices);
-          
-          const fibLevels = strategy.parameters.fibLevels || [0.382, 0.5, 0.618];
-          const fibPrices = fibLevels.map(level => 
-            highestPrice - (highestPrice - lowestPrice) * level
-          );
-          
-          const rsiThreshold = strategy.parameters.rsiThreshold || 40;
-          
-          for (let i = 0; i < fibPrices.length; i++) {
-            const fibPrice = fibPrices[i];
-            const priceDeviation = Math.abs(currentPriceValue - fibPrice) / fibPrice * 100;
-            
-            if (priceDeviation < 1.0 && currentRSI < rsiThreshold) {
-              action = 'BUY';
-              reason = `Price at ${fibLevels[i] * 100}% Fibonacci retracement with oversold RSI (${currentRSI.toFixed(2)})`;
-              break;
-            }
-          }
-          break;
-        }
-        
-        case "Ichimoku Cloud Breakout": {
-          const conversion = strategy.parameters.conversionPeriod || 9;
-          const base = strategy.parameters.basePeriod || 26;
-          const laggingSpan2 = strategy.parameters.laggingSpan2Period || 52;
-          const displacement = strategy.parameters.displacement || 26;
-          
-          const ichimoku = this.calculateIchimoku(
-            highPrices, 
-            lowPrices, 
-            conversion, 
-            base, 
-            laggingSpan2, 
-            displacement
-          );
-          
-          const currentClose = closePrices[closePrices.length - 1];
-          const currentTenkan = ichimoku.conversionLine[ichimoku.conversionLine.length - 1];
-          const currentKijun = ichimoku.baseLine[ichimoku.baseLine.length - 1];
-          const currentSenkouA = ichimoku.leadingSpanA[ichimoku.leadingSpanA.length - displacement];
-          const currentSenkouB = ichimoku.leadingSpanB[ichimoku.leadingSpanB.length - displacement];
-          
-          if (currentClose > currentSenkouA && currentClose > currentSenkouB &&
-              ichimoku.conversionLine[ichimoku.conversionLine.length - 2] < ichimoku.baseLine[ichimoku.baseLine.length - 2] &&
-              currentTenkan > currentKijun) {
-            action = 'BUY';
-            reason = `Price above Ichimoku Cloud with bullish Tenkan-Kijun cross`;
-          } 
-          else if (currentClose < currentSenkouA && currentClose < currentSenkouB &&
-                  ichimoku.conversionLine[ichimoku.conversionLine.length - 2] > ichimoku.baseLine[ichimoku.baseLine.length - 2] &&
-                  currentTenkan < currentKijun) {
-            action = 'SELL';
-            reason = `Price below Ichimoku Cloud with bearish Tenkan-Kijun cross`;
-          }
-          break;
-        }
-        
-        default: {
-          const randomValue = Math.random();
-          if (randomValue < 0.1) {
-            action = 'BUY';
-            reason = 'Random trading signal (demo mode)';
-          } else if (randomValue > 0.9) {
-            action = 'SELL';
-            reason = 'Random trading signal (demo mode)';
-          }
+        // Notify about the trade
+        if (signal !== "HOLD") {
+          await notificationService.notifyTrade(pair, signal, price);
+        } else {
+          console.log(`HOLD signal for ${pair} at price ${price}`);
         }
       }
     } catch (error) {
-      console.error(`Strategy analysis error:`, error);
-      const randomValue = Math.random();
-      if (randomValue < 0.05) {
-        action = 'BUY';
-        reason = 'Random signal (fallback after analysis error)';
-      } else if (randomValue > 0.95) {
-        action = 'SELL';
-        reason = 'Random signal (fallback after analysis error)';
-      }
+      console.error(`Error executing trade for ${pair}:`, error);
+      notificationService.addNotification({
+        title: 'Trade Execution Error',
+        message: `Failed to execute ${signal} order for ${pair}. ${error instanceof Error ? error.message : ''}`,
+        type: 'error'
+      });
     }
-    
-    return {
-      strategy,
-      symbol: strategy.symbol,
-      action,
-      price,
-      reason,
-      timestamp: new Date()
-    };
-  }
-
-  private async executeTrade(signal: TradeSignal): Promise<void> {
-    try {
-      if (signal.action === 'HOLD') {
-        return;
-      }
-      
-      const quantity = signal.symbol.includes('BTC') ? '0.001' : '0.01';
-      
-      console.log(`Executing ${signal.action} for ${signal.symbol} at $${signal.price}: ${signal.reason}`);
-      
-      const orderResult = await binanceService.placeMarketOrder(
-        signal.symbol,
-        signal.action,
-        quantity
-      );
-      
-      const signalRecord: SignalHistory = {
-        id: Date.now().toString(),
-        strategyId: signal.strategy.id,
-        symbol: signal.symbol,
-        action: signal.action,
-        price: signal.price,
-        timestamp: new Date(),
-        successful: true
-      };
-      
-      this.signalHistory.unshift(signalRecord);
-      if (this.signalHistory.length > 100) {
-        this.signalHistory.pop();
-      }
-      this.saveSignalHistory();
-      
-      const strategy = this.getStrategyById(signal.strategy.id);
-      if (strategy) {
-        strategy.trades = (strategy.trades || 0) + 1;
-        this.saveStrategies();
-      }
-      
-      this.notifyTrade(signal);
-    } catch (error) {
-      console.error('Failed to execute trade:', error);
-    }
-  }
-
-  private notifyTrade(signal: TradeSignal): void {
-    toast.success(
-      `${signal.action} signal for ${signal.symbol} at $${signal.price}`, 
-      { description: signal.reason }
-    );
-    
-    notificationService.notifyTrade(
-      signal.symbol, 
-      signal.action, 
-      signal.price
-    );
-  }
-
-  private calculateRSI(prices: number[], period: number): number[] {
-    const rsiValues: number[] = [];
-    
-    if (prices.length <= period) {
-      return Array(prices.length).fill(50);
-    }
-    
-    let gains = 0;
-    let losses = 0;
-    
-    for (let i = 1; i <= period; i++) {
-      const difference = prices[i] - prices[i - 1];
-      if (difference >= 0) {
-        gains += difference;
-      } else {
-        losses -= difference;
-      }
-    }
-    
-    let avgGain = gains / period;
-    let avgLoss = losses / period;
-    
-    let rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
-    let rsi = 100 - (100 / (1 + rs));
-    rsiValues.push(rsi);
-    
-    for (let i = period + 1; i < prices.length; i++) {
-      const difference = prices[i] - prices[i - 1];
-      
-      let currentGain = 0;
-      let currentLoss = 0;
-      
-      if (difference >= 0) {
-        currentGain = difference;
-      } else {
-        currentLoss = -difference;
-      }
-      
-      avgGain = ((avgGain * (period - 1)) + currentGain) / period;
-      avgLoss = ((avgLoss * (period - 1)) + currentLoss) / period;
-      
-      rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
-      rsi = 100 - (100 / (1 + rs));
-      
-      rsiValues.push(rsi);
-    }
-    
-    return Array(period).fill(50).concat(rsiValues);
-  }
-
-  private calculateMACD(prices: number[], fastPeriod: number, slowPeriod: number, signalPeriod: number): { macdLine: number[], signalLine: number[] } {
-    const fastEMA = this.calculateEMA(prices, fastPeriod);
-    const slowEMA = this.calculateEMA(prices, slowPeriod);
-    
-    const macdLine: number[] = [];
-    for (let i = 0; i < prices.length; i++) {
-      macdLine.push(fastEMA[i] - slowEMA[i]);
-    }
-    
-    const signalLine = this.calculateEMA(macdLine, signalPeriod);
-    
-    return { macdLine, signalLine };
-  }
-
-  private calculateEMA(prices: number[], period: number): number[] {
-    const ema: number[] = [];
-    const multiplier = 2 / (period + 1);
-    
-    let sum = 0;
-    for (let i = 0; i < period; i++) {
-      sum += prices[i];
-    }
-    
-    ema.push(sum / period);
-    
-    for (let i = period; i < prices.length; i++) {
-      ema.push((prices[i] - ema[ema.length - 1]) * multiplier + ema[ema.length - 1]);
-    }
-    
-    return Array(prices.length - ema.length).fill(ema[0]).concat(ema);
-  }
-
-  private calculateBollingerBands(prices: number[], period: number, deviation: number): { upper: number[], middle: number[], lower: number[] } {
-    const middle: number[] = [];
-    const upper: number[] = [];
-    const lower: number[] = [];
-    
-    for (let i = 0; i < prices.length; i++) {
-      if (i < period - 1) {
-        middle.push(prices[i]);
-        upper.push(prices[i]);
-        lower.push(prices[i]);
-        continue;
-      }
-      
-      let sum = 0;
-      for (let j = i - period + 1; j <= i; j++) {
-        sum += prices[j];
-      }
-      const sma = sum / period;
-      
-      let squaredDiffSum = 0;
-      for (let j = i - period + 1; j <= i; j++) {
-        squaredDiffSum += Math.pow(prices[j] - sma, 2);
-      }
-      const stdDev = Math.sqrt(squaredDiffSum / period);
-      
-      middle.push(sma);
-      upper.push(sma + (stdDev * deviation));
-      lower.push(sma - (stdDev * deviation));
-    }
-    
-    return { upper, middle, lower };
-  }
-
-  private calculateVWAP(closePrices: number[], highPrices: number[], lowPrices: number[], volumes: number[], period: number): number[] {
-    const vwap: number[] = [];
-    
-    for (let i = 0; i < closePrices.length; i++) {
-      if (i < period - 1) {
-        vwap.push(closePrices[i]);
-        continue;
-      }
-      
-      let sumPV = 0;
-      let sumV = 0;
-      
-      for (let j = i - period + 1; j <= i; j++) {
-        const typicalPrice = (highPrices[j] + lowPrices[j] + closePrices[j]) / 3;
-        sumPV += typicalPrice * volumes[j];
-        sumV += volumes[j];
-      }
-      
-      vwap.push(sumV === 0 ? closePrices[i] : sumPV / sumV);
-    }
-    
-    return vwap;
-  }
-
-  private calculateIchimoku(highPrices: number[], lowPrices: number[], conversionPeriod: number, basePeriod: number, laggingSpan2Period: number, displacement: number): {
-    conversionLine: number[],
-    baseLine: number[],
-    leadingSpanA: number[],
-    leadingSpanB: number[],
-    laggingSpan: number[]
-  } {
-    const conversionLine: number[] = [];
-    const baseLine: number[] = [];
-    const leadingSpanA: number[] = [];
-    const leadingSpanB: number[] = [];
-    const laggingSpan: number[] = [];
-    
-    const findHighestLowest = (arr: number[], start: number, length: number) => {
-      let highest = -Infinity;
-      let lowest = Infinity;
-      
-      for (let i = start; i < start + length && i < arr.length; i++) {
-        highest = Math.max(highest, arr[i]);
-        lowest = Math.min(lowest, arr[i]);
-      }
-      
-      return { highest, lowest };
-    };
-    
-    for (let i = 0; i < highPrices.length; i++) {
-      if (i < conversionPeriod - 1) {
-        conversionLine.push((highPrices[i] + lowPrices[i]) / 2);
-        continue;
-      }
-      
-      const { highest, lowest } = findHighestLowest(highPrices, i - conversionPeriod + 1, conversionPeriod);
-      conversionLine.push((highest + lowest) / 2);
-    }
-    
-    for (let i = 0; i < highPrices.length; i++) {
-      if (i < basePeriod - 1) {
-        baseLine.push((highPrices[i] + lowPrices[i]) / 2);
-        continue;
-      }
-      
-      const { highest, lowest } = findHighestLowest(highPrices, i - basePeriod + 1, basePeriod);
-      baseLine.push((highest + lowest) / 2);
-    }
-    
-    for (let i = 0; i < highPrices.length; i++) {
-      if (i < basePeriod - 1) {
-        leadingSpanA.push((conversionLine[i] + baseLine[i]) / 2);
-        continue;
-      }
-      
-        leadingSpanA.push((conversionLine[i] + baseLine[i]) / 2);
-    }
-    
-    for (let i = 0; i < highPrices.length; i++) {
-      if (i < laggingSpan2Period - 1) {
-        leadingSpanB.push((highPrices[i] + lowPrices[i]) / 2);
-        continue;
-      }
-      
-      const { highest, lowest } = findHighestLowest(highPrices, i - laggingSpan2Period + 1, laggingSpan2Period);
-      leadingSpanB.push((highest + lowest) / 2);
-    }
-    
-    for (let i = 0; i < highPrices.length; i++) {
-      laggingSpan.push(0);
-    }
-    
-    return {
-      conversionLine,
-      baseLine,
-      leadingSpanA,
-      leadingSpanB,
-      laggingSpan
-    };
   }
 }
 
