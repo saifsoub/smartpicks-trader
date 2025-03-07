@@ -8,6 +8,7 @@ export interface BalanceInfo {
   available: string;
   total: string;
   usdValue: number;
+  rawAsset?: string; // The original asset name from Binance
 }
 
 export interface BinanceBalance {
@@ -33,4 +34,13 @@ export interface TradingLog {
 export interface ApiPermissions {
   read: boolean;
   trading: boolean;
+}
+
+export interface AccountInfoResponse {
+  balances: BinanceBalance[];
+  accountType?: string;
+  canTrade?: boolean;
+  canDeposit?: boolean;
+  canWithdraw?: boolean;
+  updateTime?: number;
 }

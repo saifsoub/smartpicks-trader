@@ -1,4 +1,3 @@
-
 import { BinanceApiClient } from './binance/apiClient';
 import { StorageManager } from './binance/storageManager';
 import { LogManager } from './binance/logManager';
@@ -9,8 +8,10 @@ import {
   BinanceCredentials, 
   BinanceBalance, 
   BinanceSymbol,
-  BalanceInfo
+  BalanceInfo,
+  AccountInfoResponse
 } from './binance/types';
+import { formatBalanceData, logBalanceSummary } from './binance/accountUtils';
 import { toast } from 'sonner';
 
 class BinanceService {
@@ -40,7 +41,6 @@ class BinanceService {
     this.accountService.setApiPermissions(permissions.read, permissions.trading);
   }
 
-  // Credential and configuration methods
   public hasCredentials(): boolean {
     return this.apiClient.hasCredentials();
   }
@@ -55,14 +55,11 @@ class BinanceService {
       this.accountService.setLastConnectionError(null);
       this.cachedBalances = null; // Clear cache when credentials change
       
-      // Dispatch event to notify the application that credentials have been updated
       window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
       
-      // Test connection after saving credentials
       setTimeout(() => {
         this.testConnection().then(success => {
           if (success) {
-            // Force refresh balances after successful connection
             this.getAccountBalance(true);
           }
         });
@@ -87,11 +84,9 @@ class BinanceService {
     this.accountService.setLastConnectionError(null);
     this.cachedBalances = null; // Clear cache when proxy mode changes
     
-    // Test connection after changing proxy mode
     setTimeout(() => {
       this.testConnection().then(success => {
         if (success) {
-          // Force refresh balances after successful connection
           this.getAccountBalance(true);
         }
       });
@@ -104,7 +99,6 @@ class BinanceService {
     return this.apiClient.getProxyMode();
   }
 
-  // API permissions methods
   public setApiPermissions(readPermission: boolean, tradingPermission: boolean): void {
     this.accountService.setApiPermissions(readPermission, tradingPermission);
     StorageManager.saveApiPermissions({ read: readPermission, trading: tradingPermission });
@@ -120,7 +114,6 @@ class BinanceService {
     return permissions;
   }
 
-  // Connection related methods
   public getConnectionStatus(): 'connected' | 'disconnected' | 'unknown' {
     return this.accountService.getConnectionStatus();
   }
@@ -136,7 +129,6 @@ class BinanceService {
   public async testConnection(): Promise<boolean> {
     const result = await this.connectionService.testConnection();
     if (result) {
-      // Connection test was successful, force refresh balances
       this.cachedBalances = null;
     }
     return result;
@@ -146,15 +138,12 @@ class BinanceService {
     return false;
   }
 
-  // Trading pairs methods
   public getDefaultTradingPairs(): string[] {
     return this.accountService.getDefaultTradingPairs();
   }
 
-  // Account methods
-  public async getAccountInfo(): Promise<{ balances: BinanceBalance[] }> {
+  public async getAccountInfo(): Promise<AccountInfoResponse> {
     try {
-      // Ensure connection is tested if needed
       if (this.accountService.getConnectionStatus() === 'unknown' && this.hasCredentials()) {
         await this.testConnection();
       }
@@ -168,14 +157,12 @@ class BinanceService {
   }
 
   public async getAccountBalance(forceRefresh: boolean = false): Promise<Record<string, BalanceInfo>> {
-    // Prevent multiple simultaneous balance requests
     if (this.isGettingBalances) {
       console.log("Already retrieving balances, returning cached data or waiting");
       if (this.cachedBalances) {
         return this.cachedBalances;
       }
       
-      // Wait a bit and try again
       try {
         await new Promise(resolve => setTimeout(resolve, this.retryDelay));
         if (!this.isGettingBalances) {
@@ -192,7 +179,6 @@ class BinanceService {
       }
     }
     
-    // Check if we have recent cached balances (less than 30 seconds old) and not forcing refresh
     const now = Date.now();
     if (!forceRefresh && this.cachedBalances && now - this.lastBalanceCheck < this.maxBalanceCacheAge) {
       console.log("Using cached balance data (less than 30 seconds old)");
@@ -203,20 +189,17 @@ class BinanceService {
       this.isGettingBalances = true;
       console.log("Getting fresh account balances");
       
-      // Ensure connection is tested before getting account balance
       if (this.accountService.getConnectionStatus() === 'unknown' && this.hasCredentials()) {
         await this.testConnection();
       }
       
-      // Get balances from account service
       const balances = await this.accountService.getAccountBalance();
+      console.log("Raw balances received:", balances);
       
-      // If we have balances, try to enrich them with USD values
       if (Object.keys(balances).length > 0) {
         const prices = await this.getPrices();
         
         for (const asset in balances) {
-          // Skip if this is already USDT
           if (asset === 'USDT') {
             const available = parseFloat(balances[asset].available);
             const total = parseFloat(balances[asset].total);
@@ -224,7 +207,6 @@ class BinanceService {
             continue;
           }
           
-          // Get the price for this asset
           const symbol = `${asset}USDT`;
           const price = prices[symbol];
           
@@ -235,7 +217,8 @@ class BinanceService {
         }
       }
       
-      // Cache the enriched balances
+      logBalanceSummary(balances);
+      
       this.cachedBalances = balances;
       this.lastBalanceCheck = now;
       
@@ -255,12 +238,10 @@ class BinanceService {
     quantity: string
   ): Promise<any> {
     const result = await this.accountService.placeMarketOrder(symbol, side, quantity);
-    // Clear cached balances after placing an order
     this.cachedBalances = null;
     return result;
   }
 
-  // Market data methods
   public async getSymbols(): Promise<BinanceSymbol[]> {
     return this.marketDataService.getSymbols();
   }
@@ -281,7 +262,6 @@ class BinanceService {
     return this.marketDataService.getKlines(symbol, interval, limit);
   }
 
-  // Logging methods
   public getTradingLogs() {
     return this.logManager.getTradingLogs();
   }

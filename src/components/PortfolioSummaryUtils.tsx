@@ -1,5 +1,5 @@
 
-import { BinanceBalance } from "@/services/binance/types";
+import { BinanceBalance, BalanceInfo } from "@/services/binance/types";
 
 interface EnhancedBalance extends BinanceBalance {
   usdValue: number;
@@ -19,10 +19,22 @@ export const processPortfolioData = (
   symbols?: any[]
 ): ProcessedPortfolioData => {
   try {
+    console.log("Processing portfolio data...");
+    console.log("Account info:", accountInfo);
+    
+    // Safety check for balances
+    if (!accountInfo || !accountInfo.balances || !Array.isArray(accountInfo.balances)) {
+      console.error("Invalid account info format:", accountInfo);
+      return { balances: [], totalValue: 0 };
+    }
+    
     const significantBalances = accountInfo.balances
-      .filter((balance: BinanceBalance) => 
-        parseFloat(balance.free) > 0 || parseFloat(balance.locked) > 0
-      )
+      .filter((balance: BinanceBalance) => {
+        const freeAmount = parseFloat(balance.free);
+        const lockedAmount = parseFloat(balance.locked);
+        const hasBalance = freeAmount > 0.00000001 || lockedAmount > 0.00000001;
+        return hasBalance;
+      })
       .map((balance: BinanceBalance) => {
         let usdValue = 0;
         let priceChangePercent = "0";
@@ -57,6 +69,8 @@ export const processPortfolioData = (
       (sum: number, balance: EnhancedBalance) => sum + balance.usdValue, 
       0
     );
+    
+    console.log(`Processed ${significantBalances.length} balances with total value: ${portfolioTotal}`);
     
     return {
       balances: significantBalances,

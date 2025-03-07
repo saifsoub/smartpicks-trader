@@ -22,28 +22,75 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [availableSymbols, setAvailableSymbols] = useState<string[]>([]);
   const refreshIntervalRef = useRef<number | null>(null);
+  const retryAttemptsRef = useRef(0);
+  const MAX_RETRY_ATTEMPTS = 3;
 
+  // Load portfolio symbols from account balances
   useEffect(() => {
     const loadPortfolioSymbols = async () => {
       try {
-        const account = await binanceService.getAccountInfo();
-        if (account && account.balances) {
-          const activeBalances = account.balances.filter(
-            balance => parseFloat(balance.free) > 0 || parseFloat(balance.locked) > 0
-          );
+        console.log("Loading portfolio symbols for chart...");
+        // Try to get account balance first
+        let portfolioSymbols: string[] = [];
+        
+        try {
+          const balances = await binanceService.getAccountBalance();
           
-          const portfolioSymbols = activeBalances
-            .map(balance => `${balance.asset}USDT`)
-            .filter(pair => pair !== 'USDTUSDT');
-          
+          if (balances && Object.keys(balances).length > 0) {
+            portfolioSymbols = Object.keys(balances)
+              .filter(asset => asset !== 'USDT' && parseFloat(balances[asset].total) > 0)
+              .map(asset => `${asset}USDT`);
+              
+            console.log(`Found ${portfolioSymbols.length} portfolio symbols from balances`);
+          }
+        } catch (balanceError) {
+          console.warn("Could not load balances for chart symbols:", balanceError);
+          // Fallback to account info if balance fails
+          try {
+            const account = await binanceService.getAccountInfo();
+            if (account && account.balances) {
+              const activeBalances = account.balances.filter(
+                balance => parseFloat(balance.free) > 0 || parseFloat(balance.locked) > 0
+              );
+              
+              portfolioSymbols = activeBalances
+                .filter(balance => balance.asset !== 'USDT')
+                .map(balance => `${balance.asset}USDT`);
+                
+              console.log(`Found ${portfolioSymbols.length} portfolio symbols from account info`);
+            }
+          } catch (accountError) {
+            console.warn("Could not load account info for chart symbols:", accountError);
+          }
+        }
+        
+        // If we have portfolio symbols, use them
+        if (portfolioSymbols.length > 0) {
           setAvailableSymbols(portfolioSymbols);
           
-          if (portfolioSymbols.length > 0 && !portfolioSymbols.includes(symbol)) {
+          // If current symbol is not in portfolio, switch to first portfolio symbol
+          if (!portfolioSymbols.includes(symbol)) {
             setSymbol(portfolioSymbols[0]);
+          }
+        } else {
+          // If no portfolio symbols, use default trading pairs
+          const defaultPairs = binanceService.getDefaultTradingPairs();
+          setAvailableSymbols(defaultPairs);
+          
+          if (!defaultPairs.includes(symbol)) {
+            setSymbol(defaultPairs[0]);
           }
         }
       } catch (error) {
-        console.error('Error loading portfolio symbols:', error);
+        console.error('Error loading portfolio symbols for chart:', error);
+        
+        // Use default trading pairs as fallback
+        const defaultPairs = binanceService.getDefaultTradingPairs();
+        setAvailableSymbols(defaultPairs);
+        
+        if (!defaultPairs.includes(symbol)) {
+          setSymbol(defaultPairs[0]);
+        }
       }
     };
     
@@ -94,10 +141,26 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
       });
       
       setChartData(formattedData);
+      // Reset retry attempts on success
+      retryAttemptsRef.current = 0;
     } catch (error) {
       console.error("Failed to load chart data:", error);
       setErrorMessage(error instanceof Error ? error.message : "Failed to load chart data");
-      toast.error(error instanceof Error ? error.message : "Failed to load chart data");
+      
+      if (showToast) {
+        toast.error(error instanceof Error ? error.message : "Failed to load chart data");
+      }
+      
+      // Implement auto-retry with backoff
+      if (retryAttemptsRef.current < MAX_RETRY_ATTEMPTS) {
+        retryAttemptsRef.current++;
+        const backoffTime = Math.pow(2, retryAttemptsRef.current) * 1000;
+        console.log(`Retrying chart data load in ${backoffTime}ms (attempt ${retryAttemptsRef.current}/${MAX_RETRY_ATTEMPTS})`);
+        
+        setTimeout(() => {
+          loadChartData(false);
+        }, backoffTime);
+      }
     } finally {
       setLoading(false);
     }
