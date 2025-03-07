@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -6,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { ArrowLeft, ArrowUpDown, Save, RefreshCw, CheckCircle, AlertCircle, Loader2, Info, Globe, Server } from "lucide-react";
+import { ArrowLeft, ArrowUpDown, Save, RefreshCw, CheckCircle, AlertCircle, Loader2, Info, Globe, Server, Shield } from "lucide-react";
 import { toast } from "sonner";
 import binanceService from "@/services/binanceService";
 import notificationService from "@/services/notificationService";
@@ -17,6 +16,7 @@ const Settings = () => {
   const [isTesting, setIsTesting] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'untested' | 'success' | 'error'>('untested');
   const [connectedMessage, setConnectedMessage] = useState("");
+  const [verificationInProgress, setVerificationInProgress] = useState(false);
   
   const [apiKey, setApiKey] = useState("");
   const [secretKey, setSecretKey] = useState("");
@@ -28,6 +28,7 @@ const Settings = () => {
   const [dailySummary, setDailySummary] = useState(true);
   const [marketAlerts, setMarketAlerts] = useState(true);
   const [priceAlertThreshold, setPriceAlertThreshold] = useState(5);
+  const [portfolioVerified, setPortfolioVerified] = useState(false);
   
   useEffect(() => {
     loadSavedSettings();
@@ -59,18 +60,38 @@ const Settings = () => {
     if (!binanceService.hasCredentials()) {
       setConnectionStatus('untested');
       setConnectedMessage("No API credentials configured");
+      setPortfolioVerified(false);
       return;
     }
     
     try {
       setIsLoading(true);
+      setVerificationInProgress(true);
+      
       const connectionTest = await binanceService.testConnection();
       if (connectionTest) {
         setConnectionStatus('success');
         setConnectedMessage(`Connected to Binance API (${useProxyMode ? 'Proxy Mode' : 'Direct API Mode'})`);
+        
+        // Now verify we can access portfolio data
+        try {
+          const accountData = await binanceService.getAccountInfo();
+          if (accountData && accountData.balances && accountData.balances.length > 0) {
+            setPortfolioVerified(true);
+            toast.success("Successfully verified account data from Binance");
+          } else {
+            setPortfolioVerified(false);
+            toast.warning("Connected to Binance, but couldn't verify portfolio data");
+          }
+        } catch (portfolioError) {
+          console.error("Error verifying portfolio:", portfolioError);
+          setPortfolioVerified(false);
+          toast.error("Connected to Binance API, but couldn't fetch portfolio data");
+        }
       } else {
         setConnectionStatus('error');
         setConnectedMessage("Connection failed. Please check your API keys.");
+        setPortfolioVerified(false);
       }
     } catch (error) {
       console.error("Error testing connection:", error);
@@ -80,8 +101,10 @@ const Settings = () => {
       } else {
         setConnectedMessage("Connection error. Please check your API keys.");
       }
+      setPortfolioVerified(false);
     } finally {
       setIsLoading(false);
+      setVerificationInProgress(false);
     }
   };
   
@@ -107,6 +130,7 @@ const Settings = () => {
     
     setIsLoading(true);
     setConnectionStatus('untested');
+    setPortfolioVerified(false);
     
     try {
       if (apiKey.length < 20) {
@@ -117,6 +141,7 @@ const Settings = () => {
         return;
       }
       
+      // First save the credentials
       const success = binanceService.saveCredentials({
         apiKey,
         secretKey: secretKey === "••••••••••••••••••••••••••••••••" 
@@ -127,30 +152,49 @@ const Settings = () => {
       if (success) {
         toast.success("API keys saved successfully");
         
+        // Now test connection and verify portfolio access
+        setVerificationInProgress(true);
         try {
           const connectionTest = await binanceService.testConnection();
           if (connectionTest) {
-            toast.success("Connection to Binance API successful");
             setConnectionStatus('success');
             setConnectedMessage(`Connected to Binance API (${useProxyMode ? 'Proxy Mode' : 'Direct API Mode'})`);
-            window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
+            
+            // Try to access actual account data for full verification
+            try {
+              const accountData = await binanceService.getAccountInfo();
+              if (accountData && accountData.balances && accountData.balances.length > 0) {
+                toast.success("Successfully verified account data from Binance");
+                setPortfolioVerified(true);
+              } else {
+                toast.warning("Connected to Binance API, but couldn't verify portfolio data");
+                setPortfolioVerified(false);
+              }
+              window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
+            } catch (portfolioError) {
+              console.error("Portfolio verification error:", portfolioError);
+              toast.warning("Connected to Binance API, but couldn't verify portfolio access");
+              setPortfolioVerified(false);
+              window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
+            }
           } else {
-            toast.warning("API keys saved but connection test couldn't be completed. We'll proceed assuming your keys are valid.");
-            setConnectionStatus('success');
-            setConnectedMessage("API keys saved - connection status unverified");
-            window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
+            toast.error("Connection to Binance API failed");
+            setConnectionStatus('error');
+            setConnectedMessage("Failed to connect to Binance API");
+            setPortfolioVerified(false);
           }
         } catch (connectionError) {
           console.error("Connection test error:", connectionError);
-          toast.warning("API keys saved but connection test couldn't be completed due to browser security restrictions. We'll proceed assuming your keys are valid.");
-          setConnectionStatus('success');
-          setConnectedMessage("API keys saved - connection status unverified");
-          window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
+          toast.error("Failed to verify Binance API connection");
+          setConnectionStatus('error');
+          setConnectedMessage("Connection verification failed");
+          setPortfolioVerified(false);
         }
       } else {
         toast.error("Failed to save API keys");
         setConnectionStatus('error');
         setConnectedMessage("Failed to save API keys");
+        setPortfolioVerified(false);
       }
     } catch (error) {
       console.error("Error saving API keys:", error);
@@ -161,8 +205,10 @@ const Settings = () => {
       toast.error(errorMessage);
       setConnectionStatus('error');
       setConnectedMessage(errorMessage);
+      setPortfolioVerified(false);
     } finally {
       setIsLoading(false);
+      setVerificationInProgress(false);
     }
   };
   
@@ -261,6 +307,13 @@ const Settings = () => {
                     ? "Connection Failed"
                     : "Checking Connection..."}
               </span>
+              
+              {connectionStatus === 'success' && portfolioVerified && (
+                <span className="ml-2 bg-green-900/30 text-green-300 text-xs px-2 py-0.5 rounded-full flex items-center">
+                  <Shield className="h-3 w-3 mr-1" />
+                  Portfolio Verified
+                </span>
+              )}
             </div>
             <div className="text-slate-200">
               {connectedMessage}
@@ -338,17 +391,17 @@ const Settings = () => {
               <Button 
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white" 
                 onClick={handleSaveApiKeys}
-                disabled={isLoading}
+                disabled={isLoading || verificationInProgress}
               >
-                {isLoading ? (
+                {isLoading || verificationInProgress ? (
                   <>
                     <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    Testing Connection...
+                    {verificationInProgress ? "Verifying Connection..." : "Testing Connection..."}
                   </>
                 ) : (
                   <>
                     <Save className="mr-2 h-4 w-4" />
-                    Save & Test Connection
+                    Save & Verify Connection
                   </>
                 )}
               </Button>
@@ -357,10 +410,10 @@ const Settings = () => {
                 variant="outline"
                 className="w-full mt-2 border-slate-700 text-slate-200"
                 onClick={checkConnection}
-                disabled={isLoading || !binanceService.hasCredentials()}
+                disabled={isLoading || verificationInProgress || !binanceService.hasCredentials()}
               >
-                <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-                Test Connection Again
+                <RefreshCw className={`mr-2 h-4 w-4 ${isLoading || verificationInProgress ? 'animate-spin' : ''}`} />
+                Verify Connection Again
               </Button>
               
               <div className="mt-4 pt-2 border-t border-slate-800 text-center">
