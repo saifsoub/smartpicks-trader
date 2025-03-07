@@ -2,6 +2,7 @@
 import { BinanceApiClient } from './apiClient';
 import { LogManager } from './logManager';
 import { AccountService } from './accountService';
+import { toast } from 'sonner';
 
 export class ConnectionService {
   private apiClient: BinanceApiClient;
@@ -68,12 +69,16 @@ export class ConnectionService {
         this.accountService.setConnectionStatus('connected');
         this.accountService.setLastConnectionError(null);
         
+        // Detect API permissions and store the result
         const permissions = await this.accountService.detectApiPermissions();
         
-        const { read } = permissions;
-        
-        if (!read) {
+        if (!permissions.read) {
+          console.warn("API key doesn't have read permission");
+          this.logManager.addTradingLog("Your API key doesn't have permission to read account data. Please update your API key permissions in Binance.", 'error');
           this.accountService.setLastConnectionError("Connected to API, but your key doesn't have account data access. Please enable 'Enable Reading' permission for your API key on Binance.");
+          
+          // Use toast notification to make it more visible
+          toast.error("API key missing read permission. Enable 'Enable Reading' in your Binance API settings.");
         } else if (!proxyWorks && this.apiClient.getProxyMode()) {
           this.accountService.setLastConnectionError("API connected, but proxy mode is having issues. You may need to disable proxy mode if you don't need it.");
         }

@@ -119,7 +119,8 @@ class BinanceService {
 
   // Account methods
   public async getAccountInfo(): Promise<{ balances: BinanceBalance[] }> {
-    await this.testConnection();
+    // We don't need to test connection here since the PortfolioSummary component
+    // is already doing that. This helps avoid redundant API calls.
     return this.accountService.getAccountInfo();
   }
 

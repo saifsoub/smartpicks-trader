@@ -2,6 +2,7 @@
 import { BinanceApiClient } from './apiClient';
 import { BinanceBalance, BalanceInfo } from './types';
 import { LogManager } from './logManager';
+import { toast } from 'sonner';
 
 export class AccountService {
   private apiClient: BinanceApiClient;
@@ -102,6 +103,7 @@ export class AccountService {
       return { read: readPermission, trading: tradingPermission };
     } catch (error) {
       console.error("Error detecting API permissions:", error);
+      this.setApiPermissions(false, false);
       return { read: false, trading: false };
     }
   }
