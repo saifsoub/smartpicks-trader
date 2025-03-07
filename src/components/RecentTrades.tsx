@@ -83,7 +83,9 @@ const RecentTrades: React.FC = () => {
           }
         } catch (error) {
           console.error('Error loading portfolio trading pairs:', error);
-          setError("Failed to load your trading pairs from Binance. Please try again.");
+          setError("Failed to load your trading pairs from Binance. Using default pairs instead.");
+          // Fall back to default pairs if we can't load portfolio
+          setTradingPairs(['BTCUSDT', 'ETHUSDT']);
         }
         
         await fetchTrades();
@@ -113,7 +115,14 @@ const RecentTrades: React.FC = () => {
       for (const pair of pairs) {
         try {
           const pairTrades = await binanceService.getRecentTrades(pair);
-          allTrades.push(...pairTrades);
+          
+          // Add the symbol to each trade for reference
+          const tradesWithSymbol = pairTrades.map(trade => ({
+            ...trade,
+            symbol: pair // Ensure each trade has a symbol
+          }));
+          
+          allTrades.push(...tradesWithSymbol);
           console.log(`Fetched ${pairTrades.length} trades for ${pair}`);
         } catch (error) {
           console.error(`Failed to fetch trades for ${pair}:`, error);
@@ -131,7 +140,10 @@ const RecentTrades: React.FC = () => {
           .map(trade => {
             // Extract symbol from trade object
             const symbol = trade.symbol || 'UNKNOWN';
-            const baseAsset = symbol.replace('USDT', '');
+            // Extract base asset (remove USDT from the end)
+            const baseAsset = symbol.endsWith('USDT') 
+              ? symbol.substring(0, symbol.length - 4) 
+              : 'UNKNOWN';
             
             return {
               id: trade.id,
