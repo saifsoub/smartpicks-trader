@@ -1,4 +1,3 @@
-
 import { BinanceCredentials } from './types';
 
 export class BinanceApiClient {
@@ -7,6 +6,7 @@ export class BinanceApiClient {
   private useLocalProxy: boolean = true;
   private proxyConnectionSuccessful: boolean = false;
   private lastProxyConnectionAttempt: number = 0;
+  private proxyRetries: number = 3;
   
   constructor(credentials: BinanceCredentials | null, useLocalProxy: boolean) {
     this.credentials = credentials;
@@ -43,41 +43,54 @@ export class BinanceApiClient {
       throw new Error('API credentials not configured');
     }
 
-    try {
-      const queryString = Object.entries(params)
-        .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
-        .join('&');
+    let lastError;
+    for (let attempt = 0; attempt < this.proxyRetries; attempt++) {
+      try {
+        const queryString = Object.entries(params)
+          .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+          .join('&');
 
-      const url = `${this.proxyUrl}/${endpoint}?${queryString}`;
-      
-      const headers = {
-        'X-API-KEY': this.credentials?.apiKey || '',
-        'X-API-SECRET-HASH': btoa(this.credentials?.secretKey?.slice(-8) || ''),
-      };
+        const url = `${this.proxyUrl}/${endpoint}?${queryString}`;
+        
+        const headers = {
+          'X-API-KEY': this.credentials?.apiKey || '',
+          'X-API-SECRET-HASH': btoa(this.credentials?.secretKey?.slice(-8) || ''),
+        };
 
-      console.log(`Fetching via proxy: ${url}`);
-      this.lastProxyConnectionAttempt = Date.now();
-      
-      const response = await fetch(url, {
-        method,
-        headers,
-        mode: 'cors',
-        signal: AbortSignal.timeout(15000)
-      });
+        console.log(`Fetching via proxy (attempt ${attempt + 1}/${this.proxyRetries}): ${url}`);
+        this.lastProxyConnectionAttempt = Date.now();
+        
+        const response = await fetch(url, {
+          method,
+          headers,
+          mode: 'cors',
+          signal: AbortSignal.timeout(15000)
+        });
 
-      if (!response.ok) {
-        console.warn(`HTTP error ${response.status}: ${response.statusText}`);
-        throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+        if (!response.ok) {
+          console.warn(`HTTP error ${response.status}: ${response.statusText}`);
+          throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        this.proxyConnectionSuccessful = true;
+        console.log(`Proxy request to ${endpoint} successful`);
+        return data;
+      } catch (error) {
+        console.error(`Error in fetchWithProxy (attempt ${attempt + 1}/${this.proxyRetries}):`, error);
+        lastError = error;
+        
+        // Wait a bit before retrying (increasing delay for each retry)
+        if (attempt < this.proxyRetries - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+          console.log(`Retrying proxy request to ${endpoint}...`);
+        }
       }
-
-      const data = await response.json();
-      this.proxyConnectionSuccessful = true;
-      return data;
-    } catch (error) {
-      console.error('Error in fetchWithProxy:', error);
-      this.proxyConnectionSuccessful = false;
-      throw error;
     }
+    
+    this.proxyConnectionSuccessful = false;
+    console.error(`All ${this.proxyRetries} proxy attempts failed for ${endpoint}`);
+    throw lastError;
   }
 
   public async fetchWithRetry(url: string, options: RequestInit = {}, retries = 3): Promise<Response> {

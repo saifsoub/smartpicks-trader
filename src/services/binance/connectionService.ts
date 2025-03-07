@@ -62,6 +62,12 @@ export class ConnectionService {
         } catch (proxyError) {
           console.warn("Proxy connection failed:", proxyError);
           proxyWorks = false;
+          
+          if (this.apiClient.getProxyMode()) {
+            // If proxy mode is enabled but proxy isn't working, notify the user
+            toast.error("Proxy connection failed. The proxy server might be temporarily unavailable.");
+            this.logManager.addTradingLog("Proxy connection failed. This may be a temporary issue with our proxy server.", 'error');
+          }
         }
       }
       
@@ -69,21 +75,26 @@ export class ConnectionService {
         this.accountService.setConnectionStatus('connected');
         this.accountService.setLastConnectionError(null);
         
-        // Detect API permissions and store the result
-        const permissions = await this.accountService.detectApiPermissions();
+        // Mark the API as connected even if we can't detect permissions fully
+        const isConnected = true;
         
-        if (!permissions.read) {
-          console.warn("API key doesn't have read permission");
-          this.logManager.addTradingLog("Your API key doesn't have permission to read account data. Please update your API key permissions in Binance.", 'error');
-          this.accountService.setLastConnectionError("Connected to API, but your key doesn't have account data access. Please enable 'Enable Reading' permission for your API key on Binance.");
+        // Try to detect API permissions but don't fail if it doesn't work
+        try {
+          const permissions = await this.accountService.detectApiPermissions();
           
-          // Use toast notification to make it more visible
-          toast.error("API key missing read permission. Enable 'Enable Reading' in your Binance API settings.");
-        } else if (!proxyWorks && this.apiClient.getProxyMode()) {
-          this.accountService.setLastConnectionError("API connected, but proxy mode is having issues. You may need to disable proxy mode if you don't need it.");
+          if (!permissions.read) {
+            console.warn("API key doesn't have read permission or can't verify it");
+            this.logManager.addTradingLog("We couldn't verify if your API key has read permissions. You may still be able to use basic functionality.", 'warning');
+            this.accountService.setLastConnectionError("Connected to API, but couldn't verify your API permissions. You can still use basic features, but portfolio data may be limited.");
+          } else if (!proxyWorks && this.apiClient.getProxyMode()) {
+            this.accountService.setLastConnectionError("API connected, but proxy mode is having issues. You may need to disable proxy mode if you don't need it.");
+          }
+        } catch (permissionError) {
+          console.warn("Failed to detect API permissions:", permissionError);
+          // Don't change connection status on permission detection failure
         }
         
-        return true;
+        return isConnected;
       } else {
         this.accountService.setConnectionStatus('disconnected');
         if (this.apiClient.getProxyMode()) {
