@@ -23,6 +23,8 @@ class BinanceService {
   private lastBalanceCheck: number = 0;
   private cachedBalances: Record<string, BalanceInfo> | null = null;
   private isGettingBalances: boolean = false;
+  private retryDelay: number = 2000;
+  private maxBalanceCacheAge: number = 30000; // 30 seconds
   
   constructor() {
     this.credentials = StorageManager.loadCredentials();
@@ -174,17 +176,25 @@ class BinanceService {
       }
       
       // Wait a bit and try again
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      if (!this.isGettingBalances) {
-        return this.getAccountBalance(forceRefresh);
-      } else {
-        throw new Error("Balance retrieval in progress");
+      try {
+        await new Promise(resolve => setTimeout(resolve, this.retryDelay));
+        if (!this.isGettingBalances) {
+          return this.getAccountBalance(forceRefresh);
+        } else {
+          throw new Error("Balance retrieval in progress");
+        }
+      } catch (error) {
+        console.error("Error during balance retry:", error);
+        if (this.cachedBalances) {
+          return this.cachedBalances;
+        }
+        throw error;
       }
     }
     
     // Check if we have recent cached balances (less than 30 seconds old) and not forcing refresh
     const now = Date.now();
-    if (!forceRefresh && this.cachedBalances && now - this.lastBalanceCheck < 30000) {
+    if (!forceRefresh && this.cachedBalances && now - this.lastBalanceCheck < this.maxBalanceCacheAge) {
       console.log("Using cached balance data (less than 30 seconds old)");
       return this.cachedBalances;
     }

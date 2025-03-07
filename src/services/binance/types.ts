@@ -7,7 +7,7 @@ export interface BinanceCredentials {
 export interface BalanceInfo {
   available: string;
   total: string;
-  usdValue?: number;
+  usdValue: number;
 }
 
 export interface BinanceBalance {
