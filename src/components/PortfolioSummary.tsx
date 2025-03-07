@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,72 +25,21 @@ const PortfolioSummary: React.FC = () => {
   const [connectionTested, setConnectionTested] = useState(false);
   const [showAIInsights, setShowAIInsights] = useState(true);
   const [generatingInsights, setGeneratingInsights] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   
-  useEffect(() => {
-    checkConnectionAndLoadPortfolio();
-    
-    const interval = setInterval(() => {
-      if (isConnected) {
-        loadPortfolio(false);
-      }
-    }, 30000);
-    
-    const handleCredentialsUpdate = () => {
-      console.log("Credentials updated, refreshing portfolio");
-      checkConnectionAndLoadPortfolio();
-    };
-    
-    window.addEventListener('binance-credentials-updated', handleCredentialsUpdate);
-    
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('binance-credentials-updated', handleCredentialsUpdate);
-    };
-  }, [isConnected]);
-  
-  const checkConnectionAndLoadPortfolio = async () => {
-    if (!binanceService.hasCredentials()) {
-      setIsConnected(false);
-      setLoadError("API credentials not configured. Please set them in Settings.");
-      setConnectionTested(true);
-      return;
-    }
-    
-    setIsLoading(true);
-    setLoadError(null);
-    
-    try {
-      const testResult = await binanceService.testConnection();
-      setConnectionTested(true);
-      
-      if (testResult) {
-        setIsConnected(true);
-        await loadPortfolio();
-      } else {
-        setIsConnected(false);
-        const errorMessage = binanceService.getLastConnectionError() || 
-                            "Connection test failed. Please check your API credentials and connection.";
-        setLoadError(errorMessage);
-      }
-    } catch (error) {
-      console.error("Failed to test connection:", error);
-      setIsConnected(false);
-      setLoadError("Connection test failed with an error. Please check your API credentials.");
-      setConnectionTested(true);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const loadPortfolio = async (showToast = true) => {
+  const loadPortfolio = useCallback(async (showToast = true) => {
     try {
       setIsLoading(true);
       if (showToast) {
         setLoadError(null);
       }
       
-      await binanceService.testConnection(); // Force a fresh connection test before loading
+      // Try to test connection if we haven't or if we previously had errors
+      if (!isConnected || loadError) {
+        await binanceService.testConnection();
+      }
       
+      // Get account info with balances
       const accountInfo = await binanceService.getAccountInfo();
       
       if (!accountInfo || !accountInfo.balances) {
@@ -111,23 +60,22 @@ const PortfolioSummary: React.FC = () => {
         if (!apiPermissions.read) {
           console.warn("API key doesn't have read permission. Using placeholder balances");
           setLoadError("Connected to Binance API, but your API key doesn't have permission to read account data. Please update your API key permissions or enable proxy mode in settings.");
+          setBalances([]);
+          setTotalValue(0);
+          return;
         } else if (!binanceService.getProxyMode()) {
           console.warn("Direct API access may be restricted. Try enabling proxy mode");
           setLoadError("Connected to Binance API, but limited account data access. Try enabling proxy mode in settings to access your account data securely.");
+          setBalances([]);
+          setTotalValue(0);
+          return;
         } else {
           console.warn("Only zero balances received - connected but no balances found");
           setLoadError("Connected to Binance API, but no non-zero balances found in your account.");
+          setBalances([]);
+          setTotalValue(0);
+          return;
         }
-        
-        // Just create some placeholder zero balances for display
-        const placeholderBalances: EnhancedBalance[] = [
-          { asset: 'BTC', free: '0', locked: '0', usdValue: 0, priceChangePercent: '0' },
-          { asset: 'ETH', free: '0', locked: '0', usdValue: 0, priceChangePercent: '0' },
-          { asset: 'USDT', free: '0', locked: '0', usdValue: 0, priceChangePercent: '0' }
-        ];
-        setBalances(placeholderBalances);
-        setTotalValue(0);
-        return;
       }
       
       if (accountInfo.balances.length === 0) {
@@ -138,6 +86,7 @@ const PortfolioSummary: React.FC = () => {
         return;
       }
       
+      // Get current prices and 24h ticker info
       const prices = await binanceService.getPrices();
       const symbols = await binanceService.getSymbols();
       
@@ -146,18 +95,87 @@ const PortfolioSummary: React.FC = () => {
       if (showToast) {
         toast.success("Portfolio data loaded successfully from Binance");
       }
+      
+      // Set connection status
+      setIsConnected(true);
+      setConnectionTested(true);
     } catch (error) {
       console.error("Failed to load portfolio data:", error);
       setLoadError(error instanceof Error ? error.message : "Failed to load portfolio data from Binance");
-      if (showToast) {
+      
+      // Check if we should retry
+      if (retryCount < 3) {
+        setRetryCount(prev => prev + 1);
+        console.log(`Retrying portfolio load (attempt ${retryCount + 1}/3)...`);
+        setTimeout(() => loadPortfolio(false), 3000);
+      } else if (showToast) {
         toast.error(error instanceof Error ? error.message : "Failed to load portfolio data from Binance");
       }
+      
       setBalances([]);
       setTotalValue(0);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [isConnected, loadError, retryCount]);
+
+  const checkConnectionAndLoadPortfolio = useCallback(async () => {
+    if (!binanceService.hasCredentials()) {
+      setIsConnected(false);
+      setLoadError("API credentials not configured. Please set them in Settings.");
+      setConnectionTested(true);
+      return;
+    }
+    
+    setIsLoading(true);
+    setLoadError(null);
+    
+    try {
+      const testResult = await binanceService.testConnection();
+      setConnectionTested(true);
+      
+      if (testResult) {
+        setIsConnected(true);
+        setRetryCount(0);
+        await loadPortfolio();
+      } else {
+        setIsConnected(false);
+        const errorMessage = binanceService.getLastConnectionError() || 
+                            "Connection test failed. Please check your API credentials and connection.";
+        setLoadError(errorMessage);
+      }
+    } catch (error) {
+      console.error("Failed to test connection:", error);
+      setIsConnected(false);
+      setLoadError("Connection test failed with an error. Please check your API credentials.");
+      setConnectionTested(true);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [loadPortfolio]);
+  
+  useEffect(() => {
+    checkConnectionAndLoadPortfolio();
+    
+    const interval = setInterval(() => {
+      if (isConnected) {
+        loadPortfolio(false);
+      }
+    }, 30000);
+    
+    const handleCredentialsUpdate = () => {
+      console.log("Credentials updated, refreshing portfolio");
+      setRetryCount(0);
+      checkConnectionAndLoadPortfolio();
+    };
+    
+    window.addEventListener('binance-credentials-updated', handleCredentialsUpdate);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('binance-credentials-updated', handleCredentialsUpdate);
+    };
+  }, [isConnected, checkConnectionAndLoadPortfolio, loadPortfolio]);
 
   const generateAIInsights = async () => {
     setGeneratingInsights(true);
@@ -358,15 +376,30 @@ const PortfolioSummary: React.FC = () => {
                     <p className="text-xs text-red-300 mt-1">
                       {loadError}
                     </p>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      className="mt-2 border-red-800 bg-red-900/30 text-red-200 hover:bg-red-900/50"
-                      onClick={() => loadPortfolio()}
-                    >
-                      <RefreshCw className="mr-2 h-3 w-3" />
-                      Try again
-                    </Button>
+                    <div className="flex gap-2 mt-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="border-red-800 bg-red-900/30 text-red-200 hover:bg-red-900/50"
+                        onClick={() => {
+                          setRetryCount(0);
+                          loadPortfolio();
+                        }}
+                      >
+                        <RefreshCw className="mr-2 h-3 w-3" />
+                        Try again
+                      </Button>
+                      
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="border-red-800 bg-red-900/30 text-red-200 hover:bg-red-900/50"
+                        onClick={() => window.location.href = '/settings'}
+                      >
+                        <Settings className="mr-2 h-3 w-3" />
+                        Settings
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -475,13 +508,25 @@ const PortfolioSummary: React.FC = () => {
                     <p className="text-sm text-slate-300 mt-1">
                       Check that your API key has the necessary permissions
                     </p>
-                    <Button 
-                      variant="link" 
-                      className="text-blue-300 p-0 h-auto mt-3"
-                      onClick={() => loadPortfolio()}
-                    >
-                      Refresh portfolio
-                    </Button>
+                    <div className="flex gap-2 justify-center mt-3">
+                      <Button 
+                        variant="link" 
+                        className="text-blue-300 p-0 h-auto"
+                        onClick={() => {
+                          setRetryCount(0);
+                          loadPortfolio();
+                        }}
+                      >
+                        Refresh portfolio
+                      </Button>
+                      <Button 
+                        variant="link" 
+                        className="text-blue-300 p-0 h-auto"
+                        onClick={() => window.location.href = '/settings'}
+                      >
+                        Check settings
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>

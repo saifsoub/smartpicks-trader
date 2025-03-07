@@ -1,4 +1,3 @@
-
 import { BinanceApiClient } from './apiClient';
 import { BinanceBalance, BalanceInfo } from './types';
 import { LogManager } from './logManager';
@@ -11,7 +10,10 @@ export class AccountService {
   private tradingPermission: boolean = false;
   private connectionStatus: 'connected' | 'disconnected' | 'unknown' = 'unknown';
   private lastConnectionError: string | null = null;
-  private defaultTradingPairs: string[] = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT'];
+  private defaultTradingPairs: string[] = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ADAUSDT', 'SOLUSDT', 'DOTUSDT', 'XRPUSDT'];
+  private lastAccountInfoTimestamp: number = 0;
+  private cachedAccountInfo: { balances: BinanceBalance[] } | null = null;
+  private isRetrievingAccountInfo: boolean = false;
   
   constructor(apiClient: BinanceApiClient, logManager: LogManager) {
     this.apiClient = apiClient;
@@ -36,6 +38,12 @@ export class AccountService {
   
   public setConnectionStatus(status: 'connected' | 'disconnected' | 'unknown'): void {
     this.connectionStatus = status;
+    
+    if (status === 'connected') {
+      toast.success("Successfully connected to Binance API");
+    } else if (status === 'disconnected') {
+      toast.error("Disconnected from Binance API");
+    }
   }
   
   public getLastConnectionError(): string | null {
@@ -57,19 +65,16 @@ export class AccountService {
 
     try {
       let readPermission = false;
+      
       try {
-        // First try to detect if we can access the account endpoint
-        // without requiring signature (to avoid hitting CORS issues)
         const publicEndpoint = 'https://api.binance.com/api/v3/ticker/price';
         const response = await fetch(publicEndpoint);
         
         if (response.ok) {
-          // If we can access public endpoints, assume basic connectivity works
           readPermission = true;
           console.log("Basic API connectivity successful");
         }
         
-        // Now try the actual account endpoint if proxy mode is enabled
         if (this.apiClient.getProxyMode()) {
           try {
             const accountResult = await this.apiClient.fetchWithProxy('account');
@@ -79,7 +84,57 @@ export class AccountService {
             }
           } catch (proxyError) {
             console.warn("Proxy account check failed:", proxyError);
-            // Keep whatever value readPermission had before
+            try {
+              const endpoint = 'https://api.binance.com/api/v3/account';
+              const timestamp = Date.now();
+              const queryString = `timestamp=${timestamp}`;
+              
+              const signature = await this.apiClient.generateSignature(queryString);
+              const url = `${endpoint}?${queryString}&signature=${signature}`;
+              
+              const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                  'X-MBX-APIKEY': this.apiClient.getApiKey()
+                }
+              });
+              
+              if (response.ok) {
+                const data = await response.json();
+                if (data && Array.isArray(data.balances)) {
+                  readPermission = true;
+                  console.log("Read permission confirmed via direct API");
+                }
+              }
+            } catch (directError) {
+              console.warn("Direct API account check also failed:", directError);
+            }
+          }
+        } else {
+          try {
+            const endpoint = 'https://api.binance.com/api/v3/account';
+            const timestamp = Date.now();
+            const queryString = `timestamp=${timestamp}`;
+            
+            const signature = await this.apiClient.generateSignature(queryString);
+            const url = `${endpoint}?${queryString}&signature=${signature}`;
+            
+            const response = await fetch(url, {
+              method: 'GET',
+              headers: {
+                'X-MBX-APIKEY': this.apiClient.getApiKey()
+              }
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              if (data && Array.isArray(data.balances)) {
+                readPermission = true;
+                console.log("Read permission confirmed via direct API");
+              }
+            }
+          } catch (directError) {
+            console.warn("Direct API account check failed:", directError);
           }
         }
       } catch (error) {
@@ -89,9 +144,6 @@ export class AccountService {
 
       let tradingPermission = false;
       try {
-        // For trading permission, we'll assume it's true unless we can positively confirm it's false
-        tradingPermission = true;
-        
         if (this.apiClient.getProxyMode()) {
           try {
             const orderResult = await this.apiClient.fetchWithProxy('allOrders', { symbol: 'BTCUSDT', limit: '1' });
@@ -100,13 +152,57 @@ export class AccountService {
               console.log("Trading permission confirmed via proxy");
             }
           } catch (proxyError) {
-            console.warn("Proxy trading check failed, but not necessarily indicative of no permission:", proxyError);
-            // Keep whatever value tradingPermission had before
+            console.warn("Proxy trading check failed:", proxyError);
+            
+            try {
+              const endpoint = 'https://api.binance.com/api/v3/allOrders';
+              const timestamp = Date.now();
+              const queryString = `symbol=BTCUSDT&limit=1&timestamp=${timestamp}`;
+              
+              const signature = await this.apiClient.generateSignature(queryString);
+              const url = `${endpoint}?${queryString}&signature=${signature}`;
+              
+              const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                  'X-MBX-APIKEY': this.apiClient.getApiKey()
+                }
+              });
+              
+              if (response.ok) {
+                tradingPermission = true;
+                console.log("Trading permission confirmed via direct API");
+              }
+            } catch (directError) {
+              console.warn("Direct API trading check failed:", directError);
+            }
           }
-        } 
+        } else {
+          try {
+            const endpoint = 'https://api.binance.com/api/v3/allOrders';
+            const timestamp = Date.now();
+            const queryString = `symbol=BTCUSDT&limit=1&timestamp=${timestamp}`;
+            
+            const signature = await this.apiClient.generateSignature(queryString);
+            const url = `${endpoint}?${queryString}&signature=${signature}`;
+            
+            const response = await fetch(url, {
+              method: 'GET',
+              headers: {
+                'X-MBX-APIKEY': this.apiClient.getApiKey()
+              }
+            });
+            
+            if (response.ok) {
+              tradingPermission = true;
+              console.log("Trading permission confirmed via direct API");
+            }
+          } catch (directError) {
+            console.warn("Direct API trading check failed:", directError);
+          }
+        }
       } catch (error) {
         console.warn("Trading permission test failed:", error);
-        // Since we default to true, we'll just log this error but not change the value
       }
 
       this.setApiPermissions(readPermission, tradingPermission);
@@ -115,48 +211,59 @@ export class AccountService {
       return { read: readPermission, trading: tradingPermission };
     } catch (error) {
       console.error("Error detecting API permissions:", error);
-      // Don't reset permissions to false if we encounter an error
-      // Keep the current values instead
       return this.getApiPermissions();
     }
   }
 
   public async getAccountInfo(): Promise<{ balances: BinanceBalance[] }> {
+    if (this.isRetrievingAccountInfo) {
+      console.log("Already retrieving account info, returning cached info or waiting");
+      if (this.cachedAccountInfo) {
+        return this.cachedAccountInfo;
+      }
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      if (!this.isRetrievingAccountInfo) {
+        return this.getAccountInfo();
+      } else {
+        return this.getDefaultAccountInfo();
+      }
+    }
+    
+    const now = Date.now();
+    if (this.cachedAccountInfo && now - this.lastAccountInfoTimestamp < 30000) {
+      console.log("Using cached account info (less than 30 seconds old)");
+      return this.cachedAccountInfo;
+    }
+    
     if (!this.apiClient.hasCredentials()) {
       console.error("Cannot get account info: No credentials found");
       throw new Error('API credentials not configured');
     }
 
     try {
-      console.log("Attempting to fetch account info");
+      this.isRetrievingAccountInfo = true;
+      console.log("Attempting to fetch account info from Binance");
       
       if (this.connectionStatus !== 'connected') {
         throw new Error('Cannot fetch account info: Connection test failed. Please check your API credentials.');
       }
 
-      // For simplicity and reliability, we'll use default trading pairs
-      // This ensures the app works even if permission detection has issues
-      const defaultBalances = this.defaultTradingPairs.map(pair => {
-        const asset = pair.replace('USDT', '');
-        return { asset, free: '0', locked: '0' };
-      }).concat({ asset: 'USDT', free: '100', locked: '0' });
-      
-      // Try to fetch actual account info if possible
       if (this.apiClient.getProxyMode()) {
         try {
           const result = await this.apiClient.fetchWithProxy('account');
           
           if (result && Array.isArray(result.balances)) {
             console.log("Successfully retrieved account balances via proxy");
-            return { balances: result.balances };
+            this.cachedAccountInfo = result;
+            this.lastAccountInfoTimestamp = now;
+            this.isRetrievingAccountInfo = false;
+            return result;
           }
-          // Fall through to default balances if proxy fails
         } catch (proxyError) {
           console.warn("Failed to fetch account info via proxy:", proxyError);
         }
       }
       
-      // Try to use direct API for retrieving basic account info
       try {
         const endpoint = 'https://api.binance.com/api/v3/account';
         const timestamp = Date.now();
@@ -176,29 +283,44 @@ export class AccountService {
           const data = await response.json();
           if (data && Array.isArray(data.balances)) {
             console.log("Successfully retrieved account balances via direct API");
-            return { balances: data.balances };
+            this.cachedAccountInfo = data;
+            this.lastAccountInfoTimestamp = now;
+            this.isRetrievingAccountInfo = false;
+            return data;
           }
+        } else {
+          const errorData = await response.text();
+          console.error("API Error:", response.status, errorData);
+          throw new Error(`API Error: ${response.status} - ${errorData}`);
         }
       } catch (directError) {
         console.warn("Failed to fetch account info via direct API:", directError);
+        throw directError;
       }
       
-      // If we get here, either proxy mode is disabled or proxy request failed
-      // Return default balances to allow the app to function
-      console.log("Using default balances as fallback");
-      return { balances: defaultBalances };
+      throw new Error("Failed to retrieve account information from Binance");
     } catch (error) {
       console.error('Error fetching account info:', error);
       this.logManager.addTradingLog("Failed to fetch account info: " + (error instanceof Error ? error.message : String(error)), 'error');
       
-      // Return default balances even on error, to keep the app functional
-      const defaultBalances = this.defaultTradingPairs.map(pair => {
-        const asset = pair.replace('USDT', '');
-        return { asset, free: '0', locked: '0' };
-      }).concat({ asset: 'USDT', free: '100', locked: '0' });
+      if (this.cachedAccountInfo) {
+        this.isRetrievingAccountInfo = false;
+        return this.cachedAccountInfo;
+      }
       
-      return { balances: defaultBalances };
+      this.isRetrievingAccountInfo = false;
+      return this.getDefaultAccountInfo();
     }
+  }
+  
+  private getDefaultAccountInfo(): { balances: BinanceBalance[] } {
+    console.warn("Using default balances as fallback");
+    const defaultBalances = this.defaultTradingPairs.map(pair => {
+      const asset = pair.replace('USDT', '');
+      return { asset, free: '0', locked: '0' };
+    }).concat({ asset: 'USDT', free: '0', locked: '0' });
+    
+    return { balances: defaultBalances };
   }
 
   public async getAccountBalance(): Promise<Record<string, BalanceInfo>> {
@@ -211,18 +333,14 @@ export class AccountService {
       const { read } = await this.detectApiPermissions();
       
       if (!read) {
-        console.warn("API key doesn't have read permission or proxy isn't working. Returning placeholder balances.");
+        console.warn("API key doesn't have read permission or proxy isn't working.");
         this.logManager.addTradingLog("Your API key doesn't have permission to read account data or proxy mode is needed.", 'error');
         
         if (!this.apiClient.getProxyMode()) {
           this.logManager.addTradingLog("Try enabling proxy mode in settings to access your account data securely.", 'info');
         }
         
-        return {
-          'BTC': { available: '0', total: '0', usdValue: 0 },
-          'ETH': { available: '0', total: '0', usdValue: 0 },
-          'USDT': { available: '100', total: '100', usdValue: 100 }
-        };
+        throw new Error("API key doesn't have read permission");
       }
       
       const accountInfo = await this.getAccountInfo();
@@ -242,12 +360,10 @@ export class AccountService {
         }
         
         if (Object.keys(balanceMap).length === 0 && this.connectionStatus === 'connected') {
-          console.warn("Only zero balances received - likely limited API access");
+          console.warn("Only zero balances received - likely limited API access or empty account");
           this.logManager.addTradingLog("Connection successful, but no non-zero balances found in your account.", 'info');
           
-          balanceMap['BTC'] = { available: '0', total: '0', usdValue: 0 };
-          balanceMap['ETH'] = { available: '0', total: '0', usdValue: 0 };
-          balanceMap['USDT'] = { available: '100', total: '100', usdValue: 100 };
+          throw new Error("No non-zero balances found in your account");
         } else if (Object.keys(balanceMap).length > 0) {
           this.logManager.addTradingLog(`Successfully retrieved ${Object.keys(balanceMap).length} assets with non-zero balances`, 'success');
         }
@@ -257,13 +373,18 @@ export class AccountService {
         return balanceMap;
       }
       
-      return {
-        'USDT': { available: '100', total: '100', usdValue: 100 }
-      };
+      throw new Error("Failed to retrieve account balances");
     } catch (error) {
       console.error('Error fetching account balance:', error);
-      this.logManager.addTradingLog("Failed to fetch account balance", 'error');
-      this.connectionStatus = 'disconnected';
+      this.logManager.addTradingLog("Failed to fetch account balance: " + (error instanceof Error ? error.message : String(error)), 'error');
+      
+      if (error instanceof Error && 
+         (error.message.includes("API key") || 
+          error.message.includes("connection") || 
+          error.message.includes("network"))) {
+        this.connectionStatus = 'disconnected';
+      }
+      
       throw error;
     }
   }
@@ -298,7 +419,28 @@ export class AccountService {
         this.logManager.addTradingLog(`Order ${result.orderId || 'unknown'} ${result.status || 'PENDING'}`, 'success');
         return result;
       } else {
-        throw new Error('Direct API access is blocked. Please enable proxy mode in settings to place real orders.');
+        const endpoint = 'https://api.binance.com/api/v3/order';
+        const timestamp = Date.now();
+        const queryString = `symbol=${symbol}&side=${side}&type=MARKET&quantity=${quantity}&timestamp=${timestamp}`;
+        
+        const signature = await this.apiClient.generateSignature(queryString);
+        const url = `${endpoint}?${queryString}&signature=${signature}`;
+        
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'X-MBX-APIKEY': this.apiClient.getApiKey()
+          }
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.text();
+          throw new Error(`API Error: ${response.status} - ${errorData}`);
+        }
+        
+        const result = await response.json();
+        this.logManager.addTradingLog(`Order ${result.orderId || 'unknown'} ${result.status || 'PENDING'}`, 'success');
+        return result;
       }
     } catch (error) {
       console.error('Error placing market order:', error);

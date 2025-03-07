@@ -20,6 +20,9 @@ class BinanceService {
   private accountService: AccountService;
   private marketDataService: MarketDataService;
   private connectionService: ConnectionService;
+  private lastBalanceCheck: number = 0;
+  private cachedBalances: Record<string, BalanceInfo> | null = null;
+  private isGettingBalances: boolean = false;
   
   constructor() {
     this.credentials = StorageManager.loadCredentials();
@@ -48,8 +51,20 @@ class BinanceService {
       
       this.accountService.setConnectionStatus('unknown');
       this.accountService.setLastConnectionError(null);
+      this.cachedBalances = null; // Clear cache when credentials change
       
+      // Dispatch event to notify the application that credentials have been updated
       window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
+      
+      // Test connection after saving credentials
+      setTimeout(() => {
+        this.testConnection().then(success => {
+          if (success) {
+            // Force refresh balances after successful connection
+            this.getAccountBalance(true);
+          }
+        });
+      }, 500);
       
       return success;
     } catch (error) {
@@ -68,6 +83,17 @@ class BinanceService {
     
     this.accountService.setConnectionStatus('unknown');
     this.accountService.setLastConnectionError(null);
+    this.cachedBalances = null; // Clear cache when proxy mode changes
+    
+    // Test connection after changing proxy mode
+    setTimeout(() => {
+      this.testConnection().then(success => {
+        if (success) {
+          // Force refresh balances after successful connection
+          this.getAccountBalance(true);
+        }
+      });
+    }, 500);
     
     return true;
   }
@@ -106,7 +132,12 @@ class BinanceService {
   }
 
   public async testConnection(): Promise<boolean> {
-    return this.connectionService.testConnection();
+    const result = await this.connectionService.testConnection();
+    if (result) {
+      // Connection test was successful, force refresh balances
+      this.cachedBalances = null;
+    }
+    return result;
   }
 
   public isInTestMode(): boolean {
@@ -121,8 +152,7 @@ class BinanceService {
   // Account methods
   public async getAccountInfo(): Promise<{ balances: BinanceBalance[] }> {
     try {
-      // Since we've had issues with portfolio data not showing up,
-      // let's make sure a connection test is run if needed
+      // Ensure connection is tested if needed
       if (this.accountService.getConnectionStatus() === 'unknown' && this.hasCredentials()) {
         await this.testConnection();
       }
@@ -135,13 +165,40 @@ class BinanceService {
     }
   }
 
-  public async getAccountBalance(): Promise<Record<string, BalanceInfo>> {
+  public async getAccountBalance(forceRefresh: boolean = false): Promise<Record<string, BalanceInfo>> {
+    // Prevent multiple simultaneous balance requests
+    if (this.isGettingBalances) {
+      console.log("Already retrieving balances, returning cached data or waiting");
+      if (this.cachedBalances) {
+        return this.cachedBalances;
+      }
+      
+      // Wait a bit and try again
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      if (!this.isGettingBalances) {
+        return this.getAccountBalance(forceRefresh);
+      } else {
+        throw new Error("Balance retrieval in progress");
+      }
+    }
+    
+    // Check if we have recent cached balances (less than 30 seconds old) and not forcing refresh
+    const now = Date.now();
+    if (!forceRefresh && this.cachedBalances && now - this.lastBalanceCheck < 30000) {
+      console.log("Using cached balance data (less than 30 seconds old)");
+      return this.cachedBalances;
+    }
+    
     try {
+      this.isGettingBalances = true;
+      console.log("Getting fresh account balances");
+      
       // Ensure connection is tested before getting account balance
       if (this.accountService.getConnectionStatus() === 'unknown' && this.hasCredentials()) {
         await this.testConnection();
       }
       
+      // Get balances from account service
       const balances = await this.accountService.getAccountBalance();
       
       // If we have balances, try to enrich them with USD values
@@ -168,11 +225,17 @@ class BinanceService {
         }
       }
       
+      // Cache the enriched balances
+      this.cachedBalances = balances;
+      this.lastBalanceCheck = now;
+      
       return balances;
     } catch (error) {
       console.error('Error in getAccountBalance:', error);
       toast.error('Failed to fetch account balance. Please check your connection settings.');
       throw error;
+    } finally {
+      this.isGettingBalances = false;
     }
   }
 
@@ -181,7 +244,10 @@ class BinanceService {
     side: 'BUY' | 'SELL',
     quantity: string
   ): Promise<any> {
-    return this.accountService.placeMarketOrder(symbol, side, quantity);
+    const result = await this.accountService.placeMarketOrder(symbol, side, quantity);
+    // Clear cached balances after placing an order
+    this.cachedBalances = null;
+    return result;
   }
 
   // Market data methods
@@ -214,7 +280,7 @@ class BinanceService {
     this.logManager.clearTradingLogs();
   }
 
-  public addTradingLog(message: string, type: 'info' | 'success' | 'error' = 'info') {
+  public addTradingLog(message: string, type: 'info' | 'success' | 'error' | 'warning' = 'info') {
     this.logManager.addTradingLog(message, type);
   }
 }
