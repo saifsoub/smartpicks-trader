@@ -1,4 +1,3 @@
-
 import { BinanceApiClient } from './apiClient';
 import { LogManager } from './logManager';
 import { AccountService } from './accountService';
@@ -42,8 +41,31 @@ export class ConnectionService {
         return false;
       }
       
+      // Validate API key format before attempting connection
+      const apiKey = this.apiClient.getApiKey();
+      if (!this.connectionTester.validateApiKeyFormat(apiKey)) {
+        this.logManager.addTradingLog("Invalid API key format. Please check your API key.", 'error');
+        this.accountService.setConnectionStatus('disconnected');
+        this.accountService.setLastConnectionError("Invalid API key format. Please check your Binance API key.");
+        toast.error("Invalid API key format. Please check your Binance API key.");
+        return false;
+      }
+      
       // Test both connection methods
-      const directApiWorks = await this.connectionTester.testDirectConnection();
+      let directApiWorks = false;
+      try {
+        directApiWorks = await this.connectionTester.testDirectConnection();
+      } catch (directError) {
+        // Check if this is a network error
+        if (directError instanceof Error && directError.message.includes("Network connectivity")) {
+          this.logManager.addTradingLog("Network connectivity issue detected. Please check your internet connection.", 'error');
+          this.accountService.setConnectionStatus('disconnected');
+          this.accountService.setLastConnectionError("Network connectivity issue detected. Please check your internet connection.");
+          toast.error("Network connectivity issue detected. Please check your internet connection.");
+          return false;
+        }
+        // Other errors will continue to proxy test
+      }
       
       // Always log the direct API status
       if (directApiWorks) {
@@ -56,7 +78,18 @@ export class ConnectionService {
       
       // Test proxy connection if direct failed or proxy mode is enabled
       if (this.apiClient.getProxyMode() || !directApiWorks) {
-        proxyWorks = await this.connectionTester.testProxyConnection();
+        try {
+          proxyWorks = await this.connectionTester.testProxyConnection();
+        } catch (proxyError) {
+          // Check if this is a network error
+          if (proxyError instanceof Error && proxyError.message.includes("Network connectivity")) {
+            this.logManager.addTradingLog("Network connectivity issue detected. Please check your internet connection.", 'error');
+            this.accountService.setConnectionStatus('disconnected');
+            this.accountService.setLastConnectionError("Network connectivity issue detected. Please check your internet connection.");
+            toast.error("Network connectivity issue detected. Please check your internet connection.");
+            return false;
+          }
+        }
         
         if (proxyWorks) {
           this.logManager.addTradingLog("Proxy connection successful", 'success');
@@ -81,6 +114,25 @@ export class ConnectionService {
         }
       }
       
+      // Verify API credentials even if connection test passed
+      if (directApiWorks || proxyWorks) {
+        try {
+          this.logManager.addTradingLog("Verifying API credentials...", 'info');
+          const verificationResult = await this.verifyApiCredentials();
+          
+          if (!verificationResult.valid) {
+            this.logManager.addTradingLog(`API key verification failed: ${verificationResult.reason}`, 'error');
+            this.accountService.setConnectionStatus('disconnected');
+            this.accountService.setLastConnectionError(`API key verification failed: ${verificationResult.reason}`);
+            toast.error(`API key verification failed: ${verificationResult.reason}`);
+            return false;
+          }
+        } catch (verificationError) {
+          // Only log as warning since we got a successful connection
+          this.logManager.addTradingLog(`API key verification check failed: ${verificationError instanceof Error ? verificationError.message : String(verificationError)}`, 'warning');
+        }
+      }
+      
       // Handle overall connection results
       return this.handleConnectionResults(directApiWorks, proxyWorks);
 
@@ -95,6 +147,54 @@ export class ConnectionService {
     }
   }
   
+  /**
+   * Verify if API credentials are valid and have sufficient permissions
+   */
+  private async verifyApiCredentials(): Promise<{valid: boolean, reason?: string}> {
+    try {
+      // Try a simple authenticated endpoint to verify credentials
+      if (this.apiClient.getProxyMode()) {
+        // Through proxy
+        try {
+          await this.apiClient.fetchWithProxy('account', { recvWindow: '5000' }, 'GET');
+          return { valid: true };
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          
+          // Check for specific error messages indicating invalid credentials
+          if (errorMsg.includes('Invalid API-key') || 
+              errorMsg.includes('API-key format invalid') ||
+              errorMsg.includes('Signature') ||
+              errorMsg.includes('authorization') ||
+              errorMsg.includes('Invalid credentials')) {
+            return { 
+              valid: false, 
+              reason: 'Invalid API key or secret. Please check your credentials.' 
+            };
+          }
+          
+          // We got some other error, but can't confirm it's due to invalid credentials
+          // Let's treat connection as potentially successful
+          return { valid: true };
+        }
+      } else {
+        // Direct API - verify key format only since we can't easily test auth
+        // due to CORS restrictions on signed endpoints
+        const apiKey = this.apiClient.getApiKey();
+        if (!this.connectionTester.validateApiKeyFormat(apiKey)) {
+          return { 
+            valid: false, 
+            reason: 'Invalid API key format. Please check your Binance API key.' 
+          };
+        }
+        return { valid: true };
+      }
+    } catch (error) {
+      console.error('Error verifying API credentials:', error);
+      throw error;
+    }
+  }
+  
   private maskApiKey(apiKey: string): string {
     if (!apiKey || apiKey.length < 8) return '***';
     return apiKey.substring(0, 4) + '...' + apiKey.substring(apiKey.length - 4);
@@ -103,6 +203,7 @@ export class ConnectionService {
   private async handleConnectionResults(directApiWorks: boolean, proxyWorks: boolean): Promise<boolean> {
     if (directApiWorks || proxyWorks) {
       this.reconnectionManager.resetReconnectAttempts();
+      this.connectionTester.resetErrorCounters();
       this.accountService.setConnectionStatus('connected');
       this.accountService.setLastConnectionError(null);
       
@@ -188,3 +289,4 @@ export class ConnectionService {
     }
   }
 }
+

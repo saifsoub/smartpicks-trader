@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -140,16 +139,40 @@ const Settings = () => {
         }
       } else {
         setConnectionStatus('error');
-        setConnectedMessage("Connection failed. Please check your API keys.");
-        addStatusMessage("❌ Connection to Binance API failed");
+        
+        // Get the specific error message from the service
+        const connectionError = binanceService.getLastConnectionError();
+        if (connectionError && connectionError.includes("Network connectivity")) {
+          setConnectedMessage("Network connectivity issue detected. Please check your internet connection.");
+          addStatusMessage("❌ Network connectivity issue detected. Please check your internet connection.");
+          
+          // Add a more visible network error alert
+          addStatusMessage("❌ Your device appears to be offline or unable to reach Binance servers.");
+          addStatusMessage("📱 If using a mobile device, make sure you're on a reliable WiFi or cellular connection.");
+          addStatusMessage("🛜 If on WiFi, try switching to a mobile data connection or different network.");
+        } else {
+          setConnectedMessage(connectionError || "Connection failed. Please check your API keys.");
+          addStatusMessage("❌ Connection to Binance API failed");
+        }
+        
         setPortfolioVerified(false);
       }
     } catch (error) {
       console.error("Error testing connection:", error);
       setConnectionStatus('error');
       if (error instanceof Error) {
-        setConnectedMessage(`Connection error: ${error.message}`);
-        addStatusMessage(`❌ Connection error: ${error.message}`);
+        const errorMessage = error.message;
+        setConnectedMessage(`Connection error: ${errorMessage}`);
+        addStatusMessage(`❌ Connection error: ${errorMessage}`);
+        
+        // Add more context for network errors
+        if (errorMessage.includes("Network") || 
+            errorMessage.includes("internet") || 
+            errorMessage.includes("offline") ||
+            errorMessage.includes("Load failed")) {
+          addStatusMessage("❌ Network connectivity issue detected. Please check your internet connection.");
+          addStatusMessage("📱 Try connecting using a different network or internet connection.");
+        }
       } else {
         setConnectedMessage("Connection error. Please check your API keys.");
         addStatusMessage("❌ Connection error. Please check your API keys.");
@@ -209,110 +232,135 @@ const Settings = () => {
         toast.success("API keys saved successfully");
         addStatusMessage("✅ API keys saved successfully");
         
-        // Now test connection and verify portfolio access
+        // Now test connection with a slight delay to ensure credentials are fully saved
         setVerificationInProgress(true);
-        try {
-          addStatusMessage("Testing connection to Binance...");
-          const connectionTest = await binanceService.testConnection();
-          if (connectionTest) {
-            setConnectionStatus('success');
-            setConnectedMessage(`Connected to Binance API (${useProxyMode ? 'Proxy Mode' : 'Direct API Mode'})`);
-            addStatusMessage("✅ Successfully connected to Binance API");
+        setTimeout(async () => {
+          try {
+            addStatusMessage("Testing connection to Binance...");
+            const connectionTest = await binanceService.testConnection();
             
-            // Try to access actual account data for full verification
-            try {
-              addStatusMessage("Fetching account data...");
-              const accountData = await binanceService.getAccountInfo();
-              if (accountData && accountData.balances) {
-                // Consider API connected even if balances are placeholders
-                toast.success("Successfully connected to Binance API");
-                setConnectionStatus('success');
-                
-                // Check if we got real portfolio data or just placeholder data
-                const hasRealBalances = accountData.balances.some(
-                  balance => parseFloat(balance.free) > 0 || parseFloat(balance.locked) > 0
-                );
-                
-                if (hasRealBalances) {
-                  setPortfolioVerified(true);
-                  toast.success("Full portfolio access verified");
-                  addStatusMessage("✅ Full portfolio access verified");
+            if (connectionTest) {
+              // Success flow - keep same as before
+              setConnectionStatus('success');
+              setConnectedMessage(`Connected to Binance API (${useProxyMode ? 'Proxy Mode' : 'Direct API Mode'})`);
+              addStatusMessage("✅ Successfully connected to Binance API");
+              
+              // Try to access actual account data for full verification
+              try {
+                addStatusMessage("Fetching account data...");
+                const accountData = await binanceService.getAccountInfo();
+                if (accountData && accountData.balances) {
+                  // Consider API connected even if balances are placeholders
+                  toast.success("Successfully connected to Binance API");
+                  setConnectionStatus('success');
                   
-                  // Extract and display portfolio data
-                  const nonZeroBalances = accountData.balances.filter(
+                  // Check if we got real portfolio data or just placeholder data
+                  const hasRealBalances = accountData.balances.some(
                     balance => parseFloat(balance.free) > 0 || parseFloat(balance.locked) > 0
                   );
                   
-                  if (nonZeroBalances.length > 0) {
-                    addStatusMessage(`Found ${nonZeroBalances.length} assets in your portfolio`);
+                  if (hasRealBalances) {
+                    setPortfolioVerified(true);
+                    toast.success("Full portfolio access verified");
+                    addStatusMessage("✅ Full portfolio access verified");
                     
-                    // Get current prices to calculate USD values
-                    const prices = await binanceService.getPrices();
+                    // Extract and display portfolio data
+                    const nonZeroBalances = accountData.balances.filter(
+                      balance => parseFloat(balance.free) > 0 || parseFloat(balance.locked) > 0
+                    );
                     
-                    // Calculate USD values and store for display
-                    const portfolioWithValues = nonZeroBalances.map(balance => {
-                      const total = parseFloat(balance.free) + parseFloat(balance.locked);
-                      let usdValue = 0;
+                    if (nonZeroBalances.length > 0) {
+                      addStatusMessage(`Found ${nonZeroBalances.length} assets in your portfolio`);
                       
-                      if (balance.asset === 'USDT') {
-                        usdValue = total;
-                      } else {
-                        const price = prices[`${balance.asset}USDT`];
-                        if (price) {
-                          usdValue = total * parseFloat(price);
+                      // Get current prices to calculate USD values
+                      const prices = await binanceService.getPrices();
+                      
+                      // Calculate USD values and store for display
+                      const portfolioWithValues = nonZeroBalances.map(balance => {
+                        const total = parseFloat(balance.free) + parseFloat(balance.locked);
+                        let usdValue = 0;
+                        
+                        if (balance.asset === 'USDT') {
+                          usdValue = total;
+                        } else {
+                          const price = prices[`${balance.asset}USDT`];
+                          if (price) {
+                            usdValue = total * parseFloat(price);
+                          }
                         }
-                      }
-                      
-                      return {
-                        asset: balance.asset,
-                        value: usdValue
-                      };
-                    });
+                        
+                        return {
+                          asset: balance.asset,
+                          value: usdValue
+                        };
+                      });
                     
-                    setPortfolioData(portfolioWithValues);
+                      setPortfolioData(portfolioWithValues);
+                    }
                   }
                   
                 } else {
+                  addStatusMessage("⚠️ Connected to Binance API, but couldn't verify portfolio data");
+                  toast.warning("Connected to Binance API, but couldn't verify portfolio data");
                   setPortfolioVerified(false);
-                  addStatusMessage("⚠️ Connected to Binance API, but limited portfolio access. Try enabling proxy mode.");
-                  toast.warning("Connected to Binance API, but limited portfolio access. Try enabling proxy mode.");
+                  window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
                 }
-                
-                window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
-              } else {
-                addStatusMessage("⚠️ Connected to Binance API, but couldn't verify portfolio data");
-                toast.warning("Connected to Binance API, but couldn't verify portfolio data");
+              } catch (portfolioError) {
+                console.error("Portfolio verification error:", portfolioError);
+                addStatusMessage("⚠️ Connected to Binance API, but couldn't verify portfolio access");
+                toast.warning("Connected to Binance API, but couldn't verify portfolio access");
                 setPortfolioVerified(false);
                 window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
               }
-            } catch (portfolioError) {
-              console.error("Portfolio verification error:", portfolioError);
-              addStatusMessage("⚠️ Connected to Binance API, but couldn't verify portfolio access");
-              toast.warning("Connected to Binance API, but couldn't verify portfolio access");
+            } else {
+              // Error flow - enhanced with network error detection
+              addStatusMessage("❌ Connection to Binance API failed");
+              
+              // Get the specific error message from the service
+              const connectionError = binanceService.getLastConnectionError();
+              if (connectionError && connectionError.includes("Network connectivity")) {
+                setConnectedMessage("Network connectivity issue detected. Please check your internet connection.");
+                addStatusMessage("❌ Network connectivity issue detected. Please check your internet connection.");
+                
+                // Add a more visible network error alert
+                addStatusMessage("❌ Your device appears to be offline or unable to reach Binance servers.");
+                addStatusMessage("📱 If using a mobile device, make sure you're on a reliable WiFi or cellular connection.");
+                addStatusMessage("🛜 If on WiFi, try switching to a mobile data connection or different network.");
+                
+                toast.error("Network connectivity issue detected. Please check your internet connection.");
+              } else if (connectionError && connectionError.includes("Invalid API key")) {
+                setConnectedMessage("Invalid API key format or credentials. Please verify your API keys.");
+                addStatusMessage("❌ Invalid API key format or credentials. Please verify your API keys.");
+                toast.error("Invalid API key format or credentials. Please verify your API keys.");
+              } else {
+                setConnectedMessage(connectionError || "Connection failed. Please check your API keys.");
+                addStatusMessage("❌ Connection to Binance API failed");
+                toast.error("Connection to Binance API failed");
+              }
+              
+              setConnectionStatus('error');
               setPortfolioVerified(false);
-              window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
             }
-          } else {
-            addStatusMessage("❌ Connection to Binance API failed");
-            toast.error("Connection to Binance API failed");
+          } catch (connectionError) {
+            console.error("Connection test error:", connectionError);
+            addStatusMessage("❌ Failed to verify Binance API connection");
+            toast.error("Failed to verify Binance API connection");
             setConnectionStatus('error');
-            setConnectedMessage("Failed to connect to Binance API");
+            setConnectedMessage("Connection verification failed");
             setPortfolioVerified(false);
+          } finally {
+            setIsLoading(false);
+            setVerificationInProgress(false);
           }
-        } catch (connectionError) {
-          console.error("Connection test error:", connectionError);
-          addStatusMessage("❌ Failed to verify Binance API connection");
-          toast.error("Failed to verify Binance API connection");
-          setConnectionStatus('error');
-          setConnectedMessage("Connection verification failed");
-          setPortfolioVerified(false);
-        }
+        }, 500); // Half-second delay to ensure credentials are saved
       } else {
         addStatusMessage("❌ Failed to save API keys");
         toast.error("Failed to save API keys");
         setConnectionStatus('error');
         setConnectedMessage("Failed to save API keys");
         setPortfolioVerified(false);
+        setIsLoading(false);
+        setVerificationInProgress(false);
       }
     } catch (error) {
       console.error("Error saving API keys:", error);
@@ -325,7 +373,6 @@ const Settings = () => {
       setConnectionStatus('error');
       setConnectedMessage(errorMessage);
       setPortfolioVerified(false);
-    } finally {
       setIsLoading(false);
       setVerificationInProgress(false);
     }
