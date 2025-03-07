@@ -84,7 +84,7 @@ export class ConnectionService {
           
           if (!permissions.read) {
             console.warn("API key doesn't have read permission or can't verify it");
-            this.logManager.addTradingLog("We couldn't verify if your API key has read permissions. You may still be able to use basic functionality.", 'warning');
+            this.logManager.addTradingLog("We couldn't verify if your API key has read permissions. You may still be able to use basic functionality.", 'info');
             this.accountService.setLastConnectionError("Connected to API, but couldn't verify your API permissions. You can still use basic features, but portfolio data may be limited.");
           } else if (!proxyWorks && this.apiClient.getProxyMode()) {
             this.accountService.setLastConnectionError("API connected, but proxy mode is having issues. You may need to disable proxy mode if you don't need it.");

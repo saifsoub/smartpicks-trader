@@ -21,7 +21,7 @@ export interface BinanceSymbol {
 }
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'unknown';
-export type LogType = 'info' | 'success' | 'error';
+export type LogType = 'info' | 'success' | 'error' | 'warning';
 
 export interface TradingLog {
   timestamp: Date;
