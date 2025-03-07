@@ -46,14 +46,16 @@ export class ConnectionTester {
       try {
         const timeResponse = await fetch('https://api.binance.com/api/v3/time', {
           method: 'GET',
-          signal: AbortSignal.timeout(15000), // Increased timeout further
+          signal: AbortSignal.timeout(20000), // Increased timeout to 20 seconds
           headers: {
-            'Cache-Control': 'no-cache'
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
           }
         });
         
         if (timeResponse.ok) {
           this.logManager.addTradingLog('Direct API basic connectivity confirmed', 'success');
+          this.networkErrorCount = 0; // Reset network error counter
           // At minimum, we have basic connectivity
           return true;
         }
@@ -65,7 +67,7 @@ export class ConnectionTester {
           this.networkErrorCount++;
           this.logManager.addTradingLog(`Network connectivity issue detected (${this.networkErrorCount} consecutive errors)`, 'warning');
           
-          if (this.networkErrorCount >= 3) {
+          if (this.networkErrorCount >= 2) { // Reduced threshold from 3 to 2
             this.logManager.addTradingLog("Multiple network errors detected. Please check your internet connection.", 'error');
             throw new Error("Network connectivity issue detected. Please check your internet connection.");
           }
@@ -77,9 +79,10 @@ export class ConnectionTester {
       try {
         const priceResponse = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT', {
           method: 'GET',
-          signal: AbortSignal.timeout(15000),
+          signal: AbortSignal.timeout(20000), // Increased timeout
           headers: {
-            'Cache-Control': 'no-cache'
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
           }
         });
         
@@ -93,7 +96,7 @@ export class ConnectionTester {
           this.networkErrorCount++;
           this.logManager.addTradingLog(`Network connectivity issue detected (${this.networkErrorCount} consecutive errors)`, 'warning');
           
-          if (this.networkErrorCount >= 3) {
+          if (this.networkErrorCount >= 2) { // Reduced threshold from 3 to 2
             this.logManager.addTradingLog("Multiple network errors detected. Please check your internet connection.", 'error');
             throw new Error("Network connectivity issue detected. Please check your internet connection.");
           }
@@ -146,7 +149,7 @@ export class ConnectionTester {
           this.networkErrorCount++;
           this.logManager.addTradingLog(`Network connectivity issue detected (${this.networkErrorCount} consecutive errors)`, 'warning');
           
-          if (this.networkErrorCount >= 3) {
+          if (this.networkErrorCount >= 2) { // Reduced threshold from 3 to 2
             this.logManager.addTradingLog("Multiple network errors detected. Please check your internet connection.", 'error');
             throw new Error("Network connectivity issue detected. Please check your internet connection.");
           }
@@ -167,7 +170,7 @@ export class ConnectionTester {
           this.networkErrorCount++;
           this.logManager.addTradingLog(`Network connectivity issue detected (${this.networkErrorCount} consecutive errors)`, 'warning');
           
-          if (this.networkErrorCount >= 3) {
+          if (this.networkErrorCount >= 2) { // Reduced threshold from 3 to 2
             this.logManager.addTradingLog("Multiple network errors detected. Please check your internet connection.", 'error');
             throw new Error("Network connectivity issue detected. Please check your internet connection.");
           }
@@ -192,7 +195,7 @@ export class ConnectionTester {
     
     const errorMessage = error instanceof Error ? error.message : String(error);
     
-    // Common network error patterns
+    // Enhanced network error patterns
     return (
       errorMessage.includes('network') ||
       errorMessage.includes('offline') ||
@@ -200,9 +203,14 @@ export class ConnectionTester {
       errorMessage.includes('ECONNREFUSED') ||
       errorMessage.includes('ENOTFOUND') ||
       errorMessage.includes('Failed to fetch') ||
-      errorMessage.includes('Load failed') ||
+      errorMessage.includes('Load failed') || // Common in browser fetch errors
       errorMessage.includes('timeout') ||
-      errorMessage.includes('ERR_CONNECTION')
+      errorMessage.includes('ERR_CONNECTION') ||
+      errorMessage.includes('Network request failed') ||
+      errorMessage.includes('network is offline') ||
+      errorMessage.includes('connection') ||
+      errorMessage.includes('AbortError') ||
+      errorMessage.includes('net::') // Chrome network error prefix
     );
   }
   

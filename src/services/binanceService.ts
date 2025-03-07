@@ -1,4 +1,3 @@
-
 import { BinanceApiClient } from './binance/apiClient';
 import { StorageManager } from './binance/storageManager';
 import { LogManager } from './binance/logManager';
@@ -100,6 +99,18 @@ class BinanceService {
           this.getAccountBalance(true);
         } else {
           this.logManager.addTradingLog("Connection test with new credentials failed", 'error');
+          
+          // Check if this is likely a network issue
+          const lastError = this.getLastConnectionError();
+          if (lastError && (
+              lastError.includes("Network connectivity") || 
+              lastError.includes("internet") || 
+              lastError.includes("offline") ||
+              lastError.includes("Load failed")
+          )) {
+            toast.error("Network connectivity issue detected. Please check your internet connection.");
+            this.logManager.addTradingLog("Network connectivity issue detected. Please check your internet connection or try enabling offline mode.", 'warning');
+          }
         }
       });
     }, 500);
@@ -162,6 +173,34 @@ class BinanceService {
 
   public async testConnection(): Promise<boolean> {
     try {
+      // First check for network connectivity by testing connectivity to a major site
+      try {
+        const networkTestResponse = await fetch('https://www.google.com/generate_204', {
+          method: 'HEAD',
+          signal: AbortSignal.timeout(5000),
+          cache: 'no-cache',
+          headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+        });
+        
+        if (!networkTestResponse.ok) {
+          console.warn("General network connectivity test failed");
+          this.accountService.setConnectionStatus('disconnected');
+          this.accountService.setLastConnectionError("Network connectivity issue detected. Your device appears to be offline.");
+          return false;
+        }
+      } catch (networkError) {
+        console.error("Network connectivity test failed:", networkError);
+        this.accountService.setConnectionStatus('disconnected');
+        this.accountService.setLastConnectionError("Network connectivity issue detected. Your device appears to be offline.");
+        
+        const connectionErrors = this.connectionStatusManager.incrementConnectionErrors();
+        if (connectionErrors >= 2) {
+          toast.error("Network connectivity issue detected. Please check your internet connection.");
+        }
+        
+        return false;
+      }
+      
       const result = await this.connectionService.testConnection();
       if (result) {
         this.balanceService.resetCache();
@@ -173,13 +212,41 @@ class BinanceService {
         if (connectionErrors >= this.connectionStatusManager.getMaxConnectionErrors()) {
           toast.error("Multiple connection failures. Switching to offline demo mode.");
           this.logManager.addTradingLog("Multiple connection failures. Using offline demo mode.", 'warning');
+          this.credentialsService.setOfflineMode(true);
         }
       }
       return result;
     } catch (error) {
       console.error("Test connection error:", error);
       this.connectionStatusManager.incrementConnectionErrors();
+      
+      // Detect network errors specifically
+      if (error instanceof Error && (
+          error.message.includes("Network") || 
+          error.message.includes("internet") || 
+          error.message.includes("offline") || 
+          error.message.includes("Load failed")
+      )) {
+        this.accountService.setLastConnectionError("Network connectivity issue detected. Please check your internet connection.");
+        toast.error("Network connectivity issue detected. Please check your internet connection.");
+      }
+      
       return false;
+    }
+  }
+
+  public isInOfflineMode(): boolean {
+    return this.credentialsService.isInOfflineMode();
+  }
+  
+  public setOfflineMode(enabled: boolean): void {
+    this.credentialsService.setOfflineMode(enabled);
+    if (enabled) {
+      toast.info("Offline mode enabled. Using demo data.");
+      this.logManager.addTradingLog("Offline mode enabled. Using demo data.", 'info');
+    } else {
+      toast.info("Offline mode disabled. Attempting to connect to Binance...");
+      this.testConnection();
     }
   }
 

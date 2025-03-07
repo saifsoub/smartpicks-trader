@@ -5,9 +5,12 @@ import { BinanceCredentials } from './types';
 
 export class CredentialsService {
   private apiClient: BinanceApiClient;
+  private isOfflineMode: boolean = false;
   
   constructor(apiClient: BinanceApiClient) {
     this.apiClient = apiClient;
+    // Load offline mode setting
+    this.isOfflineMode = StorageManager.getOfflineMode();
   }
   
   public hasCredentials(): boolean {
@@ -50,5 +53,14 @@ export class CredentialsService {
   
   public getApiPermissions(): { read: boolean, trading: boolean } {
     return StorageManager.loadApiPermissions();
+  }
+  
+  public setOfflineMode(enabled: boolean): void {
+    this.isOfflineMode = enabled;
+    StorageManager.saveOfflineMode(enabled);
+  }
+  
+  public isInOfflineMode(): boolean {
+    return this.isOfflineMode;
   }
 }

@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import binanceService from "@/services/binanceService";
 import notificationService from "@/services/notificationService";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { NetworkStatusAlert } from "@/components/NetworkStatusAlert";
 
 const Settings = () => {
   const navigate = useNavigate();
@@ -33,9 +34,13 @@ const Settings = () => {
   const [portfolioVerified, setPortfolioVerified] = useState(false);
   const [portfolioData, setPortfolioData] = useState<{asset: string, value: number}[]>([]);
   
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
+  
   useEffect(() => {
     loadSavedSettings();
     checkConnection();
+    
+    setIsOfflineMode(binanceService.isInOfflineMode());
   }, []);
   
   const addStatusMessage = (message: string) => {
@@ -75,6 +80,78 @@ const Settings = () => {
       setIsLoading(true);
       setVerificationInProgress(true);
       addStatusMessage("Testing connection to Binance...");
+      
+      // First, check for general network connectivity
+      try {
+        const networkTestResponse = await fetch('https://www.google.com/generate_204', {
+          method: 'HEAD',
+          signal: AbortSignal.timeout(5000),
+          cache: 'no-cache',
+          headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+        });
+        
+        if (!networkTestResponse.ok) {
+          setConnectionStatus('error');
+          setConnectedMessage("Network connectivity issue detected. Your device appears to be offline.");
+          addStatusMessage("❌ Network connectivity issue detected. Your device appears to be offline.");
+          addStatusMessage("📱 Please check your internet connection and try again.");
+          setIsLoading(false);
+          setVerificationInProgress(false);
+          
+          // Show offline mode alert
+          toast.error("Network connectivity issue detected. Consider enabling offline mode for testing.", {
+            action: {
+              label: "Enable Offline Mode",
+              onClick: () => handleToggleOfflineMode(true)
+            }
+          });
+          
+          return;
+        }
+      } catch (networkError) {
+        console.error("Network connectivity test failed:", networkError);
+        setConnectionStatus('error');
+        setConnectedMessage("Network connectivity issue detected. Your device appears to be offline.");
+        addStatusMessage("❌ Network connectivity issue detected. Your device appears to be offline.");
+        addStatusMessage("📱 Please check your internet connection and try again.");
+        
+        // Recommend offline mode
+        addStatusMessage("💡 You can enable offline mode to use demo data for testing");
+        
+        setIsLoading(false);
+        setVerificationInProgress(false);
+        
+        // Show offline mode alert
+        toast.error("Network connectivity issue detected. Consider enabling offline mode for testing.", {
+          action: {
+            label: "Enable Offline Mode",
+            onClick: () => handleToggleOfflineMode(true)
+          }
+        });
+        
+        return;
+      }
+      
+      // If offline mode is active, don't test actual API connection
+      if (isOfflineMode) {
+        setConnectionStatus('success');
+        setConnectedMessage("Connected to offline demo mode (no real trading)");
+        addStatusMessage("✅ Using offline demo mode with simulated data");
+        setPortfolioVerified(true);
+        
+        // Simulated portfolio data for offline mode
+        const offlinePortfolioData = [
+          { asset: "BTC", value: 24500.00 },
+          { asset: "ETH", value: 12600.00 },
+          { asset: "BNB", value: 3800.00 },
+          { asset: "USDT", value: 5000.00 }
+        ];
+        
+        setPortfolioData(offlinePortfolioData);
+        setIsLoading(false);
+        setVerificationInProgress(false);
+        return;
+      }
       
       const connectionTest = await binanceService.testConnection();
       if (connectionTest) {
@@ -142,17 +219,41 @@ const Settings = () => {
         
         // Get the specific error message from the service
         const connectionError = binanceService.getLastConnectionError();
-        if (connectionError && connectionError.includes("Network connectivity")) {
+        
+        // Check if this is a network error
+        if (connectionError && (
+            connectionError.includes("Network connectivity") || 
+            connectionError.includes("internet") || 
+            connectionError.includes("offline") || 
+            connectionError.includes("Load failed")
+        )) {
           setConnectedMessage("Network connectivity issue detected. Please check your internet connection.");
           addStatusMessage("❌ Network connectivity issue detected. Please check your internet connection.");
           
           // Add a more visible network error alert
-          addStatusMessage("❌ Your device appears to be offline or unable to reach Binance servers.");
+          addStatusMessage("❌ Your device appears to be having trouble reaching Binance servers.");
           addStatusMessage("📱 If using a mobile device, make sure you're on a reliable WiFi or cellular connection.");
           addStatusMessage("🛜 If on WiFi, try switching to a mobile data connection or different network.");
+          
+          // Suggest offline mode
+          addStatusMessage("💡 You can enable offline mode to use demo data for testing");
+          
+          // Show offline mode suggestion toast
+          toast.error("Network connectivity issue detected. Consider enabling offline mode for testing.", {
+            action: {
+              label: "Enable Offline Mode",
+              onClick: () => handleToggleOfflineMode(true)
+            }
+          });
+        } else if (connectionError && connectionError.includes("API key")) {
+          setConnectedMessage("API key verification failed. Please check your credentials.");
+          addStatusMessage("❌ API key verification failed. Please check your credentials.");
+          addStatusMessage("🔑 Make sure you've entered the correct API key and secret from your Binance account.");
+          addStatusMessage("⚠️ Also ensure your API key has the necessary permissions and IP restrictions.");
         } else {
           setConnectedMessage(connectionError || "Connection failed. Please check your API keys.");
           addStatusMessage("❌ Connection to Binance API failed");
+          addStatusMessage("🔍 Try enabling proxy mode, which can help bypass connection restrictions.");
         }
         
         setPortfolioVerified(false);
@@ -457,6 +558,24 @@ const Settings = () => {
     setIsTesting(false);
   };
 
+  const handleToggleOfflineMode = (checked: boolean) => {
+    setIsOfflineMode(checked);
+    binanceService.setOfflineMode(checked);
+    
+    if (checked) {
+      // When enabling offline mode, show a successful connection with message
+      setConnectionStatus('success');
+      setConnectedMessage("Connected to offline demo mode (no real trading)");
+      toast.success("Offline demo mode enabled. Using simulated data.");
+    } else {
+      // When disabling, reset and check real connection
+      setConnectionStatus('untested');
+      setStatusMessages([]);
+      addStatusMessage("Checking connection to Binance...");
+      checkConnection();
+    }
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-slate-950 text-white">
       <header className="border-b border-slate-800 bg-slate-900 px-4 py-3">
@@ -488,6 +607,8 @@ const Settings = () => {
 
       <main className="container mx-auto flex-1 p-4">
         <h1 className="mb-6 text-2xl font-bold text-white">Settings</h1>
+
+        <NetworkStatusAlert />
 
         {(connectionStatus !== 'untested' || binanceService.hasCredentials()) && (
           <div className={`mb-6 p-4 rounded-lg flex items-center justify-between ${

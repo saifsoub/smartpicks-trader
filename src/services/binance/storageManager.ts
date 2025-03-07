@@ -5,6 +5,7 @@ export class StorageManager {
   private static CREDENTIALS_KEY = 'binanceCredentials';
   private static PERMISSIONS_KEY = 'binanceApiPermissions';
   private static PROXY_MODE_KEY = 'useLocalProxy';
+  private static OFFLINE_MODE_KEY = 'offlineMode';
   
   public static loadCredentials(): BinanceCredentials | null {
     const savedCredentials = localStorage.getItem(this.CREDENTIALS_KEY);
@@ -57,6 +58,15 @@ export class StorageManager {
   
   public static saveProxyMode(useLocalProxy: boolean): void {
     localStorage.setItem(this.PROXY_MODE_KEY, String(useLocalProxy));
-    console.log(`Proxy mode set to: ${useLocalProxy ? 'Local Proxy' : 'Direct API'}`);
+    console.log(`Proxy mode set to: ${useLocalProxy ? 'Local Proxy' : 'Direct API Mode'}`);
+  }
+  
+  public static getOfflineMode(): boolean {
+    return localStorage.getItem(this.OFFLINE_MODE_KEY) === 'true';
+  }
+  
+  public static saveOfflineMode(offlineMode: boolean): void {
+    localStorage.setItem(this.OFFLINE_MODE_KEY, String(offlineMode));
+    console.log(`Offline mode set to: ${offlineMode ? 'Enabled' : 'Disabled'}`);
   }
 }
