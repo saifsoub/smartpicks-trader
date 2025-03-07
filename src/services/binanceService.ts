@@ -42,6 +42,11 @@ class BinanceService {
     
     const permissions = StorageManager.loadApiPermissions();
     this.accountService.setApiPermissions(permissions.read, permissions.trading);
+    
+    // Check server time difference on startup
+    this.apiClient.checkServerTimeDifference().catch(err => {
+      console.warn("Failed to check server time:", err);
+    });
   }
 
   public hasCredentials(): boolean {
@@ -56,10 +61,17 @@ class BinanceService {
       this.accountService.setLastConnectionError(null);
       this.balanceService.resetCache(); // Clear cache when credentials change
       
+      // After saving credentials, immediately test the connection
+      // This helps users get feedback right away
+      this.logManager.addTradingLog("API credentials updated, testing connection...", 'info');
+      
       setTimeout(() => {
         this.testConnection().then(success => {
           if (success) {
+            this.logManager.addTradingLog("Successfully connected with new credentials", 'success');
             this.getAccountBalance(true);
+          } else {
+            this.logManager.addTradingLog("Connection test with new credentials failed", 'error');
           }
         });
       }, 500);
@@ -67,6 +79,7 @@ class BinanceService {
       return success;
     } catch (error) {
       console.error('Failed to save credentials:', error);
+      this.logManager.addTradingLog(`Failed to save credentials: ${error instanceof Error ? error.message : String(error)}`, 'error');
       return false;
     }
   }
@@ -128,6 +141,17 @@ class BinanceService {
     const result = await this.connectionService.testConnection();
     if (result) {
       this.balanceService.resetCache();
+      // Store the successful connection
+      localStorage.setItem('lastSuccessfulConnection', Date.now().toString());
+    } else {
+      // Check when was the last successful connection
+      const lastConnection = localStorage.getItem('lastSuccessfulConnection');
+      if (lastConnection) {
+        const hoursSinceLastConnection = (Date.now() - parseInt(lastConnection)) / (1000 * 60 * 60);
+        if (hoursSinceLastConnection > 24) {
+          toast.warning("No successful connection in over 24 hours. Consider updating your API keys or checking network.");
+        }
+      }
     }
     return result;
   }
