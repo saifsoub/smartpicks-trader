@@ -4,6 +4,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Wifi, WifiOff, RefreshCw, CloudOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import binanceService from '@/services/binanceService';
+import { toast } from "sonner";
 
 export const NetworkStatusAlert = () => {
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
@@ -17,18 +18,19 @@ export const NetworkStatusAlert = () => {
     try {
       setIsCheckingConnection(true);
       
-      // Test connectivity to multiple endpoints for better accuracy
+      // Test connectivity to multiple reliable endpoints for better accuracy
       const endpoints = [
-        'https://www.google.com/generate_204',
         'https://www.cloudflare.com/cdn-cgi/trace',
-        'https://httpbin.org/status/200'
+        'https://www.google.com/generate_204',
+        'https://httpbin.org/status/200',
+        'https://1.1.1.1/cdn-cgi/trace'
       ];
       
       // Try each endpoint with a proper timeout
       for (const endpoint of endpoints) {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 3000);
+          const timeoutId = setTimeout(() => controller.abort(), 5000); // Increased timeout
           
           const response = await fetch(endpoint, {
             method: 'HEAD',
@@ -40,22 +42,25 @@ export const NetworkStatusAlert = () => {
           clearTimeout(timeoutId);
           
           if (response.ok) {
+            console.log(`Connectivity confirmed via ${endpoint}`);
             setIsCheckingConnection(false);
             return true; // We have connectivity
           }
-        } catch {
+        } catch (error) {
+          console.log(`Endpoint ${endpoint} check failed:`, error);
           // Try next endpoint
           continue;
         }
       }
       
       // As a last resort, check Binance specific connectivity
+      // Only do this if we've already tried other endpoints and failed
       if (navigator.onLine) {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 3000);
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
           
-          const response = await fetch('https://api.binance.com/api/v3/time', {
+          const response = await fetch('https://api.binance.com/api/v3/ping', {
             method: 'HEAD',
             cache: 'no-cache',
             headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
@@ -65,60 +70,83 @@ export const NetworkStatusAlert = () => {
           clearTimeout(timeoutId);
           
           if (response.ok) {
+            console.log("Connectivity confirmed via Binance API");
             setIsCheckingConnection(false);
-            return true; // We have Binance connectivity
+            return true;
           }
-        } catch {
-          // Binance-specific check failed
+        } catch (error) {
+          console.log("Binance API check failed:", error);
         }
       }
       
       // All endpoints failed
       setIsCheckingConnection(false);
+      console.log("All connectivity checks failed");
       return false;
-    } catch {
+    } catch (error) {
+      console.error("Error checking connectivity:", error);
       setIsCheckingConnection(false);
       return false;
     }
   }, []);
   
+  // Make sure we react to browser online/offline events
   useEffect(() => {
+    // Wait a moment before responding to online/offline events
+    // to avoid false positives
     const handleOnline = () => {
-      setIsOnline(true);
-      // Don't immediately hide when coming back online - verify first
-      checkRealConnectivity().then(hasRealConnectivity => {
-        if (hasRealConnectivity) {
-          setIsVisible(false);
-          setConnectionAttempts(0);
-        }
-      });
+      console.log("Browser reports online status");
+      // Don't immediately update - verify first after a small delay
+      setTimeout(() => {
+        checkRealConnectivity().then(hasRealConnectivity => {
+          if (hasRealConnectivity) {
+            setIsOnline(true);
+            setIsVisible(false);
+            setConnectionAttempts(0);
+            console.log("Connectivity confirmed after online event");
+          } else {
+            console.log("Browser reports online but connectivity check failed");
+          }
+        });
+      }, 1000);
     };
     
     const handleOffline = () => {
-      setIsOnline(false);
-      // Don't immediately show alert - double check first
-      checkRealConnectivity().then(hasRealConnectivity => {
-        if (!hasRealConnectivity) {
-          setIsVisible(true);
-        }
-      });
+      console.log("Browser reports offline status");
+      // Don't immediately update - verify first after a small delay
+      setTimeout(() => {
+        checkRealConnectivity().then(hasRealConnectivity => {
+          if (!hasRealConnectivity) {
+            setIsOnline(false);
+            setIsVisible(true);
+            console.log("Offline status confirmed");
+          } else {
+            console.log("Browser reports offline but connectivity check passed");
+          }
+        });
+      }, 1000);
     };
     
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     
-    // Initial check - but with a longer delay to let the network stabilize
+    // Initial check - with a longer delay to let the network stabilize
+    // and avoid false negatives during page load
     const initialCheckTimer = setTimeout(async () => {
-      // Only run the check if browser reports as offline or we need to verify
-      if (!navigator.onLine) {
-        // Double check with our more reliable method
-        const hasConnectivity = await checkRealConnectivity();
-        if (!hasConnectivity) {
-          setIsVisible(true);
-        }
+      const hasConnectivity = await checkRealConnectivity();
+      
+      if (!hasConnectivity) {
+        setIsOnline(false);
+        setIsVisible(true);
+        console.log("Initial connectivity check failed");
+      } else {
+        setIsOnline(true);
+        setIsVisible(false);
+        console.log("Initial connectivity check passed");
       }
+      
       setInitialCheckDone(true);
-    }, 2000); // Increased to 2 seconds for better stability
+    }, 3000); // Increased to 3 seconds for better stability
     
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -135,33 +163,37 @@ export const NetworkStatusAlert = () => {
     // Clear any existing alerts temporarily during check
     setIsVisible(false);
     
-    // Test internet connection with a slight delay to ensure UI updates
-    setTimeout(async () => {
-      const hasConnectivity = await checkRealConnectivity();
+    console.log("Manual connection check initiated");
+    
+    // Test internet connection
+    const hasConnectivity = await checkRealConnectivity();
+    
+    if (hasConnectivity) {
+      setIsOnline(true);
+      setIsVisible(false);
+      toast.success("Your internet connection is working");
+      console.log("Manual connectivity check passed");
       
-      if (hasConnectivity) {
-        setIsOnline(true);
-        setIsVisible(false);
-        setIsCheckingConnection(false);
-        
-        // If we previously thought we were offline, test Binance connection
-        if (!isOnline) {
-          binanceService.testConnection().catch(() => {
-            // Don't do anything special on error, just let the service handle it
-          });
-        }
-      } else {
-        setIsOnline(false);
-        setIsVisible(true);
-        setIsCheckingConnection(false);
-        
-        // If multiple connection attempts have failed, suggest offline mode
-        if (connectionAttempts >= 2 && !binanceService.isInOfflineMode()) {
-          // Automatically enable offline mode after multiple failed attempts
-          binanceService.setOfflineMode(true);
-        }
+      // If we previously thought we were offline, test Binance connection
+      if (!isOnline) {
+        binanceService.testConnection().catch(() => {
+          // Don't do anything special on error, just let the service handle it
+        });
       }
-    }, 500);
+    } else {
+      setIsOnline(false);
+      setIsVisible(true);
+      toast.error("Internet connectivity issues detected");
+      console.log("Manual connectivity check failed");
+      
+      // If multiple connection attempts have failed, suggest offline mode
+      if (connectionAttempts >= 2 && !binanceService.isInOfflineMode()) {
+        // Automatically enable offline mode after multiple failed attempts
+        binanceService.setOfflineMode(true);
+      }
+    }
+    
+    setIsCheckingConnection(false);
   };
   
   // Enable offline mode
