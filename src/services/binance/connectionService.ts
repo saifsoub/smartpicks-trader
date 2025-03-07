@@ -68,9 +68,9 @@ export class ConnectionService {
         this.accountService.setConnectionStatus('connected');
         this.accountService.setLastConnectionError(null);
         
-        await this.accountService.detectApiPermissions();
+        const permissions = await this.accountService.detectApiPermissions();
         
-        const { read } = this.accountService.getApiPermissions();
+        const { read } = permissions;
         
         if (!read) {
           this.accountService.setLastConnectionError("Connected to API, but your key doesn't have account data access. Please enable 'Enable Reading' permission for your API key on Binance.");

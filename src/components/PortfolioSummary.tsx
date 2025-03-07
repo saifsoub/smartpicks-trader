@@ -89,6 +89,8 @@ const PortfolioSummary: React.FC = () => {
         setLoadError(null);
       }
       
+      await binanceService.testConnection(); // Force a fresh connection test before loading
+      
       const accountInfo = await binanceService.getAccountInfo();
       
       if (!accountInfo || !accountInfo.balances) {
@@ -104,10 +106,26 @@ const PortfolioSummary: React.FC = () => {
         balance => parseFloat(balance.free) > 0 || parseFloat(balance.locked) > 0
       );
       
-      if (!hasRealBalances) {
-        console.warn("Only zero balances received - likely limited API access");
-        setLoadError("Connected to Binance API, but limited account data access. Your API key may have restricted permissions, or you may need to enable proxy mode in settings.");
-        setBalances([]);
+      if (!hasRealBalances && binanceService.getConnectionStatus() === 'connected') {
+        const apiPermissions = binanceService.getApiPermissions();
+        if (!apiPermissions.read) {
+          console.warn("API key doesn't have read permission. Using placeholder balances");
+          setLoadError("Connected to Binance API, but your API key doesn't have permission to read account data. Please update your API key permissions or enable proxy mode in settings.");
+        } else if (!binanceService.getProxyMode()) {
+          console.warn("Direct API access may be restricted. Try enabling proxy mode");
+          setLoadError("Connected to Binance API, but limited account data access. Try enabling proxy mode in settings to access your account data securely.");
+        } else {
+          console.warn("Only zero balances received - connected but no balances found");
+          setLoadError("Connected to Binance API, but no non-zero balances found in your account.");
+        }
+        
+        // Just create some placeholder zero balances for display
+        const placeholderBalances: EnhancedBalance[] = [
+          { asset: 'BTC', free: '0', locked: '0', usdValue: 0, priceChangePercent: '0' },
+          { asset: 'ETH', free: '0', locked: '0', usdValue: 0, priceChangePercent: '0' },
+          { asset: 'USDT', free: '0', locked: '0', usdValue: 0, priceChangePercent: '0' }
+        ];
+        setBalances(placeholderBalances);
         setTotalValue(0);
         return;
       }
