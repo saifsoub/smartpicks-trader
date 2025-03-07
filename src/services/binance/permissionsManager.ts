@@ -11,6 +11,8 @@ export class PermissionsManager {
   private tradingPermission: boolean = false;
   private lastPermissionCheck: number = 0;
   private permissionCheckCooldown: number = 60000; // 1 minute
+  private permissionDetectionAttempts: number = 0;
+  private maxPermissionDetectionAttempts: number = 3;
   
   constructor(apiClient: BinanceApiClient, logManager: LogManager) {
     this.apiClient = apiClient;
@@ -36,12 +38,14 @@ export class PermissionsManager {
 
     // Prevent frequent permission checks
     const now = Date.now();
-    if (now - this.lastPermissionCheck < this.permissionCheckCooldown) {
+    if (now - this.lastPermissionCheck < this.permissionCheckCooldown && 
+        (this.readPermission || this.permissionDetectionAttempts >= this.maxPermissionDetectionAttempts)) {
       console.log("Using cached API permissions to prevent frequent checks");
       return this.getApiPermissions();
     }
     
     this.lastPermissionCheck = now;
+    this.permissionDetectionAttempts++;
     
     try {
       console.log("Detecting API permissions...");
@@ -100,10 +104,22 @@ export class PermissionsManager {
     try {
       console.log("Testing read permission...");
       
+      // First try direct API methods which are more reliable
+      try {
+        const result = await this.testDirectAccountAccess();
+        if (result) {
+          console.log("Read permission confirmed via direct API");
+          return true;
+        }
+      } catch (directError) {
+        console.warn("Direct read permission test failed:", directError);
+      }
+      
+      // Then try proxy methods as fallback
       if (this.apiClient.getProxyMode()) {
         try {
           // First try with proxy
-          const accountResult = await this.apiClient.fetchWithProxy('account', {}, 'GET', true);
+          const accountResult = await this.apiClient.fetchWithProxy('account', { recvWindow: '10000' }, 'GET', true);
           if (accountResult && Array.isArray(accountResult.balances)) {
             console.log("Read permission confirmed via proxy:", accountResult.balances.length, "balances");
             return true;
@@ -122,14 +138,55 @@ export class PermissionsManager {
             console.warn("Alternative proxy endpoint check failed:", altProxyError);
           }
           
-          // Try direct API as fallback
-          return this.testDirectAccountAccess();
+          // Try user data stream as another option
+          try {
+            const userDataResult = await this.apiClient.fetchWithProxy('userDataStream', {}, 'POST', true);
+            if (userDataResult && userDataResult.listenKey) {
+              console.log("Read permission confirmed via user data stream");
+              return true;
+            }
+          } catch (userDataError) {
+            console.warn("User data stream check failed:", userDataError);
+          }
         }
-      } else {
-        // Direct API test
-        return this.testDirectAccountAccess();
       }
       
+      // Try to get open orders - requires read permission but not full account access
+      try {
+        const openOrdersEndpoint = 'https://api.binance.com/api/v3/openOrders';
+        
+        // Get server time first for accurate timestamp
+        const serverTimeResponse = await fetch('https://api.binance.com/api/v3/time');
+        const serverTimeData = await serverTimeResponse.json();
+        const timestamp = serverTimeData.serverTime || Date.now();
+        
+        const queryString = `timestamp=${timestamp}&recvWindow=10000`;
+        const signature = await this.apiClient.generateSignature(queryString);
+        const url = `${openOrdersEndpoint}?${queryString}&signature=${signature}`;
+        
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'X-MBX-APIKEY': this.apiClient.getApiKey()
+          }
+        });
+        
+        if (response.ok) {
+          console.log("Read permission confirmed via open orders endpoint");
+          return true;
+        } else {
+          const errorText = await response.text();
+          if (errorText.includes("API-key has no permission")) {
+            console.warn("API key does not have permission for orders:", errorText);
+            return false;
+          }
+        }
+      } catch (ordersError) {
+        console.warn("Open orders check failed:", ordersError);
+      }
+      
+      // If all above checks fail, assume no read permission
+      console.warn("API key doesn't have read permission or can't verify it");
       return false;
     } catch (error) {
       console.warn("Read permission test error:", error);
@@ -140,8 +197,13 @@ export class PermissionsManager {
   private async testDirectAccountAccess(): Promise<boolean> {
     try {
       const endpoint = 'https://api.binance.com/api/v3/account';
-      const timestamp = Date.now();
-      const queryString = `timestamp=${timestamp}`;
+      
+      // Get server time first for accurate timestamp
+      const serverTimeResponse = await fetch('https://api.binance.com/api/v3/time');
+      const serverTimeData = await serverTimeResponse.json();
+      const timestamp = serverTimeData.serverTime || Date.now();
+      
+      const queryString = `timestamp=${timestamp}&recvWindow=10000`;
       
       const signature = await this.apiClient.generateSignature(queryString);
       const url = `${endpoint}?${queryString}&signature=${signature}`;
@@ -162,6 +224,17 @@ export class PermissionsManager {
       } else {
         const errorText = await response.text();
         console.warn("Direct API account check failed with status:", response.status, errorText);
+        
+        // Special case: If error mentions "no permission" but API key is valid
+        if (errorText.includes("API-key has no permission") && !errorText.includes("invalid API-key")) {
+          // This means the API key is valid but doesn't have account permission
+          // Depending on what other permissions the key has, we might still mark read as true
+          // We'll use a heuristic here: if the status is 400 or 403, likely a permission issue
+          if (response.status === 400 || response.status === 403) {
+            console.log("API key appears valid but with limited permissions");
+            // We'll check other endpoints in the parent method
+          }
+        }
       }
       
       return false;
@@ -175,35 +248,17 @@ export class PermissionsManager {
     try {
       console.log("Testing trading permission...");
       
-      if (this.apiClient.getProxyMode()) {
-        try {
-          // First try order history
-          const orderResult = await this.apiClient.fetchWithProxy('allOrders', { symbol: 'BTCUSDT', limit: '1' }, 'GET', true);
-          if (Array.isArray(orderResult)) {
-            console.log("Trading permission confirmed via proxy (order history)");
-            return true;
-          }
-        } catch (proxyOrderError) {
-          console.warn("Proxy trading check (orders) failed:", proxyOrderError);
-          
-          // Try open orders as fallback
-          try {
-            const openOrdersResult = await this.apiClient.fetchWithProxy('openOrders', {}, 'GET', true);
-            if (Array.isArray(openOrdersResult)) {
-              console.log("Trading permission confirmed via proxy (open orders)");
-              return true;
-            }
-          } catch (openOrdersError) {
-            console.warn("Proxy trading check (open orders) failed:", openOrdersError);
-          }
-        }
-      }
-      
-      // Try direct API method as fallback
+      // First try direct API method which is more reliable
       try {
+        // Try getting open orders - a good test for trading permission
         const endpoint = 'https://api.binance.com/api/v3/openOrders';
-        const timestamp = Date.now();
-        const queryString = `timestamp=${timestamp}`;
+        
+        // Get server time first for accurate timestamp
+        const serverTimeResponse = await fetch('https://api.binance.com/api/v3/time');
+        const serverTimeData = await serverTimeResponse.json();
+        const timestamp = serverTimeData.serverTime || Date.now();
+        
+        const queryString = `timestamp=${timestamp}&recvWindow=10000`;
         
         const signature = await this.apiClient.generateSignature(queryString);
         const url = `${endpoint}?${queryString}&signature=${signature}`;
@@ -233,11 +288,41 @@ export class PermissionsManager {
         console.warn("Direct API trading check failed:", directError);
       }
       
+      // Then try proxy methods as fallback
+      if (this.apiClient.getProxyMode()) {
+        try {
+          // First try order history
+          const orderResult = await this.apiClient.fetchWithProxy('allOrders', { symbol: 'BTCUSDT', limit: '1' }, 'GET', true);
+          if (Array.isArray(orderResult)) {
+            console.log("Trading permission confirmed via proxy (order history)");
+            return true;
+          }
+        } catch (proxyOrderError) {
+          console.warn("Proxy trading check (orders) failed:", proxyOrderError);
+          
+          // Try open orders as fallback
+          try {
+            const openOrdersResult = await this.apiClient.fetchWithProxy('openOrders', {}, 'GET', true);
+            if (Array.isArray(openOrdersResult)) {
+              console.log("Trading permission confirmed via proxy (open orders)");
+              return true;
+            }
+          } catch (openOrdersError) {
+            console.warn("Proxy trading check (open orders) failed:", openOrdersError);
+          }
+        }
+      }
+      
       // Finally, fallback to checking for specific permission key
       try {
         const endpoint = 'https://api.binance.com/api/v3/account';
-        const timestamp = Date.now();
-        const queryString = `timestamp=${timestamp}`;
+        
+        // Get server time first for accurate timestamp
+        const serverTimeResponse = await fetch('https://api.binance.com/api/v3/time');
+        const serverTimeData = await serverTimeResponse.json();
+        const timestamp = serverTimeData.serverTime || Date.now();
+        
+        const queryString = `timestamp=${timestamp}&recvWindow=10000`;
         
         const signature = await this.apiClient.generateSignature(queryString);
         const url = `${endpoint}?${queryString}&signature=${signature}`;

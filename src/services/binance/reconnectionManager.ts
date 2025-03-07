@@ -2,8 +2,8 @@
 import { LogManager } from './logManager';
 
 export class ReconnectionManager {
-  private reconnectDelay: number = 2000; // Reduced initial delay to 2 seconds
-  private maxReconnectAttempts: number = 10; // Increased from 5 to 10 attempts
+  private reconnectDelay: number = 2000; // Initial delay at 2 seconds
+  private maxReconnectAttempts: number = 15; // Increased from 10 to 15 attempts
   private reconnectAttempts: number = 0;
   private reconnectTimer: number | null = null;
   private logManager: LogManager;
@@ -11,6 +11,8 @@ export class ReconnectionManager {
   private backoffFactor: number = 1.5; // Exponential backoff multiplier
   private maxDelay: number = 60000; // Maximum delay cap at 1 minute
   private reconnectInProgress: boolean = false;
+  private lastReconnectAttempt: number = 0;
+  private reconnectCooldown: number = 5000; // 5 second cooldown between reconnection attempts
   
   constructor(logManager: LogManager, onReconnect: () => Promise<boolean>) {
     this.logManager = logManager;
@@ -23,11 +25,20 @@ export class ReconnectionManager {
       return;
     }
     
+    // Check cooldown to prevent too frequent reconnections
+    const now = Date.now();
+    if (now - this.lastReconnectAttempt < this.reconnectCooldown) {
+      console.log(`Reconnection attempt too soon, waiting for cooldown to expire (${Math.round((this.reconnectCooldown - (now - this.lastReconnectAttempt)) / 1000)}s)`);
+      return;
+    }
+    
     if (this.reconnectTimer !== null) {
       window.clearTimeout(this.reconnectTimer);
     }
     
     this.reconnectAttempts++;
+    this.lastReconnectAttempt = now;
+    
     // Use exponential backoff for more reliable reconnection
     const delay = this.calculateBackoffDelay();
     

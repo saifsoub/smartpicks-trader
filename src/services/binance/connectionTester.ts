@@ -9,10 +9,11 @@ export class ConnectionTester {
   private logManager: LogManager;
   private accountService: AccountService;
   private lastConnectionAttempt: number = 0;
-  private connectionCooldown: number = 1000; // Reduced to 1 second to allow more frequent tests
-  private connectionTimeout: number = 20000; // Increased to 20 seconds for slower networks
+  private connectionCooldown: number = 1000; // 1 second cooldown to allow more frequent tests
+  private connectionTimeout: number = 30000; // Increased to 30 seconds for slower networks
   private consecutiveFailures: number = 0;
   private maxConsecutiveFailures: number = 3;
+  private hasReadPermission: boolean = false;
   
   constructor(apiClient: BinanceApiClient, logManager: LogManager, accountService: AccountService) {
     this.apiClient = apiClient;
@@ -82,13 +83,20 @@ export class ConnectionTester {
       // Test 3: Try a signed test if API key/secret are available
       if (this.apiClient.hasCredentials()) {
         try {
+          // First get server time to sync timestamp
           const serverTimeResponse = await fetch('https://api.binance.com/api/v3/time', {
-            cache: 'no-store'
+            cache: 'no-store',
+            signal: AbortSignal.timeout(this.connectionTimeout)
           });
           const serverTimeData = await serverTimeResponse.json();
           
+          if (!serverTimeData.serverTime) {
+            console.warn("Failed to get server time:", serverTimeData);
+            // Continue with local time as fallback
+          }
+          
           const timestamp = serverTimeData.serverTime || Date.now();
-          const queryString = `timestamp=${timestamp}`;
+          const queryString = `timestamp=${timestamp}&recvWindow=10000`;
           const signature = await this.apiClient.generateSignature(queryString);
           
           // Try to check account endpoint directly - this will verify read access
@@ -105,11 +113,24 @@ export class ConnectionTester {
           
           if (accountTestResponse.ok) {
             console.log("Direct API account request test successful");
-            // If we can access account data, we have all the required permissions
-            return true;
+            const accountData = await accountTestResponse.json();
+            
+            if (accountData && Array.isArray(accountData.balances)) {
+              this.hasReadPermission = true;
+              console.log("Account data access confirmed:", accountData.balances.length, "assets found");
+              // If we can access account data, we have read permissions
+              return true;
+            }
           } else {
             const errorText = await accountTestResponse.text();
             console.warn("Direct API account test failed:", errorText);
+            
+            // Check if error is permission related
+            if (errorText.includes("API-key has no permission")) {
+              console.log("API key permission issue detected:", errorText);
+              // Mark that we have limited permissions, but basic connectivity works
+              this.hasReadPermission = false;
+            }
             
             // Even if account test fails, basic connectivity is working
             return true;
@@ -162,13 +183,28 @@ export class ConnectionTester {
       // Try to access account data - this will verify API permissions
       if (this.apiClient.hasCredentials()) {
         try {
-          const accountResult = await this.apiClient.fetchWithProxy('account', {}, 'GET', false);
+          // Use recvWindow parameter to allow for time differences
+          const accountResult = await this.apiClient.fetchWithProxy('account', { recvWindow: '10000' }, 'GET', false);
           if (accountResult && Array.isArray(accountResult.balances)) {
             console.log("Proxy account data access successful");
+            this.hasReadPermission = true;
           }
         } catch (accountError) {
           console.warn("Proxy account access failed:", accountError);
+          this.hasReadPermission = false;
           // Continue with other tests - basic connection might still work
+        }
+        
+        // Try an alternative endpoint for checking API permissions
+        try {
+          const userDataResult = await this.apiClient.fetchWithProxy('userDataStream', {}, 'POST', false);
+          if (userDataResult && userDataResult.listenKey) {
+            console.log("Proxy user data stream access successful");
+            this.hasReadPermission = true;
+          }
+        } catch (userDataError) {
+          console.warn("Proxy user data stream access failed:", userDataError);
+          // Continue with other tests
         }
       }
       
@@ -188,6 +224,10 @@ export class ConnectionTester {
       
       return false;
     }
+  }
+  
+  public hasReadAccess(): boolean {
+    return this.hasReadPermission;
   }
   
   public updateLastConnectionAttempt(): void {

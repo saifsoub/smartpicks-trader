@@ -16,6 +16,7 @@ export class AccountService {
   private lastAccountInfoTimestamp: number = 0;
   private cachedAccountInfo: { balances: BinanceBalance[] } | null = null;
   private isRetrievingAccountInfo: boolean = false;
+  private readOnlyMode: boolean = false;
   
   constructor(apiClient: BinanceApiClient, logManager: LogManager) {
     this.apiClient = apiClient;
@@ -25,6 +26,9 @@ export class AccountService {
   
   public setApiPermissions(readPermission: boolean, tradingPermission: boolean): void {
     this.permissionsManager.setApiPermissions(readPermission, tradingPermission);
+    // Update read-only mode based on permissions
+    this.readOnlyMode = readPermission && !tradingPermission;
+    console.log(`Account service mode: ${this.readOnlyMode ? 'Read-only' : 'Full access'}`);
   }
   
   public getApiPermissions() {
@@ -32,7 +36,10 @@ export class AccountService {
   }
   
   public async detectApiPermissions() {
-    return this.permissionsManager.detectApiPermissions();
+    const permissions = await this.permissionsManager.detectApiPermissions();
+    // Update read-only mode based on detected permissions
+    this.readOnlyMode = permissions.read && !permissions.trading;
+    return permissions;
   }
   
   public getConnectionStatus(): ConnectionStatus {
@@ -59,6 +66,10 @@ export class AccountService {
   
   public getDefaultTradingPairs(): string[] {
     return [...this.defaultTradingPairs];
+  }
+  
+  public isReadOnlyMode(): boolean {
+    return this.readOnlyMode;
   }
 
   public async getAccountInfo(): Promise<{ balances: BinanceBalance[] }> {
@@ -96,7 +107,8 @@ export class AccountService {
 
       if (this.apiClient.getProxyMode()) {
         try {
-          const result = await this.apiClient.fetchWithProxy('account');
+          // Add recvWindow parameter for better handling of time differences
+          const result = await this.apiClient.fetchWithProxy('account', { recvWindow: '10000' });
           
           if (result && Array.isArray(result.balances)) {
             console.log("Successfully retrieved account balances via proxy");
@@ -107,13 +119,36 @@ export class AccountService {
           }
         } catch (proxyError) {
           console.warn("Failed to fetch account info via proxy:", proxyError);
+          
+          // Try alternative endpoint for account data
+          try {
+            const userData = await this.apiClient.fetchWithProxy('userDataStream', {}, 'POST');
+            if (userData && userData.listenKey) {
+              console.log("Successfully created user data stream, trying snapshot");
+              // If we can create a user data stream, we have API access but might not have
+              // permission for full account data. Generate a placeholder response.
+              const placeholderData = getDefaultAccountInfo(this.defaultTradingPairs);
+              placeholderData.isLimitedAccess = true;
+              this.cachedAccountInfo = placeholderData;
+              this.lastAccountInfoTimestamp = now;
+              this.isRetrievingAccountInfo = false;
+              return placeholderData;
+            }
+          } catch (userDataError) {
+            console.warn("User data stream creation failed:", userDataError);
+          }
         }
       }
       
       try {
         const endpoint = 'https://api.binance.com/api/v3/account';
-        const timestamp = Date.now();
-        const queryString = `timestamp=${timestamp}`;
+        // Get server time first for accurate timestamp
+        const serverTimeResponse = await fetch('https://api.binance.com/api/v3/time');
+        const serverTimeData = await serverTimeResponse.json();
+        const timestamp = serverTimeData.serverTime || Date.now();
+        
+        // Add recvWindow parameter for better handling of time differences
+        const queryString = `timestamp=${timestamp}&recvWindow=10000`;
         
         const signature = await this.apiClient.generateSignature(queryString);
         const url = `${endpoint}?${queryString}&signature=${signature}`;
@@ -137,6 +172,20 @@ export class AccountService {
         } else {
           const errorData = await response.text();
           console.error("API Error:", response.status, errorData);
+          
+          // Check if it's a permissions issue
+          if (errorData.includes("API-key has no permission")) {
+            console.log("API key has limited permissions, using fallback data");
+            // Mark that we have limited permissions and use placeholder data
+            this.readOnlyMode = true;
+            const placeholderData = getDefaultAccountInfo(this.defaultTradingPairs);
+            placeholderData.isLimitedAccess = true;
+            this.cachedAccountInfo = placeholderData;
+            this.lastAccountInfoTimestamp = now;
+            this.isRetrievingAccountInfo = false;
+            return placeholderData;
+          }
+          
           throw new Error(`API Error: ${response.status} - ${errorData}`);
         }
       } catch (directError) {
