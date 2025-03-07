@@ -1230,44 +1230,8 @@ class TradingService {
       }
     }
     
-    // If none in localStorage or if parsing failed, return mock data
-    // In a real implementation, this would come from the bot's actual trading history
-    const mockData: PerformanceData[] = [];
-    const now = new Date();
-    let cumulativeProfit = 0;
-    
-    // Generate sample data for the past 14 periods (days/weeks/months)
-    for (let i = 13; i >= 0; i--) {
-      const date = new Date(now);
-      
-      if (timeframe === 'daily') {
-        date.setDate(date.getDate() - i);
-      } else if (timeframe === 'weekly') {
-        date.setDate(date.getDate() - (i * 7));
-      } else {
-        date.setMonth(date.getMonth() - i);
-      }
-      
-      // Generate some random values for demonstration
-      const profit = Math.random() * 20 - 5; // Between -5 and +15
-      cumulativeProfit += profit;
-      const trades = Math.floor(Math.random() * 8) + 1; // 1-8 trades
-      const winRate = Math.floor(Math.random() * 30) + 40; // 40-70% win rate
-      
-      mockData.push({
-        time: timeframe === 'daily' 
-          ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-          : timeframe === 'weekly'
-            ? `Week ${Math.floor(date.getDate() / 7) + 1}, ${date.toLocaleDateString('en-US', { month: 'short' })}`
-            : date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-        profit,
-        cumulativeProfit,
-        trades,
-        winRate
-      });
-    }
-    
-    return mockData;
+    // Return empty array instead of mock data
+    return [];
   }
   
   private recordPerformance(trade: { symbol: string, profit: number, isWin: boolean }): void {
@@ -1313,10 +1277,6 @@ class TradingService {
     
     // Store in localStorage
     localStorage.setItem('botPerformance_daily', JSON.stringify(dailyHistory));
-    
-    // Similar logic for weekly and monthly, just with different grouping
-    // For brevity, we'll skip the implementation details for weekly/monthly
-    // but the concept is the same
   }
 }
 

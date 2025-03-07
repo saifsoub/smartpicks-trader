@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -111,17 +112,13 @@ const BotStatus: React.FC = () => {
   }, []);
   
   useEffect(() => {
-    const loadStatistics = () => {
-      const savedStats = localStorage.getItem('botStatistics');
-      if (savedStats) {
-        const stats = JSON.parse(savedStats);
-        setTotalTrades(stats.totalTrades || 0);
-        setWinRate(stats.winRate || "0%");
-        setProfitLoss(stats.profitLoss || "$0.00");
-      }
-    };
+    // Reset statistics if not found
+    if (!localStorage.getItem('botStatistics')) {
+      const defaultStats = { totalTrades: 0, winRate: "0%", profitLoss: "$0.00" };
+      localStorage.setItem('botStatistics', JSON.stringify(defaultStats));
+    }
     
-    loadStatistics();
+    loadBotStatistics();
   }, []);
   
   useEffect(() => {
@@ -129,16 +126,24 @@ const BotStatus: React.FC = () => {
     if (statsStr) {
       try {
         const stats = JSON.parse(statsStr);
-        const profitValue = parseFloat(stats.profitLoss.replace('$', ''));
         
-        setMonthlyProgress(Math.min((profitValue / monthlyTarget) * 100, 100));
-        
-        const perfHistory = tradingService.getPerformanceHistory('daily');
-        const todayProfit = perfHistory.length > 0 ? perfHistory[perfHistory.length - 1].profit : 0;
-        setDailyProgress(Math.min((todayProfit / todayTarget) * 100, 100));
-        
-        const winRateNum = parseInt(stats.winRate) || 0;
-        setBotEfficiency((winRateNum * 0.85));
+        // Only update progress bars if bot has made actual trades
+        if (stats.totalTrades > 0) {
+          const profitValue = parseFloat(stats.profitLoss.replace('$', ''));
+          setMonthlyProgress(Math.min((profitValue / monthlyTarget) * 100, 100));
+          
+          const perfHistory = tradingService.getPerformanceHistory('daily');
+          const todayProfit = perfHistory.length > 0 ? perfHistory[perfHistory.length - 1].profit : 0;
+          setDailyProgress(Math.min((todayProfit / todayTarget) * 100, 100));
+          
+          const winRateNum = parseInt(stats.winRate) || 0;
+          setBotEfficiency((winRateNum * 0.85));
+        } else {
+          // Reset progress if no trades
+          setMonthlyProgress(0);
+          setDailyProgress(0);
+          setBotEfficiency(0);
+        }
       } catch (error) {
         console.error('Error parsing bot statistics:', error);
       }
@@ -199,6 +204,9 @@ const BotStatus: React.FC = () => {
     setTotalTrades(0);
     setWinRate("0%");
     setProfitLoss("$0.00");
+    setMonthlyProgress(0);
+    setDailyProgress(0);
+    setBotEfficiency(0);
     toast.success("Bot statistics have been reset");
   };
   
