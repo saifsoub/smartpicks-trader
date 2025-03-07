@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from "react";
 import binanceService from "@/services/binanceService";
 import { toast } from "sonner";
@@ -20,10 +19,36 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
   const [currentPrice, setCurrentPrice] = useState<string | null>(null);
   const [priceChange, setPriceChange] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  // Fix: Change the type from NodeJS.Timeout to number as window.setInterval returns a number
+  const [availableSymbols, setAvailableSymbols] = useState<string[]>([]);
   const refreshIntervalRef = useRef<number | null>(null);
 
-  // Define loadChartData with an optional parameter
+  useEffect(() => {
+    const loadPortfolioSymbols = async () => {
+      try {
+        const account = await binanceService.getAccountInfo();
+        if (account && account.balances) {
+          const activeBalances = account.balances.filter(
+            balance => parseFloat(balance.free) > 0 || parseFloat(balance.locked) > 0
+          );
+          
+          const portfolioSymbols = activeBalances
+            .map(balance => `${balance.asset}USDT`)
+            .filter(pair => pair !== 'USDTUSDT');
+          
+          setAvailableSymbols(portfolioSymbols);
+          
+          if (portfolioSymbols.length > 0 && !portfolioSymbols.includes(symbol)) {
+            setSymbol(portfolioSymbols[0]);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading portfolio symbols:', error);
+      }
+    };
+    
+    loadPortfolioSymbols();
+  }, [symbol]);
+
   const loadChartData = useCallback(async (showToast = true) => {
     try {
       setLoading(true);
@@ -42,7 +67,6 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
         }
       } catch (error) {
         console.error("Failed to load symbol info:", error);
-        // Continue with other data fetching
       }
       
       try {
@@ -52,7 +76,6 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
         }
       } catch (error) {
         console.error("Failed to load prices:", error);
-        // Continue with klines data fetching
       }
       
       const klines = await binanceService.getKlines(symbol, interval);
@@ -82,17 +105,14 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
   useEffect(() => {
     loadChartData();
     
-    // Clear any existing interval
     if (refreshIntervalRef.current) {
       clearInterval(refreshIntervalRef.current);
     }
     
-    // Define the refresh function that calls loadChartData without showing toast
     const refreshData = () => {
       loadChartData(false);
     };
     
-    // Set up the interval - properly using global window.setInterval
     refreshIntervalRef.current = window.setInterval(refreshData, 60000);
     
     return () => {
@@ -120,6 +140,7 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
     priceChange,
     errorMessage,
     loadChartData,
-    formatPrice
+    formatPrice,
+    availableSymbols
   };
 };
