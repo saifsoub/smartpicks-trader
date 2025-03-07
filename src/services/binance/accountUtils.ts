@@ -8,7 +8,7 @@ export const formatBalanceData = (
   
   for (const balance of balances) {
     // Consider even very small balances (some exchanges return very small dust amounts)
-    if (parseFloat(balance.free) > 0.00000001 || parseFloat(balance.locked) > 0.00000001) {
+    if (parseFloat(balance.free) > 0.000000001 || parseFloat(balance.locked) > 0.000000001) {
       balanceMap[balance.asset] = {
         available: balance.free,
         total: (parseFloat(balance.free) + parseFloat(balance.locked)).toString(),
@@ -23,7 +23,7 @@ export const formatBalanceData = (
 };
 
 export const getDefaultAccountInfo = (defaultTradingPairs: string[]): { balances: BinanceBalance[] } => {
-  console.warn("Using default balances as fallback");
+  console.warn("Using default balances as fallback - THIS IS NOT REAL DATA");
   
   // Create some sample balances for testing when API isn't working
   const defaultBalances = [
@@ -46,9 +46,19 @@ export const getDefaultAccountInfo = (defaultTradingPairs: string[]): { balances
 };
 
 export const checkHasRealBalances = (balances: BinanceBalance[]): boolean => {
-  return balances.some(
-    balance => parseFloat(balance.free) > 0.00000001 || parseFloat(balance.locked) > 0.00000001
+  // Check if we have any non-zero balances
+  const hasNonZeroBalance = balances.some(
+    balance => parseFloat(balance.free) > 0.000000001 || parseFloat(balance.locked) > 0.000000001
   );
+  
+  // Also check if this looks like our default data
+  const looksLikeDefaultData = balances.length === 4 && 
+    balances.some(b => b.asset === 'BTC' && b.free === '0.01') &&
+    balances.some(b => b.asset === 'ETH' && b.free === '0.5') &&
+    balances.some(b => b.asset === 'BNB' && b.free === '2') &&
+    balances.some(b => b.asset === 'USDT' && b.free === '100');
+  
+  return hasNonZeroBalance && !looksLikeDefaultData;
 };
 
 export const logBalanceSummary = (balances: Record<string, BalanceInfo>): void => {
@@ -61,4 +71,13 @@ export const logBalanceSummary = (balances: Record<string, BalanceInfo>): void =
   Object.keys(balances).forEach(asset => {
     console.log(`${asset}: ${balances[asset].total} (${balances[asset].usdValue} USD)`);
   });
+};
+
+export const isDefaultBalance = (balances: BinanceBalance[]): boolean => {
+  // Check if this matches our default data pattern
+  return balances.length >= 4 && 
+    balances.some(b => b.asset === 'BTC' && b.free === '0.01') &&
+    balances.some(b => b.asset === 'ETH' && b.free === '0.5') &&
+    balances.some(b => b.asset === 'BNB' && b.free === '2') &&
+    balances.some(b => b.asset === 'USDT' && b.free === '100');
 };

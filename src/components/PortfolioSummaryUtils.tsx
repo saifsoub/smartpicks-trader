@@ -1,16 +1,19 @@
 
 import { BinanceBalance, BalanceInfo } from "@/services/binance/types";
+import { isDefaultBalance } from "@/services/binance/accountUtils";
 
 interface EnhancedBalance extends BinanceBalance {
   usdValue: number;
   priceChangePercent: string;
   aiInsight?: string;
   potentialReturn?: string;
+  isDefault?: boolean;
 }
 
 export interface ProcessedPortfolioData {
   balances: EnhancedBalance[];
   totalValue: number;
+  isDefault: boolean;
 }
 
 export const processPortfolioData = (
@@ -22,17 +25,25 @@ export const processPortfolioData = (
     console.log("Processing portfolio data...");
     console.log("Account info:", accountInfo);
     
+    // Check if we're using default data
+    const isDefaultData = accountInfo && accountInfo.balances && 
+      isDefaultBalance(accountInfo.balances);
+    
+    if (isDefaultData) {
+      console.warn("DETECTED DEFAULT DATA IN PORTFOLIO PROCESSING");
+    }
+    
     // Safety check for balances
     if (!accountInfo || !accountInfo.balances || !Array.isArray(accountInfo.balances)) {
       console.error("Invalid account info format:", accountInfo);
-      return { balances: [], totalValue: 0 };
+      return { balances: [], totalValue: 0, isDefault: true };
     }
     
     const significantBalances = accountInfo.balances
       .filter((balance: BinanceBalance) => {
         const freeAmount = parseFloat(balance.free);
         const lockedAmount = parseFloat(balance.locked);
-        const hasBalance = freeAmount > 0.00000001 || lockedAmount > 0.00000001;
+        const hasBalance = freeAmount > 0.000000001 || lockedAmount > 0.000000001;
         return hasBalance;
       })
       .map((balance: BinanceBalance) => {
@@ -60,7 +71,8 @@ export const processPortfolioData = (
         return {
           ...balance,
           usdValue,
-          priceChangePercent
+          priceChangePercent,
+          isDefault: isDefaultData
         };
       })
       .sort((a: EnhancedBalance, b: EnhancedBalance) => b.usdValue - a.usdValue);
@@ -71,16 +83,19 @@ export const processPortfolioData = (
     );
     
     console.log(`Processed ${significantBalances.length} balances with total value: ${portfolioTotal}`);
+    console.log(`Is default data: ${isDefaultData}`);
     
     return {
       balances: significantBalances,
-      totalValue: portfolioTotal
+      totalValue: portfolioTotal,
+      isDefault: isDefaultData
     };
   } catch (err) {
     console.error("Error processing portfolio data:", err);
     return {
       balances: [],
-      totalValue: 0
+      totalValue: 0,
+      isDefault: true
     };
   }
 };

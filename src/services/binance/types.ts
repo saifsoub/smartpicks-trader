@@ -9,6 +9,7 @@ export interface BalanceInfo {
   total: string;
   usdValue: number;
   rawAsset?: string; // The original asset name from Binance
+  isDefault?: boolean; // Flag to indicate if this is default/demo data
 }
 
 export interface BinanceBalance {
@@ -43,4 +44,5 @@ export interface AccountInfoResponse {
   canDeposit?: boolean;
   canWithdraw?: boolean;
   updateTime?: number;
+  isDefault?: boolean; // Flag to indicate if this is default/demo data
 }
