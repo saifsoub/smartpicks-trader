@@ -45,4 +45,5 @@ export interface AccountInfoResponse {
   canWithdraw?: boolean;
   updateTime?: number;
   isDefault?: boolean; // Flag to indicate if this is default/demo data
+  isLimitedAccess?: boolean; // Flag to indicate limited API access permissions
 }
