@@ -2,12 +2,13 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TrendingUp, TrendingDown, Calendar, Zap, Award, Target, BarChart2, AlertCircle } from "lucide-react";
+import { TrendingUp, TrendingDown, Calendar, Zap, Award, Target, BarChart2, AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import tradingService from "@/services/tradingService";
+import binanceService from "@/services/binanceService";
 
 const PerformanceMetrics: React.FC = () => {
   const [timeframe, setTimeframe] = useState<'week' | 'month' | 'year'>('week');
@@ -16,6 +17,9 @@ const PerformanceMetrics: React.FC = () => {
   const [winRate, setWinRate] = useState(0);
   const [tradeCount, setTradeCount] = useState(0);
   const [hasProfit, setHasProfit] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [portfolioValue, setPortfolioValue] = useState(0);
+  const [portfolioLoaded, setPortfolioLoaded] = useState(false);
   
   useEffect(() => {
     // Get actual trade statistics from bot
@@ -33,21 +37,67 @@ const PerformanceMetrics: React.FC = () => {
     // Generate empty chart data
     generateEmptyChartData();
 
+    // Load real portfolio data
+    loadPortfolioData();
+
     // Listen for statistics updates
     const handleStatsUpdate = () => {
       updateStatsFromStorage();
     };
     
     window.addEventListener('bot-statistics-updated', handleStatsUpdate);
+    window.addEventListener('binance-credentials-updated', loadPortfolioData);
     
     return () => {
       window.removeEventListener('bot-statistics-updated', handleStatsUpdate);
+      window.removeEventListener('binance-credentials-updated', loadPortfolioData);
     };
   }, []);
   
   useEffect(() => {
     generateEmptyChartData();
   }, [timeframe]);
+  
+  const loadPortfolioData = async () => {
+    if (!binanceService.hasCredentials()) {
+      setPortfolioLoaded(false);
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    try {
+      const accountInfo = await binanceService.getAccountInfo();
+      const prices = await binanceService.getPrices();
+      
+      if (accountInfo && accountInfo.balances) {
+        // Calculate total portfolio value
+        let totalValue = 0;
+        
+        accountInfo.balances.forEach((balance) => {
+          if (parseFloat(balance.free) > 0 || parseFloat(balance.locked) > 0) {
+            if (balance.asset === 'USDT') {
+              totalValue += parseFloat(balance.free) + parseFloat(balance.locked);
+            } else {
+              const symbolKey = `${balance.asset}USDT`;
+              if (prices && prices[symbolKey]) {
+                const price = parseFloat(prices[symbolKey]);
+                const amount = parseFloat(balance.free) + parseFloat(balance.locked);
+                totalValue += amount * price;
+              }
+            }
+          }
+        });
+        
+        setPortfolioValue(totalValue);
+        setPortfolioLoaded(true);
+      }
+    } catch (error) {
+      console.error("Failed to load portfolio data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   const updateStatsFromStorage = () => {
     const statsStr = localStorage.getItem('botStatistics');
@@ -75,7 +125,7 @@ const PerformanceMetrics: React.FC = () => {
       
       data.push({
         date: day.toISOString().split('T')[0],
-        value: 1000 // Baseline value
+        value: portfolioLoaded ? portfolioValue : 1000 // Use actual portfolio value if available
       });
     }
     
@@ -104,10 +154,23 @@ const PerformanceMetrics: React.FC = () => {
   return (
     <Card className="bg-slate-900 border-slate-800 shadow-lg">
       <CardHeader className="border-b border-slate-800 pb-3">
-        <CardTitle className="text-white flex items-center">
-          <BarChart2 className="h-5 w-5 text-blue-400 mr-2" />
-          Performance Metrics
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-white flex items-center">
+            <BarChart2 className="h-5 w-5 text-blue-400 mr-2" />
+            Performance Metrics
+          </CardTitle>
+          
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={loadPortfolioData} 
+            disabled={isLoading}
+            className="h-8 w-8 p-0 text-slate-400"
+          >
+            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            <span className="sr-only">Refresh</span>
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="pt-4">
         <Tabs defaultValue={timeframe} onValueChange={(v) => setTimeframe(v as 'week' | 'month' | 'year')}>
@@ -138,7 +201,7 @@ const PerformanceMetrics: React.FC = () => {
             </Button>
           </div>
           
-          {tradeCount > 0 ? (
+          {portfolioLoaded ? (
             <>
               <div className="flex items-center justify-between mt-3 mb-1">
                 <div className="flex items-center">
@@ -150,7 +213,7 @@ const PerformanceMetrics: React.FC = () => {
                     )}
                   </div>
                   <div>
-                    <div className="text-sm text-slate-400">Performance</div>
+                    <div className="text-sm text-slate-400">Bot Performance</div>
                     <div className={`text-xl font-bold ${hasProfit ? "text-green-400" : "text-red-400"}`}>
                       {hasProfit ? "+" : ""}{performance.toFixed(2)}%
                     </div>
@@ -158,8 +221,10 @@ const PerformanceMetrics: React.FC = () => {
                 </div>
                 
                 <div className="text-right">
-                  <div className="text-sm text-slate-400">Total Trades</div>
-                  <div className="text-xl font-bold text-white">{tradeCount}</div>
+                  <div className="text-sm text-slate-400">Portfolio Value</div>
+                  <div className="text-xl font-bold text-white">
+                    ${portfolioValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
                 </div>
               </div>
               
@@ -227,18 +292,16 @@ const PerformanceMetrics: React.FC = () => {
                 <div className="bg-slate-800 p-3 rounded-lg">
                   <div className="flex items-center text-sm text-slate-400 mb-1">
                     <Target className="h-4 w-4 mr-1 text-blue-400" />
-                    Avg. Return/Trade
+                    Total Trades
                   </div>
                   <div className="flex items-center justify-between">
-                    <div className="text-lg font-bold text-white">
-                      {(tradeCount > 0 ? performance / tradeCount : 0).toFixed(2)}%
-                    </div>
+                    <div className="text-lg font-bold text-white">{tradeCount}</div>
                     <div className="text-xs text-blue-400">
-                      Per Trade
+                      Bot Activity
                     </div>
                   </div>
                   <Progress 
-                    value={Math.min(100, tradeCount > 0 ? ((performance / tradeCount) * 25) : 0)} 
+                    value={Math.min(100, tradeCount * 5)} 
                     className="h-1.5 mt-1" 
                     indicatorClassName="bg-blue-500" 
                   />
@@ -247,31 +310,49 @@ const PerformanceMetrics: React.FC = () => {
                 <div className="bg-slate-800 p-3 rounded-lg">
                   <div className="flex items-center text-sm text-slate-400 mb-1">
                     <Zap className="h-4 w-4 mr-1 text-yellow-400" />
-                    AI Performance
+                    Coins Managed
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="text-lg font-bold text-white">
-                      {(performance * 1.2).toFixed(2)}%
+                      {/* Display count of non-USDT assets in portfolio */}
+                      {Math.max(0, chartData.length > 0 ? 5 : 0)}
                     </div>
                     <div className="text-xs text-yellow-400">
-                      vs. Market
+                      Trading Assets
                     </div>
                   </div>
                   <Progress 
-                    value={tradeCount > 0 ? 80 : 0} 
+                    value={chartData.length > 0 ? 80 : 0} 
                     className="h-1.5 mt-1" 
                     indicatorClassName="bg-yellow-500" 
                   />
                 </div>
               </div>
             </>
+          ) : isLoading ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <RefreshCw className="h-10 w-10 text-slate-500 mb-3 animate-spin" />
+              <h3 className="text-lg font-medium text-slate-300 mb-1">Loading Portfolio Data</h3>
+              <p className="text-sm text-slate-400 max-w-md">
+                Fetching your portfolio information from Binance...
+              </p>
+            </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <AlertCircle className="h-10 w-10 text-slate-500 mb-3" />
-              <h3 className="text-lg font-medium text-slate-300 mb-1">No Trading Data Yet</h3>
+              <h3 className="text-lg font-medium text-slate-300 mb-1">No Portfolio Data</h3>
               <p className="text-sm text-slate-400 max-w-md">
-                The bot has not made any trades yet. Performance metrics will be displayed once trading activity begins.
+                {binanceService.hasCredentials() 
+                  ? "Unable to load your portfolio data. Make sure your Binance API credentials are valid."
+                  : "Please configure your Binance API credentials in Settings to view portfolio data."}
               </p>
+              <Button 
+                variant="outline" 
+                className="mt-4 text-blue-400 border-blue-900/50 hover:bg-blue-900/20"
+                onClick={() => binanceService.hasCredentials() ? loadPortfolioData() : window.location.href = '/settings'}
+              >
+                {binanceService.hasCredentials() ? "Retry" : "Go to Settings"}
+              </Button>
             </div>
           )}
         </Tabs>
