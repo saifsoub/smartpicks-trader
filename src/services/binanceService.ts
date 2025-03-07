@@ -385,20 +385,21 @@ class BinanceService {
         }
       }
       
+      let accountResult = null;
+      
       if (this.getProxyMode()) {
         try {
-          const result = await this.fetchWithProxy('account');
-          console.log("Account info via proxy:", result);
+          accountResult = await this.fetchWithProxy('account');
+          console.log("Account info via proxy:", accountResult);
           
-          if (result && Array.isArray(result.balances)) {
+          if (accountResult && Array.isArray(accountResult.balances)) {
             this.connectionStatus = 'connected';
             this.addTradingLog("Successfully retrieved account balances", 'success');
-            return { balances: result.balances };
+            return { balances: accountResult.balances };
           }
           
           console.warn('Proxy returned invalid response, trying direct API as fallback');
-          console.log('Trying to fetch account info directly as fallback...');
-          continue;
+          accountResult = null;
         } catch (error) {
           console.error('Error fetching account info via proxy:', error);
           this.addTradingLog("Failed to fetch account info via proxy: " + (error instanceof Error ? error.message : String(error)), 'error');
@@ -411,42 +412,46 @@ class BinanceService {
         }
       }
       
-      try {
-        const timestamp = Date.now();
-        const publicEndpoint = 'https://api.binance.com/api/v3/ticker/price';
-        
-        console.log("Attempting to fetch public data directly to verify API access");
-        const response = await fetch(publicEndpoint);
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
-        }
-        
-        const tickerData = await response.json();
-        if (Array.isArray(tickerData) && tickerData.length > 0) {
-          this.connectionStatus = 'connected';
-          this.lastConnectionError = "API connection successful, but your browser cannot fetch account data directly due to security restrictions. Enable proxy mode in settings.";
-          this.addTradingLog("Account data requires proxy mode - enable it in settings.", 'info');
+      if (!accountResult) {
+        try {
+          const timestamp = Date.now();
+          const publicEndpoint = 'https://api.binance.com/api/v3/ticker/price';
           
-          return { 
-            balances: this.defaultTradingPairs.map(pair => {
-              const asset = pair.replace('USDT', '');
-              return { asset, free: '0', locked: '0' };
-            }).concat({ asset: 'USDT', free: '0', locked: '0' })
-          };
-        }
-        
-        throw new Error('Invalid response from Binance API');
-      } catch (directError) {
-        console.error('Error fetching account info directly:', directError);
-        this.connectionStatus = 'disconnected';
-        
-        if (!this.getProxyMode()) {
-          throw new Error('Failed to retrieve account data. Enable proxy mode in settings to access your account data securely.');
-        } else {
-          throw new Error('Failed to retrieve account data from Binance. Verify your API key has "Enable Reading" permission in your Binance API settings.');
+          console.log("Attempting to fetch public data directly to verify API access");
+          const response = await fetch(publicEndpoint);
+          
+          if (!response.ok) {
+            throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+          }
+          
+          const tickerData = await response.json();
+          if (Array.isArray(tickerData) && tickerData.length > 0) {
+            this.connectionStatus = 'connected';
+            this.lastConnectionError = "API connection successful, but your browser cannot fetch account data directly due to security restrictions. Enable proxy mode in settings.";
+            this.addTradingLog("Account data requires proxy mode - enable it in settings.", 'info');
+            
+            return { 
+              balances: this.defaultTradingPairs.map(pair => {
+                const asset = pair.replace('USDT', '');
+                return { asset, free: '0', locked: '0' };
+              }).concat({ asset: 'USDT', free: '0', locked: '0' })
+            };
+          }
+          
+          throw new Error('Invalid response from Binance API');
+        } catch (directError) {
+          console.error('Error fetching account info directly:', directError);
+          this.connectionStatus = 'disconnected';
+          
+          if (!this.getProxyMode()) {
+            throw new Error('Failed to retrieve account data. Enable proxy mode in settings to access your account data securely.');
+          } else {
+            throw new Error('Failed to retrieve account data from Binance. Verify your API key has "Enable Reading" permission in your Binance API settings.');
+          }
         }
       }
+      
+      throw new Error('Failed to retrieve account data. Please check your connection and API key permissions.');
     } catch (error) {
       console.error('Error fetching account info:', error);
       this.addTradingLog("Failed to fetch account info: " + (error instanceof Error ? error.message : String(error)), 'error');
