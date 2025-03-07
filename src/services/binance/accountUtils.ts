@@ -1,8 +1,9 @@
 
-import { BalanceInfo, BinanceBalance } from './types';
+import { BalanceInfo, BinanceBalance, AccountInfoResponse } from './types';
 
 export const formatBalanceData = (
-  balances: BinanceBalance[]
+  balances: BinanceBalance[],
+  isDefaultData: boolean = false
 ): Record<string, BalanceInfo> => {
   const balanceMap: Record<string, BalanceInfo> = {};
   
@@ -13,16 +14,17 @@ export const formatBalanceData = (
         available: balance.free,
         total: (parseFloat(balance.free) + parseFloat(balance.locked)).toString(),
         usdValue: 0, // Will be filled in by binanceService
-        rawAsset: balance.asset
+        rawAsset: balance.asset,
+        isDefault: isDefaultData
       };
     }
   }
   
-  console.log(`Formatted ${Object.keys(balanceMap).length} non-zero balances`);
+  console.log(`Formatted ${Object.keys(balanceMap).length} non-zero balances (isDefault: ${isDefaultData})`);
   return balanceMap;
 };
 
-export const getDefaultAccountInfo = (defaultTradingPairs: string[]): { balances: BinanceBalance[] } => {
+export const getDefaultAccountInfo = (defaultTradingPairs: string[]): AccountInfoResponse => {
   console.warn("Using default balances as fallback - THIS IS NOT REAL DATA");
   
   // Create some sample balances for testing when API isn't working
@@ -42,7 +44,10 @@ export const getDefaultAccountInfo = (defaultTradingPairs: string[]): { balances
     }
   });
   
-  return { balances: defaultBalances };
+  return { 
+    balances: defaultBalances,
+    isDefault: true 
+  };
 };
 
 export const checkHasRealBalances = (balances: BinanceBalance[]): boolean => {
@@ -52,11 +57,7 @@ export const checkHasRealBalances = (balances: BinanceBalance[]): boolean => {
   );
   
   // Also check if this looks like our default data
-  const looksLikeDefaultData = balances.length === 4 && 
-    balances.some(b => b.asset === 'BTC' && b.free === '0.01') &&
-    balances.some(b => b.asset === 'ETH' && b.free === '0.5') &&
-    balances.some(b => b.asset === 'BNB' && b.free === '2') &&
-    balances.some(b => b.asset === 'USDT' && b.free === '100');
+  const looksLikeDefaultData = isDefaultBalance(balances);
   
   return hasNonZeroBalance && !looksLikeDefaultData;
 };
@@ -67,9 +68,15 @@ export const logBalanceSummary = (balances: Record<string, BalanceInfo>): void =
     return;
   }
   
+  const isDefaultData = Object.values(balances).some(balance => balance.isDefault);
+  
+  if (isDefaultData) {
+    console.warn("USING DEFAULT BALANCE DATA - NOT REAL BALANCES");
+  }
+  
   console.log(`Found ${Object.keys(balances).length} assets with non-zero balances:`);
   Object.keys(balances).forEach(asset => {
-    console.log(`${asset}: ${balances[asset].total} (${balances[asset].usdValue} USD)`);
+    console.log(`${asset}: ${balances[asset].total} (${balances[asset].usdValue} USD) ${balances[asset].isDefault ? '[DEFAULT DATA]' : ''}`);
   });
 };
 

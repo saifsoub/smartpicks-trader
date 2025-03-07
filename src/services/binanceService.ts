@@ -1,3 +1,4 @@
+
 import { BinanceApiClient } from './binance/apiClient';
 import { StorageManager } from './binance/storageManager';
 import { LogManager } from './binance/logManager';
@@ -152,8 +153,11 @@ class BinanceService {
       const accountInfo = await this.accountService.getAccountInfo();
       
       if (accountInfo && accountInfo.balances) {
-        accountInfo.isDefault = isDefaultBalance(accountInfo.balances);
-        if (accountInfo.isDefault) {
+        const isDefaultData = isDefaultBalance(accountInfo.balances);
+        // Add the isDefault flag to the account info (TypeScript now knows this is valid)
+        accountInfo.isDefault = isDefaultData;
+        
+        if (isDefaultData) {
           console.warn("WARNING: Using default account data, not real balances");
         }
       }
