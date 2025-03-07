@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -64,14 +63,18 @@ const PortfolioSummary: React.FC = () => {
       const testResult = await binanceService.testConnection();
       setDebugInfo(`Connection test result: ${testResult}`);
       
-      setIsConnected(true);
-      await loadPortfolio();
+      if (testResult) {
+        setIsConnected(true);
+        await loadPortfolio();
+      } else {
+        setIsConnected(false);
+        setLoadError("Connection test failed. Please check your API credentials and connection.");
+      }
     } catch (error) {
       console.error("Failed to test connection:", error);
       setDebugInfo(`Connection test error: ${error instanceof Error ? error.message : String(error)}`);
-      
-      setIsConnected(true);
-      await loadPortfolio();
+      setIsConnected(false);
+      setLoadError("Connection test failed with an error. Please check your API credentials.");
     } finally {
       setIsLoading(false);
     }
@@ -109,7 +112,7 @@ const PortfolioSummary: React.FC = () => {
       console.error("Failed to load portfolio data:", error);
       setLoadError(error instanceof Error ? error.message : "Failed to load portfolio data");
       setDebugInfo(`Error loading portfolio: ${error instanceof Error ? error.message : String(error)}`);
-      toast.error("Failed to load portfolio data. Please check your API connection.");
+      toast.error(error instanceof Error ? error.message : "Failed to load portfolio data");
       setBalances([]);
       setTotalValue(0);
     } finally {

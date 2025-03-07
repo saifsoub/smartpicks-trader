@@ -19,6 +19,7 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
   const [loading, setLoading] = useState(false);
   const [currentPrice, setCurrentPrice] = useState<string | null>(null);
   const [priceChange, setPriceChange] = useState<number | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   // Fix: Change the type from NodeJS.Timeout to number as window.setInterval returns a number
   const refreshIntervalRef = useRef<number | null>(null);
 
@@ -26,20 +27,32 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
   const loadChartData = useCallback(async (showToast = true) => {
     try {
       setLoading(true);
+      setErrorMessage(null);
+      
       if (showToast) {
         toast.info(`Loading chart data for ${symbol}...`);
       }
       
-      const symbols = await binanceService.getSymbols();
-      const symbolInfo = symbols.find((s) => s.symbol === symbol);
-      
-      if (symbolInfo) {
-        setPriceChange(parseFloat(symbolInfo.priceChangePercent));
+      try {
+        const symbols = await binanceService.getSymbols();
+        const symbolInfo = symbols.find((s) => s.symbol === symbol);
+        
+        if (symbolInfo) {
+          setPriceChange(parseFloat(symbolInfo.priceChangePercent));
+        }
+      } catch (error) {
+        console.error("Failed to load symbol info:", error);
+        // Continue with other data fetching
       }
       
-      const prices = await binanceService.getPrices();
-      if (prices && prices[symbol]) {
-        setCurrentPrice(prices[symbol]);
+      try {
+        const prices = await binanceService.getPrices();
+        if (prices && prices[symbol]) {
+          setCurrentPrice(prices[symbol]);
+        }
+      } catch (error) {
+        console.error("Failed to load prices:", error);
+        // Continue with klines data fetching
       }
       
       const klines = await binanceService.getKlines(symbol, interval);
@@ -59,7 +72,8 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
       setChartData(formattedData);
     } catch (error) {
       console.error("Failed to load chart data:", error);
-      toast.error("Failed to load chart data");
+      setErrorMessage(error instanceof Error ? error.message : "Failed to load chart data");
+      toast.error(error instanceof Error ? error.message : "Failed to load chart data");
     } finally {
       setLoading(false);
     }
@@ -104,6 +118,7 @@ export const useChartData = (initialSymbol: string, initialInterval: string) => 
     loading,
     currentPrice,
     priceChange,
+    errorMessage,
     loadChartData,
     formatPrice
   };

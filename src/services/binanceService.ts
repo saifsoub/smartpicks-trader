@@ -1,4 +1,3 @@
-
 export interface BinanceCredentials {
   apiKey: string;
   secretKey: string;
@@ -216,51 +215,17 @@ class BinanceService {
         } catch (error) {
           console.error('Error fetching account info via proxy:', error);
           this.addTradingLog("Failed to fetch account info via proxy: " + (error instanceof Error ? error.message : String(error)), 'error');
-          
-          // Fallback to more realistic mock data
-          return {
-            balances: [
-              { asset: "BTC", free: "0.00125000", locked: "0.00000000" },
-              { asset: "ETH", free: "0.05230000", locked: "0.00000000" },
-              { asset: "USDT", free: "125.50000000", locked: "0.00000000" },
-              { asset: "BNB", free: "0.00850000", locked: "0.00000000" },
-              { asset: "SOL", free: "1.20000000", locked: "0.00000000" },
-              { asset: "ADA", free: "120.00000000", locked: "0.00000000" },
-              { asset: "DOT", free: "4.75000000", locked: "0.00000000" },
-              { asset: "XRP", free: "75.50000000", locked: "0.00000000" },
-              { asset: "MATIC", free: "35.25000000", locked: "0.00000000" }
-            ]
-          };
+          throw new Error('Could not fetch real account data. Please check your API credentials and connection.');
         }
       } else {
-        // CORS will block this direct call in the browser but we provide mock data
-        return {
-          balances: [
-            { asset: "BTC", free: "0.00125000", locked: "0.00000000" },
-            { asset: "ETH", free: "0.05230000", locked: "0.00000000" },
-            { asset: "USDT", free: "125.50000000", locked: "0.00000000" },
-            { asset: "BNB", free: "0.00850000", locked: "0.00000000" },
-            { asset: "SOL", free: "1.20000000", locked: "0.00000000" },
-            { asset: "ADA", free: "120.00000000", locked: "0.00000000" },
-            { asset: "DOT", free: "4.75000000", locked: "0.00000000" },
-            { asset: "XRP", free: "75.50000000", locked: "0.00000000" },
-            { asset: "MATIC", free: "35.25000000", locked: "0.00000000" }
-          ]
-        };
+        // In a real implementation, this would make a direct request to the Binance API
+        // But since CORS will block it, we throw an error suggesting to use the proxy
+        throw new Error('Direct Binance API access blocked due to CORS restrictions. Please enable proxy mode in settings.');
       }
     } catch (error) {
       console.error('Error fetching account info:', error);
-      // For demo purposes, return realistic balances even on error
       this.addTradingLog("Failed to fetch account info: " + (error instanceof Error ? error.message : String(error)), 'error');
-      return { 
-        balances: [
-          { asset: "BTC", free: "0.00125000", locked: "0.00000000" },
-          { asset: "ETH", free: "0.05230000", locked: "0.00000000" },
-          { asset: "USDT", free: "125.50000000", locked: "0.00000000" },
-          { asset: "BNB", free: "0.00850000", locked: "0.00000000" },
-          { asset: "SOL", free: "1.20000000", locked: "0.00000000" }
-        ] 
-      };
+      throw error; // Propagate the error to be handled by the caller
     }
   }
 
@@ -277,14 +242,7 @@ class BinanceService {
       }));
     } catch (error) {
       console.error('Error fetching symbols:', error);
-      // Return mock data for demo
-      return [
-        { symbol: "BTCUSDT", priceChangePercent: "2.34" },
-        { symbol: "ETHUSDT", priceChangePercent: "1.45" },
-        { symbol: "BNBUSDT", priceChangePercent: "-0.78" },
-        { symbol: "SOLUSDT", priceChangePercent: "3.21" },
-        { symbol: "ADAUSDT", priceChangePercent: "-1.23" }
-      ];
+      throw new Error('Could not fetch market symbols. Please try again later.');
     }
   }
 
@@ -295,15 +253,7 @@ class BinanceService {
       return await response.json();
     } catch (error) {
       console.error(`Error fetching recent trades for ${symbol}:`, error);
-      // Return mock trades
-      return Array(5).fill(0).map((_, i) => ({
-        id: 10000000 + i,
-        price: symbol.includes("BTC") ? "56789.12" : "2345.67",
-        qty: "0.015",
-        quoteQty: "851.84",
-        time: Date.now() - i * 60000,
-        isBuyerMaker: i % 2 === 0
-      }));
+      throw new Error(`Could not fetch recent trades for ${symbol}. Please try again later.`);
     }
   }
 
@@ -353,13 +303,7 @@ class BinanceService {
     } catch (error) {
       console.error('Error fetching account balance:', error);
       this.addTradingLog("Failed to fetch account balance", 'error');
-      
-      // Return mock data for demo
-      return {
-        "BTC": { available: "0.00125000", total: "0.00125000" },
-        "ETH": { available: "0.05230000", total: "0.05230000" },
-        "USDT": { available: "248.76000000", total: "248.76000000" }
-      };
+      throw error; // Propagate error to caller
     }
   }
 
@@ -385,15 +329,7 @@ class BinanceService {
     } catch (error) {
       console.error('Error fetching prices:', error);
       this.addTradingLog("Failed to fetch current prices", 'error');
-      
-      // Return mock price data for demo
-      return {
-        "BTCUSDT": "56789.12",
-        "ETHUSDT": "2345.67",
-        "BNBUSDT": "345.12",
-        "SOLUSDT": "89.76",
-        "ADAUSDT": "0.45"
-      };
+      throw new Error('Could not fetch current market prices. Please try again later.');
     }
   }
 
@@ -407,23 +343,24 @@ class BinanceService {
     }
 
     try {
-      // In a real implementation, this would make a request to the Binance API
-      // This is a placeholder for the real implementation
-      console.log(`Placing ${side} market order for ${quantity} ${symbol}`);
-      this.addTradingLog(`${side} ${quantity} ${symbol} at market price`, 'info');
-      
-      // Return a mock order response
-      const mockOrder = {
-        symbol,
-        orderId: Math.floor(Math.random() * 1000000),
-        status: 'FILLED',
-        side,
-        type: 'MARKET',
-        quantity
-      };
-      
-      this.addTradingLog(`Order ${mockOrder.orderId} ${mockOrder.status}`, 'success');
-      return mockOrder;
+      if (this.getProxyMode()) {
+        // Use proxy to place a real order
+        const params = {
+          symbol,
+          side,
+          type: 'MARKET',
+          quantity
+        };
+        
+        console.log(`Placing ${side} market order for ${quantity} ${symbol} via proxy`);
+        this.addTradingLog(`${side} ${quantity} ${symbol} at market price`, 'info');
+        
+        const result = await this.fetchWithProxy('order', params, 'POST');
+        this.addTradingLog(`Order ${result.orderId || 'unknown'} ${result.status || 'PENDING'}`, 'success');
+        return result;
+      } else {
+        throw new Error('Direct API access is blocked. Please enable proxy mode in settings to place real orders.');
+      }
     } catch (error) {
       console.error('Error placing market order:', error);
       this.addTradingLog(`Failed to place ${side} order for ${symbol}: ${error instanceof Error ? error.message : String(error)}`, 'error');
@@ -449,37 +386,7 @@ class BinanceService {
     } catch (error) {
       console.error('Error fetching klines:', error);
       this.addTradingLog(`Failed to fetch klines for ${symbol}`, 'error');
-      
-      // Generate mock kline data for demonstration
-      const now = Date.now();
-      const mockKlines = [];
-      const basePrice = symbol.includes("BTC") ? 56000 : symbol.includes("ETH") ? 2300 : 100;
-      
-      for (let i = 0; i < limit; i++) {
-        const time = now - (limit - i) * 60000 * (interval === '1m' ? 1 : interval === '1h' ? 60 : 1440);
-        const open = basePrice + Math.random() * 500 - 250;
-        const high = open + Math.random() * 100;
-        const low = open - Math.random() * 100;
-        const close = (open + high + low) / 3 + (Math.random() * 50 - 25);
-        const volume = Math.random() * 100 + 10;
-        
-        mockKlines.push([
-          time, // Open time
-          open.toFixed(2), // Open
-          high.toFixed(2), // High
-          low.toFixed(2), // Low
-          close.toFixed(2), // Close
-          volume.toFixed(8), // Volume
-          time + 60000, // Close time
-          (volume * close).toFixed(2), // Quote asset volume
-          10, // Number of trades
-          volume * 0.7, // Taker buy base asset volume
-          (volume * 0.7 * close).toFixed(2), // Taker buy quote asset volume
-          "0" // Ignore
-        ]);
-      }
-      
-      return mockKlines;
+      throw new Error(`Could not fetch chart data for ${symbol}. Please try again later.`);
     }
   }
 }
