@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,10 +21,9 @@ const PortfolioSummary: React.FC = () => {
   const [totalValue, setTotalValue] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [debugInfo, setDebugInfo] = useState<string | null>(null);
+  const [connectionTested, setConnectionTested] = useState(false);
   const [showAIInsights, setShowAIInsights] = useState(true);
   const [generatingInsights, setGeneratingInsights] = useState(false);
-  const [connectionTested, setConnectionTested] = useState(false);
   
   useEffect(() => {
     checkConnectionAndLoadPortfolio();
@@ -48,11 +48,8 @@ const PortfolioSummary: React.FC = () => {
   }, [isConnected]);
   
   const checkConnectionAndLoadPortfolio = async () => {
-    setDebugInfo(`Checking connection... Has credentials: ${binanceService.hasCredentials()}`);
-    
     if (!binanceService.hasCredentials()) {
       setIsConnected(false);
-      setDebugInfo("No credentials found");
       setLoadError("API credentials not configured. Please set them in Settings.");
       setConnectionTested(true);
       return;
@@ -62,9 +59,7 @@ const PortfolioSummary: React.FC = () => {
     setLoadError(null);
     
     try {
-      setDebugInfo("Testing connection...");
       const testResult = await binanceService.testConnection();
-      setDebugInfo(`Connection test result: ${testResult}`);
       setConnectionTested(true);
       
       if (testResult) {
@@ -78,7 +73,6 @@ const PortfolioSummary: React.FC = () => {
       }
     } catch (error) {
       console.error("Failed to test connection:", error);
-      setDebugInfo(`Connection test error: ${error instanceof Error ? error.message : String(error)}`);
       setIsConnected(false);
       setLoadError("Connection test failed with an error. Please check your API credentials.");
       setConnectionTested(true);
@@ -93,14 +87,12 @@ const PortfolioSummary: React.FC = () => {
       if (showToast) {
         setLoadError(null);
       }
-      setDebugInfo("Loading portfolio data...");
       
       const accountInfo = await binanceService.getAccountInfo();
-      setDebugInfo(`Account info received with ${accountInfo?.balances?.length || 0} balances`);
       
       if (!accountInfo || !accountInfo.balances) {
         console.warn("Invalid account data received:", accountInfo);
-        setLoadError("No account data received from Binance API. Please try again.");
+        setLoadError("No account data received from Binance API. Please verify your API key permissions.");
         setBalances([]);
         setTotalValue(0);
         return;
@@ -114,27 +106,19 @@ const PortfolioSummary: React.FC = () => {
         return;
       }
       
-      setDebugInfo("Fetching prices...");
       const prices = await binanceService.getPrices();
-      setDebugInfo(`Prices received for ${Object.keys(prices).length} symbols`);
-      
-      setDebugInfo("Fetching symbols info...");
       const symbols = await binanceService.getSymbols();
-      setDebugInfo(`Symbol info received for ${symbols.length} symbols`);
       
-      setDebugInfo("Processing portfolio data...");
       processPortfolioData(accountInfo, prices, symbols);
-      setDebugInfo("Portfolio data processed successfully");
       
       if (showToast) {
-        toast.success("Portfolio data loaded successfully");
+        toast.success("Portfolio data loaded successfully from Binance");
       }
     } catch (error) {
       console.error("Failed to load portfolio data:", error);
-      setLoadError(error instanceof Error ? error.message : "Failed to load portfolio data");
-      setDebugInfo(`Error loading portfolio: ${error instanceof Error ? error.message : String(error)}`);
+      setLoadError(error instanceof Error ? error.message : "Failed to load portfolio data from Binance");
       if (showToast) {
-        toast.error(error instanceof Error ? error.message : "Failed to load portfolio data");
+        toast.error(error instanceof Error ? error.message : "Failed to load portfolio data from Binance");
       }
       setBalances([]);
       setTotalValue(0);
@@ -262,9 +246,9 @@ const PortfolioSummary: React.FC = () => {
       setTotalValue(portfolioTotal);
     } catch (err) {
       console.error("Error processing portfolio data:", err);
-      setDebugInfo(`Error processing data: ${err instanceof Error ? err.message : String(err)}`);
       setBalances([]);
       setTotalValue(0);
+      throw new Error("Error processing portfolio data from Binance");
     }
   };
 
@@ -331,17 +315,6 @@ const PortfolioSummary: React.FC = () => {
           </div>
         ) : (
           <>
-            {debugInfo && (
-              <div className="mb-4 p-2 rounded-md bg-slate-800 border border-slate-700 text-xs text-slate-300">
-                <div className="flex items-start">
-                  <Info className="h-4 w-4 text-blue-300 mr-1 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="font-mono">{debugInfo}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {loadError && (
               <div className="mb-4 p-3 rounded-md bg-red-900/20 border border-red-800">
                 <div className="flex items-start">
@@ -462,13 +435,13 @@ const PortfolioSummary: React.FC = () => {
                 {isLoading ? (
                   <div className="flex flex-col items-center">
                     <RefreshCw className="h-8 w-8 animate-spin mb-3 text-blue-300" />
-                    <p>Loading portfolio data...</p>
+                    <p>Loading portfolio data from Binance...</p>
                   </div>
                 ) : (
                   <div>
                     <p>No assets found in your Binance account</p>
                     <p className="text-sm text-slate-300 mt-1">
-                      {binanceService.isInTestMode() ? "Using test data mode" : "Using live Binance API"}
+                      Check that your API key has the necessary permissions
                     </p>
                     <Button 
                       variant="link" 

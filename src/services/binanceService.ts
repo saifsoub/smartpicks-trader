@@ -1,4 +1,3 @@
-
 export interface BinanceCredentials {
   apiKey: string;
   secretKey: string;
@@ -267,30 +266,13 @@ class BinanceService {
           // The proxy might return empty balances even when connected
           if (result && Array.isArray(result.balances)) {
             this.connectionStatus = 'connected';
-            
-            // If we get no balances, provide a helpful message
-            if (result.balances.length === 0) {
-              console.warn("No balances found in account");
-              // Return empty balances but don't throw an error
-              return { balances: [] };
-            }
-            
             return { balances: result.balances };
           }
           throw new Error('Invalid response format from proxy');
         } catch (error) {
           console.error('Error fetching account info via proxy:', error);
           this.addTradingLog("Failed to fetch account info via proxy: " + (error instanceof Error ? error.message : String(error)), 'error');
-          
-          // Fall back to local demo data
-          console.log("Falling back to sample data for testing");
-          return { 
-            balances: [
-              { asset: 'BTC', free: '0.03', locked: '0' },
-              { asset: 'ETH', free: '0.5', locked: '0' },
-              { asset: 'USDT', free: '1000', locked: '0' }
-            ] 
-          };
+          throw new Error('Failed to retrieve account data from Binance. Please verify your API permissions and connection.');
         }
       } else {
         // In a real implementation, this would make a direct request to the Binance API

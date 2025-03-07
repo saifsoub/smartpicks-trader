@@ -60,35 +60,41 @@ const RecentTrades: React.FC = () => {
     
     try {
       const testConnection = await binanceService.testConnection();
-      setIsConnected(true); // Assume connected even if test fails due to CORS
       
-      // Load trading pairs from portfolio
-      try {
-        const account = await binanceService.getAccountInfo();
-        if (account && account.balances) {
-          // Filter balances to only include assets with non-zero balances
-          const activeBalances = account.balances.filter(
-            balance => parseFloat(balance.free) > 0 || parseFloat(balance.locked) > 0
-          );
-          
-          // Convert each asset to a trading pair with USDT
-          const portfolioPairs = activeBalances
-            .map(balance => `${balance.asset}USDT`)
-            .filter(pair => pair !== 'USDTUSDT'); // Exclude USDT itself
-          
-          setTradingPairs(portfolioPairs);
-          console.log('Trading pairs from portfolio:', portfolioPairs);
+      if (testConnection) {
+        setIsConnected(true);
+      
+        // Load trading pairs from portfolio
+        try {
+          const account = await binanceService.getAccountInfo();
+          if (account && account.balances) {
+            // Filter balances to only include assets with non-zero balances
+            const activeBalances = account.balances.filter(
+              balance => parseFloat(balance.free) > 0 || parseFloat(balance.locked) > 0
+            );
+            
+            // Convert each asset to a trading pair with USDT
+            const portfolioPairs = activeBalances
+              .map(balance => `${balance.asset}USDT`)
+              .filter(pair => pair !== 'USDTUSDT'); // Exclude USDT itself
+            
+            setTradingPairs(portfolioPairs);
+            console.log('Trading pairs from portfolio:', portfolioPairs);
+          }
+        } catch (error) {
+          console.error('Error loading portfolio trading pairs:', error);
+          setError("Failed to load your trading pairs from Binance. Please try again.");
         }
-      } catch (error) {
-        console.error('Error loading portfolio trading pairs:', error);
-        // Default to BTC and ETH if portfolio loading fails
-        setTradingPairs(['BTCUSDT', 'ETHUSDT']);
+        
+        await fetchTrades();
+      } else {
+        setIsConnected(false);
+        setError("API connection failed. Please check your credentials in settings.");
       }
-      
-      await fetchTrades();
     } catch (error) {
       console.error("Failed to test connection:", error);
       setIsConnected(false);
+      setError("Failed to connect to Binance API. Please check your credentials.");
     } finally {
       setIsLoading(false);
     }
