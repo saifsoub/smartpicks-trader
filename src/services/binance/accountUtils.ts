@@ -24,24 +24,6 @@ export function checkHasRealBalances(balances: BinanceBalance[]): boolean {
 }
 
 /**
- * Determines if a balance or array of balances is from default/demo data
- */
-export function isDefaultBalance(balance: BinanceBalance | BinanceBalance[]): boolean {
-  if (Array.isArray(balance)) {
-    // For arrays, check if it matches our default balance pattern
-    return FallbackDataProvider.isDefaultBalanceArray(balance);
-  }
-  
-  // For single balances, check against known default values
-  const defaultBalances = FallbackDataProvider.getSafeBalances();
-  return defaultBalances.some(defaultBal => 
-    defaultBal.asset === balance.asset && 
-    defaultBal.free === balance.free && 
-    defaultBal.locked === balance.locked
-  );
-}
-
-/**
  * Formats raw balance data into a more usable format
  */
 export function formatBalanceData(balances: BinanceBalance[]): Record<string, BalanceInfo> {

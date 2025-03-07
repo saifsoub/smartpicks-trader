@@ -34,13 +34,35 @@ export class ConnectionService {
     try {
       console.info('Testing API connection with credentials:', this.maskApiKey(this.apiClient.getApiKey()));
       
+      // Check if we have credentials before proceeding
+      if (!this.apiClient.hasCredentials()) {
+        this.logManager.addTradingLog("Missing API credentials. Please configure your Binance API keys.", 'warning');
+        this.accountService.setConnectionStatus('disconnected');
+        this.accountService.setLastConnectionError("Missing API credentials. Please configure your Binance API keys.");
+        return false;
+      }
+      
       // Test both connection methods
       const directApiWorks = await this.connectionTester.testDirectConnection();
+      
+      // Always log the direct API status
+      if (directApiWorks) {
+        this.logManager.addTradingLog("Direct API connection successful", 'success');
+      } else {
+        this.logManager.addTradingLog("Direct API connection failed", 'warning');
+      }
+      
       let proxyWorks = false;
       
       // Test proxy connection if direct failed or proxy mode is enabled
       if (this.apiClient.getProxyMode() || !directApiWorks) {
         proxyWorks = await this.connectionTester.testProxyConnection();
+        
+        if (proxyWorks) {
+          this.logManager.addTradingLog("Proxy connection successful", 'success');
+        } else {
+          this.logManager.addTradingLog("Proxy connection failed", 'warning');
+        }
         
         // Handle proxy connection results
         if (!proxyWorks && this.apiClient.getProxyMode()) {
@@ -129,11 +151,9 @@ export class ConnectionService {
         this.accountService.setLastConnectionError(errorMessage);
         this.logManager.addTradingLog(errorMessage, 'error');
         
-        // Suggest solutions
-        toast.error("Connection failed. Try again later or check your API credentials.");
-        
         // Provide more specific guidance
-        this.logManager.addTradingLog("Make sure you've created an API key on Binance with proper permissions and IP restrictions.", 'info');
+        toast.error("Connection failed. Please verify your API keys are correct and valid.");
+        this.logManager.addTradingLog("Make sure you've entered the correct API key and secret, and that they are active on Binance. Also check your internet connection.", 'info');
       } else {
         const errorMessage = "API connection failed. Try enabling proxy mode in settings, which helps bypass CORS restrictions.";
         this.accountService.setLastConnectionError(errorMessage);

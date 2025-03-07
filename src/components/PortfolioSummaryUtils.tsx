@@ -1,6 +1,6 @@
 
 import { BinanceBalance, BalanceInfo } from "@/services/binance/types";
-import { isDefaultBalance } from "@/services/binance/accountUtils";
+import { FallbackDataProvider } from "@/services/binance/fallbackDataProvider";
 
 interface EnhancedBalance extends BinanceBalance {
   usdValue: number;
@@ -27,7 +27,7 @@ export const processPortfolioData = (
     
     // Check if we're using default data
     const isDefaultData = accountInfo && accountInfo.balances && 
-      (isDefaultBalance(accountInfo.balances) || accountInfo.isDefault === true);
+      (FallbackDataProvider.isDefaultBalanceArray(accountInfo.balances) || accountInfo.isDefault === true);
     
     if (isDefaultData) {
       console.warn("DETECTED DEFAULT DATA IN PORTFOLIO PROCESSING");

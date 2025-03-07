@@ -50,12 +50,12 @@ export class PermissionsManager {
     
     try {
       this.logManager.addTradingLog("Detecting API key permissions...", 'info');
-      let accountInfo: AccountInfoResponse | null = null;
+      let accountInfoResponse: AccountInfoResponse | null = null;
       
       // Test read permission with account endpoint
       try {
-        accountInfo = await this.apiClient.fetchWithProxy('account', { recvWindow: '5000' }, 'GET');
-        if (accountInfo && Array.isArray(accountInfo.balances)) {
+        accountInfoResponse = await this.apiClient.fetchWithProxy('account', { recvWindow: '5000' }, 'GET');
+        if (accountInfoResponse && Array.isArray(accountInfoResponse.balances)) {
           permissions.read = true;
           this.logManager.addTradingLog("READ permission detected for API key", 'success');
         }
@@ -76,18 +76,18 @@ export class PermissionsManager {
       }
       
       // Test trading permission by checking account info if available
-      if (permissions.read && accountInfo) {
+      if (permissions.read && accountInfoResponse) {
         try {
           // First check account for trading status
-          if (accountInfo.canTrade) {
+          if (accountInfoResponse.canTrade) {
             permissions.trading = true;
             this.logManager.addTradingLog("TRADING permission detected from account info", 'info');
           } else {
             // Test with API permissions array if available
-            if (Array.isArray(accountInfo.permissions)) {
-              if (accountInfo.permissions.includes('SPOT') || 
-                  accountInfo.permissions.includes('MARGIN') ||
-                  accountInfo.permissions.includes('FUTURES')) {
+            if (Array.isArray(accountInfoResponse.permissions)) {
+              if (accountInfoResponse.permissions.includes('SPOT') || 
+                  accountInfoResponse.permissions.includes('MARGIN') ||
+                  accountInfoResponse.permissions.includes('FUTURES')) {
                 permissions.trading = true;
                 this.logManager.addTradingLog("TRADING permission detected from permissions list", 'info');
               }
