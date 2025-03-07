@@ -11,6 +11,7 @@ import {
   BinanceSymbol,
   BalanceInfo
 } from './binance/types';
+import { toast } from 'sonner';
 
 class BinanceService {
   private credentials: BinanceCredentials | null = null;
@@ -119,13 +120,60 @@ class BinanceService {
 
   // Account methods
   public async getAccountInfo(): Promise<{ balances: BinanceBalance[] }> {
-    // We don't need to test connection here since the PortfolioSummary component
-    // is already doing that. This helps avoid redundant API calls.
-    return this.accountService.getAccountInfo();
+    try {
+      // Since we've had issues with portfolio data not showing up,
+      // let's make sure a connection test is run if needed
+      if (this.accountService.getConnectionStatus() === 'unknown' && this.hasCredentials()) {
+        await this.testConnection();
+      }
+      
+      return this.accountService.getAccountInfo();
+    } catch (error) {
+      console.error('Error in getAccountInfo:', error);
+      toast.error('Failed to fetch account information. Please check your connection settings.');
+      throw error;
+    }
   }
 
   public async getAccountBalance(): Promise<Record<string, BalanceInfo>> {
-    return this.accountService.getAccountBalance();
+    try {
+      // Ensure connection is tested before getting account balance
+      if (this.accountService.getConnectionStatus() === 'unknown' && this.hasCredentials()) {
+        await this.testConnection();
+      }
+      
+      const balances = await this.accountService.getAccountBalance();
+      
+      // If we have balances, try to enrich them with USD values
+      if (Object.keys(balances).length > 0) {
+        const prices = await this.getPrices();
+        
+        for (const asset in balances) {
+          // Skip if this is already USDT
+          if (asset === 'USDT') {
+            const available = parseFloat(balances[asset].available);
+            const total = parseFloat(balances[asset].total);
+            balances[asset].usdValue = total;
+            continue;
+          }
+          
+          // Get the price for this asset
+          const symbol = `${asset}USDT`;
+          const price = prices[symbol];
+          
+          if (price) {
+            const total = parseFloat(balances[asset].total);
+            balances[asset].usdValue = total * parseFloat(price);
+          }
+        }
+      }
+      
+      return balances;
+    } catch (error) {
+      console.error('Error in getAccountBalance:', error);
+      toast.error('Failed to fetch account balance. Please check your connection settings.');
+      throw error;
+    }
   }
 
   public async placeMarketOrder(

@@ -1,4 +1,3 @@
-
 export interface TradingStrategy {
   id: string;
   name: string;
@@ -105,4 +104,10 @@ export interface Position {
   trailingStop: number | null;
   entryTime: number;
   side: 'long' | 'short';
+}
+
+export interface BalanceInfo {
+  available: string;
+  total: string;
+  usdValue?: number; // Added to match usage in tradeExecutor.ts
 }

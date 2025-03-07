@@ -4,6 +4,7 @@ import { calculateATR } from '../indicators/technicalIndicators';
 import { TradingEventEmitter } from '../tradingEventEmitter';
 import notificationService from '../../notificationService';
 import { toast } from 'sonner';
+import { BalanceInfo } from '../types';
 
 // Position interface for tracking active trades
 interface Position {
