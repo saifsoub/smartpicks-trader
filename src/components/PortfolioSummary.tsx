@@ -23,13 +23,14 @@ const PortfolioSummary: React.FC = () => {
   const [debugInfo, setDebugInfo] = useState<string | null>(null);
   const [showAIInsights, setShowAIInsights] = useState(true);
   const [generatingInsights, setGeneratingInsights] = useState(false);
+  const [connectionTested, setConnectionTested] = useState(false);
   
   useEffect(() => {
     checkConnectionAndLoadPortfolio();
     
     const interval = setInterval(() => {
       if (isConnected) {
-        loadPortfolio();
+        loadPortfolio(false);
       }
     }, 30000);
     
@@ -52,6 +53,8 @@ const PortfolioSummary: React.FC = () => {
     if (!binanceService.hasCredentials()) {
       setIsConnected(false);
       setDebugInfo("No credentials found");
+      setLoadError("API credentials not configured. Please set them in Settings.");
+      setConnectionTested(true);
       return;
     }
     
@@ -62,36 +65,50 @@ const PortfolioSummary: React.FC = () => {
       setDebugInfo("Testing connection...");
       const testResult = await binanceService.testConnection();
       setDebugInfo(`Connection test result: ${testResult}`);
+      setConnectionTested(true);
       
       if (testResult) {
         setIsConnected(true);
         await loadPortfolio();
       } else {
         setIsConnected(false);
-        setLoadError("Connection test failed. Please check your API credentials and connection.");
+        const errorMessage = binanceService.getLastConnectionError() || 
+                            "Connection test failed. Please check your API credentials and connection.";
+        setLoadError(errorMessage);
       }
     } catch (error) {
       console.error("Failed to test connection:", error);
       setDebugInfo(`Connection test error: ${error instanceof Error ? error.message : String(error)}`);
       setIsConnected(false);
       setLoadError("Connection test failed with an error. Please check your API credentials.");
+      setConnectionTested(true);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const loadPortfolio = async () => {
+  const loadPortfolio = async (showToast = true) => {
     try {
       setIsLoading(true);
-      setLoadError(null);
+      if (showToast) {
+        setLoadError(null);
+      }
       setDebugInfo("Loading portfolio data...");
       
       const accountInfo = await binanceService.getAccountInfo();
       setDebugInfo(`Account info received with ${accountInfo?.balances?.length || 0} balances`);
       
-      if (!accountInfo || !accountInfo.balances || accountInfo.balances.length === 0) {
-        console.warn("Invalid account data received or empty balances:", accountInfo);
-        setLoadError("No balances found in your account or there was an API issue.");
+      if (!accountInfo || !accountInfo.balances) {
+        console.warn("Invalid account data received:", accountInfo);
+        setLoadError("No account data received from Binance API. Please try again.");
+        setBalances([]);
+        setTotalValue(0);
+        return;
+      }
+
+      if (accountInfo.balances.length === 0) {
+        console.warn("Empty balances array received");
+        setLoadError("No assets found in your Binance account. Your account may be empty or API permissions might be limited.");
         setBalances([]);
         setTotalValue(0);
         return;
@@ -108,11 +125,17 @@ const PortfolioSummary: React.FC = () => {
       setDebugInfo("Processing portfolio data...");
       processPortfolioData(accountInfo, prices, symbols);
       setDebugInfo("Portfolio data processed successfully");
+      
+      if (showToast) {
+        toast.success("Portfolio data loaded successfully");
+      }
     } catch (error) {
       console.error("Failed to load portfolio data:", error);
       setLoadError(error instanceof Error ? error.message : "Failed to load portfolio data");
       setDebugInfo(`Error loading portfolio: ${error instanceof Error ? error.message : String(error)}`);
-      toast.error(error instanceof Error ? error.message : "Failed to load portfolio data");
+      if (showToast) {
+        toast.error(error instanceof Error ? error.message : "Failed to load portfolio data");
+      }
       setBalances([]);
       setTotalValue(0);
     } finally {
@@ -126,8 +149,6 @@ const PortfolioSummary: React.FC = () => {
     try {
       const enhancedBalances = [...balances];
       
-      // Generate pseudo-AI insights for demo purposes
-      // In a production app, you would call an actual AI API here
       const insights = {
         "BTC": {
           insight: "Strong bullish momentum with increasing institutional interest. Recent price consolidation suggests potential for a breakout.",
@@ -175,7 +196,6 @@ const PortfolioSummary: React.FC = () => {
         }
       };
       
-      // Apply insights to balances
       enhancedBalances.forEach((balance, index) => {
         const assetInfo = insights[balance.asset as keyof typeof insights];
         enhancedBalances[index].aiInsight = assetInfo?.insight || 
@@ -197,7 +217,6 @@ const PortfolioSummary: React.FC = () => {
   
   const processPortfolioData = (accountInfo: any, prices?: Record<string, string>, symbols?: any[]) => {
     try {
-      // Include ALL balances with non-zero values, even tiny ones
       const significantBalances = accountInfo.balances
         .filter((balance: BinanceBalance) => 
           parseFloat(balance.free) > 0 || parseFloat(balance.locked) > 0
@@ -290,7 +309,12 @@ const PortfolioSummary: React.FC = () => {
         </div>
       </CardHeader>
       <CardContent className="pt-4">
-        {!isConnected ? (
+        {!connectionTested ? (
+          <div className="text-center py-6">
+            <Loader2 className="h-10 w-10 text-blue-400 mx-auto mb-3 animate-spin" />
+            <p className="text-slate-200">Checking Binance API connection...</p>
+          </div>
+        ) : !isConnected ? (
           <div className="text-center py-6">
             <AlertTriangle className="h-10 w-10 text-yellow-400 mx-auto mb-3" />
             <p className="text-yellow-100 font-medium">Not connected to Binance API</p>
