@@ -1,13 +1,18 @@
+
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, ArrowUp, ArrowDown, DollarSign, AlertTriangle, Settings, Info } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { RefreshCw, ArrowUp, ArrowDown, DollarSign, AlertTriangle, Settings, Info, Sparkles, Loader2 } from "lucide-react";
 import binanceService, { BinanceBalance } from "@/services/binanceService";
 import { toast } from "sonner";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface EnhancedBalance extends BinanceBalance {
   usdValue: number;
   priceChangePercent: string;
+  aiInsight?: string;
+  potentialReturn?: string;
 }
 
 const PortfolioSummary: React.FC = () => {
@@ -17,6 +22,8 @@ const PortfolioSummary: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<string | null>(null);
+  const [showAIInsights, setShowAIInsights] = useState(true);
+  const [generatingInsights, setGeneratingInsights] = useState(false);
   
   useEffect(() => {
     checkConnectionAndLoadPortfolio();
@@ -109,9 +116,85 @@ const PortfolioSummary: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  const generateAIInsights = async () => {
+    setGeneratingInsights(true);
+    
+    try {
+      const enhancedBalances = [...balances];
+      
+      // Generate pseudo-AI insights for demo purposes
+      // In a production app, you would call an actual AI API here
+      const insights = {
+        "BTC": {
+          insight: "Strong bullish momentum with increasing institutional interest. Recent price consolidation suggests potential for a breakout.",
+          potential: "8-12%"
+        },
+        "ETH": {
+          insight: "Recent network upgrades have improved scalability. Growing DeFi ecosystem offers positive long-term outlook despite short-term volatility.",
+          potential: "7-15%"
+        },
+        "SOL": {
+          insight: "High transaction throughput attracting developers. Recent price stability indicates market confidence after past volatility.",
+          potential: "10-20%"
+        },
+        "BNB": {
+          insight: "Exchange token with strong utility value. BNB burn mechanism creates deflationary pressure, supporting long-term price appreciation.",
+          potential: "5-9%"
+        },
+        "USDT": {
+          insight: "Stable asset serving as portfolio foundation. Consider deploying into yield-generating opportunities or during market dips.",
+          potential: "0-2%"
+        },
+        "ADA": {
+          insight: "Ongoing development milestones on roadmap. Smart contract functionality expanding ecosystem, though adoption remains a key metric to watch.",
+          potential: "6-14%"
+        },
+        "DOT": {
+          insight: "Parachain ecosystem growing steadily. Interoperability features position well for multi-chain future.",
+          potential: "9-18%"
+        },
+        "XRP": {
+          insight: "Regulatory clarity improving sentiment. Cross-border payment solutions gaining institutional partners.",
+          potential: "4-13%"
+        },
+        "MATIC": {
+          insight: "Layer-2 scaling solution with growing adoption. ZK-rollup implementation improving performance.",
+          potential: "8-16%"
+        },
+        "LINK": {
+          insight: "Critical oracle infrastructure for DeFi. New CCIP protocol expanding use cases beyond price feeds.",
+          potential: "7-15%"
+        },
+        "AVAX": {
+          insight: "Fast-finality blockchain with subnet architecture. Enterprise adoption increasing as scalability improves.",
+          potential: "9-17%"
+        }
+      };
+      
+      // Apply insights to balances
+      enhancedBalances.forEach((balance, index) => {
+        const assetInfo = insights[balance.asset as keyof typeof insights];
+        enhancedBalances[index].aiInsight = assetInfo?.insight || 
+          `${balance.asset} shows ${parseFloat(balance.priceChangePercent) > 0 ? 'positive' : 'negative'} price action in the current market cycle. Monitor for trend continuation.`;
+        
+        enhancedBalances[index].potentialReturn = assetInfo?.potential || 
+          `${Math.abs(parseFloat(balance.priceChangePercent) * 1.5).toFixed(1)}-${Math.abs(parseFloat(balance.priceChangePercent) * 2.5).toFixed(1)}%`;
+      });
+      
+      setBalances(enhancedBalances);
+      toast.success("AI insights generated for your portfolio");
+    } catch (error) {
+      console.error("Error generating AI insights:", error);
+      toast.error("Failed to generate AI insights");
+    } finally {
+      setGeneratingInsights(false);
+    }
+  };
   
   const processPortfolioData = (accountInfo: any, prices?: Record<string, string>, symbols?: any[]) => {
     try {
+      // Include ALL balances with non-zero values, even tiny ones
       const significantBalances = accountInfo.balances
         .filter((balance: BinanceBalance) => 
           parseFloat(balance.free) > 0 || parseFloat(balance.locked) > 0
@@ -168,19 +251,39 @@ const PortfolioSummary: React.FC = () => {
       <CardHeader className="border-b border-slate-800 pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-white">Portfolio Summary</CardTitle>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => loadPortfolio()}
-            disabled={isLoading}
-            className="text-slate-200 hover:text-white hover:bg-slate-800"
-          >
-            {isLoading ? (
-              <RefreshCw className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-          </Button>
+          <div className="flex items-center gap-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 rounded-md text-slate-200 hover:text-white hover:bg-slate-800"
+                    onClick={() => setShowAIInsights(!showAIInsights)}
+                  >
+                    <Sparkles className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{showAIInsights ? "Hide" : "Show"} AI Insights</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => loadPortfolio()}
+              disabled={isLoading}
+              className="text-slate-200 hover:text-white hover:bg-slate-800"
+            >
+              {isLoading ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="pt-4">
@@ -238,44 +341,92 @@ const PortfolioSummary: React.FC = () => {
             )}
         
             {totalValue > 0 && (
-              <div className="mb-4 flex items-center justify-between">
-                <span className="text-slate-200">Total Value</span>
-                <div className="flex items-center">
-                  <DollarSign className="h-4 w-4 mr-1 text-white" />
-                  <span className="text-xl font-bold text-white">{totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-slate-300">Total Portfolio Value</span>
+                  <div className="flex items-center">
+                    <DollarSign className="h-4 w-4 mr-1 text-white" />
+                    <span className="text-xl font-bold text-white">{totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
                 </div>
+                
+                {balances.length > 0 && showAIInsights && (
+                  <Button
+                    variant="outline" 
+                    size="sm"
+                    className="mt-1 w-full border-indigo-800 bg-indigo-900/30 text-indigo-200 hover:bg-indigo-900/50"
+                    onClick={generateAIInsights}
+                    disabled={generatingInsights}
+                  >
+                    {generatingInsights ? (
+                      <>
+                        <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                        Generating AI insights...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="mr-2 h-3 w-3" />
+                        Generate AI insights for your portfolio
+                      </>
+                    )}
+                  </Button>
+                )}
               </div>
             )}
             
             {balances.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
                 {balances.map((balance, index) => (
-                  <div key={index} className="flex items-center justify-between p-2 rounded-md bg-slate-800">
-                    <div>
-                      <div className="font-medium text-white">{balance.asset}</div>
-                      <div className="text-xs text-slate-200">
+                  <div key={index} className="p-3 rounded-md bg-slate-800 border border-slate-700">
+                    <div className="flex justify-between mb-1">
+                      <div className="flex items-center">
+                        <div className="font-medium text-white text-lg">{balance.asset}</div>
+                        <Badge 
+                          className={`ml-2 ${
+                            parseFloat(balance.priceChangePercent) > 0 
+                              ? 'bg-green-900/60 text-green-300 hover:bg-green-900' 
+                              : parseFloat(balance.priceChangePercent) < 0
+                                ? 'bg-red-900/60 text-red-300 hover:bg-red-900'
+                                : 'bg-slate-700 text-slate-300'
+                          }`}
+                        >
+                          {parseFloat(balance.priceChangePercent) > 0 ? '+' : ''}
+                          {parseFloat(balance.priceChangePercent).toFixed(2)}%
+                        </Badge>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-medium text-white">${balance.usdValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-between text-xs text-slate-300 mb-2">
+                      <span>
                         {parseFloat(balance.free).toLocaleString('en-US', { maximumFractionDigits: 8 })}
                         {parseFloat(balance.locked) > 0 && 
                           ` (${parseFloat(balance.locked).toLocaleString('en-US', { maximumFractionDigits: 8 })} locked)`
                         }
-                      </div>
+                      </span>
+                      <span>
+                        {balance.usdValue > 0 && (
+                          `${((balance.usdValue / totalValue) * 100).toFixed(1)}% of portfolio`
+                        )}
+                      </span>
                     </div>
-                    <div className="text-right">
-                      <div className="font-medium text-white">${balance.usdValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                      {parseFloat(balance.priceChangePercent) !== 0 && (
-                        <div className={`flex items-center justify-end text-xs ${
-                          parseFloat(balance.priceChangePercent) > 0 
-                            ? 'text-green-300' 
-                            : 'text-red-300'
-                        }`}>
-                          {parseFloat(balance.priceChangePercent) > 0 
-                            ? <ArrowUp className="h-3 w-3 mr-1" /> 
-                            : <ArrowDown className="h-3 w-3 mr-1" />
-                          }
-                          {Math.abs(parseFloat(balance.priceChangePercent)).toFixed(2)}%
+                    
+                    {showAIInsights && balance.aiInsight && (
+                      <div className="mt-2 pt-2 border-t border-slate-700">
+                        <div className="flex items-start">
+                          <Sparkles className="h-3 w-3 text-indigo-400 mt-1 mr-1.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-xs text-slate-300">{balance.aiInsight}</p>
+                            <div className="flex justify-between mt-1">
+                              <span className="text-xs text-indigo-400">Potential return:</span>
+                              <span className="text-xs font-medium text-indigo-300">{balance.potentialReturn}</span>
+                            </div>
+                          </div>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
