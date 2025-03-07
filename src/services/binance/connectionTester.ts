@@ -9,8 +9,10 @@ export class ConnectionTester {
   private logManager: LogManager;
   private accountService: AccountService;
   private lastConnectionAttempt: number = 0;
-  private connectionCooldown: number = 2000; // Reduced from 3000ms to 2000ms
-  private connectionTimeout: number = 15000; // 15 seconds timeout
+  private connectionCooldown: number = 1000; // Reduced to 1 second to allow more frequent tests
+  private connectionTimeout: number = 20000; // Increased to 20 seconds for slower networks
+  private consecutiveFailures: number = 0;
+  private maxConsecutiveFailures: number = 3;
   
   constructor(apiClient: BinanceApiClient, logManager: LogManager, accountService: AccountService) {
     this.apiClient = apiClient;
@@ -44,58 +46,73 @@ export class ConnectionTester {
       // Test 1: Simple ping test
       const pingResponse = await fetch('https://api.binance.com/api/v3/ping', {
         method: 'GET',
-        signal: AbortSignal.timeout(this.connectionTimeout)
+        signal: AbortSignal.timeout(this.connectionTimeout),
+        cache: 'no-store' // Prevent caching
       });
       
       console.log("Basic ping test response:", pingResponse.status, pingResponse.statusText);
       if (!pingResponse.ok) {
         console.warn("Basic ping test failed with status:", pingResponse.status);
+        this.consecutiveFailures++;
         return false;
       }
       
       // Test 2: Get ticker price data (public endpoint)
       const tickerResponse = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT', {
-        signal: AbortSignal.timeout(this.connectionTimeout)
+        signal: AbortSignal.timeout(this.connectionTimeout),
+        cache: 'no-store'
       });
       
       if (!tickerResponse.ok) {
         console.warn("Ticker test failed with status:", tickerResponse.status);
+        this.consecutiveFailures++;
         return false;
       }
       
       const tickerData = await tickerResponse.json();
       if (!tickerData.price) {
         console.warn("Invalid ticker data:", tickerData);
+        this.consecutiveFailures++;
         return false;
       }
       
       console.log("Direct API ticker test successful:", tickerData.price);
+      this.consecutiveFailures = 0;
       
       // Test 3: Try a signed test if API key/secret are available
       if (this.apiClient.hasCredentials()) {
         try {
-          const serverTimeResponse = await fetch('https://api.binance.com/api/v3/time');
+          const serverTimeResponse = await fetch('https://api.binance.com/api/v3/time', {
+            cache: 'no-store'
+          });
           const serverTimeData = await serverTimeResponse.json();
           
           const timestamp = serverTimeData.serverTime || Date.now();
           const queryString = `timestamp=${timestamp}`;
           const signature = await this.apiClient.generateSignature(queryString);
           
-          // Test a simple signed endpoint that doesn't require special permissions
-          const signedTestUrl = `https://api.binance.com/api/v3/userDataStream?${queryString}&signature=${signature}`;
+          // Try to check account endpoint directly - this will verify read access
+          const accountTestUrl = `https://api.binance.com/api/v3/account?${queryString}&signature=${signature}`;
           
-          const signedTestResponse = await fetch(signedTestUrl, {
-            method: 'POST',
+          const accountTestResponse = await fetch(accountTestUrl, {
+            method: 'GET',
             headers: {
               'X-MBX-APIKEY': this.apiClient.getApiKey()
             },
-            signal: AbortSignal.timeout(this.connectionTimeout)
+            signal: AbortSignal.timeout(this.connectionTimeout),
+            cache: 'no-store'
           });
           
-          if (signedTestResponse.ok) {
-            console.log("Direct API signed request test successful");
+          if (accountTestResponse.ok) {
+            console.log("Direct API account request test successful");
+            // If we can access account data, we have all the required permissions
+            return true;
           } else {
-            console.warn("Direct API signed request test failed:", await signedTestResponse.text());
+            const errorText = await accountTestResponse.text();
+            console.warn("Direct API account test failed:", errorText);
+            
+            // Even if account test fails, basic connectivity is working
+            return true;
           }
         } catch (signedTestError) {
           console.warn("Direct API signed request test error:", signedTestError);
@@ -106,6 +123,13 @@ export class ConnectionTester {
       return true;
     } catch (directError) {
       console.warn("Direct connection failed:", directError);
+      this.consecutiveFailures++;
+      
+      if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
+        console.error(`Direct API connection failed ${this.consecutiveFailures} consecutive times`);
+        this.logManager.addTradingLog("Multiple connection failures detected. Your network may be blocking Binance.", 'warning');
+      }
+      
       return false;
     }
   }
@@ -116,7 +140,7 @@ export class ConnectionTester {
       
       // Try multiple proxy endpoints to better validate the connection
       // Start with a simple ping test
-      const pingResult = await this.apiClient.fetchWithProxy('ping', {}, 'GET', true);
+      const pingResult = await this.apiClient.fetchWithProxy('ping', {}, 'GET', false);
       if (!pingResult) {
         console.warn("Proxy ping test failed");
         return false;
@@ -124,7 +148,7 @@ export class ConnectionTester {
       
       // Try to get a public endpoint that doesn't require auth
       try {
-        const tickerResult = await this.apiClient.fetchWithProxy('ticker/price', { symbol: 'BTCUSDT' }, 'GET', true);
+        const tickerResult = await this.apiClient.fetchWithProxy('ticker/price', { symbol: 'BTCUSDT' }, 'GET', false);
         if (tickerResult && tickerResult.price) {
           console.log("Proxy ticker test successful:", tickerResult.price);
         } else {
@@ -135,28 +159,42 @@ export class ConnectionTester {
         // Continue with other tests
       }
       
-      // Try to get server time - another simple test
-      try {
-        const timeResult = await this.apiClient.fetchWithProxy('time', {}, 'GET', true);
-        if (timeResult && timeResult.serverTime) {
-          console.log("Proxy server time test successful");
+      // Try to access account data - this will verify API permissions
+      if (this.apiClient.hasCredentials()) {
+        try {
+          const accountResult = await this.apiClient.fetchWithProxy('account', {}, 'GET', false);
+          if (accountResult && Array.isArray(accountResult.balances)) {
+            console.log("Proxy account data access successful");
+          }
+        } catch (accountError) {
+          console.warn("Proxy account access failed:", accountError);
+          // Continue with other tests - basic connection might still work
         }
-      } catch (timeError) {
-        console.warn("Proxy server time test failed:", timeError);
-        // Continue with other tests
       }
       
       console.log("Proxy connection test completed with some success");
       this.apiClient.setProxyConnectionSuccessful(true);
+      this.consecutiveFailures = 0;
       return true;
     } catch (proxyError) {
       console.warn("Proxy connection failed:", proxyError);
       this.apiClient.setProxyConnectionSuccessful(false);
+      this.consecutiveFailures++;
+      
+      if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
+        console.error(`Proxy connection failed ${this.consecutiveFailures} consecutive times`);
+        this.logManager.addTradingLog("Persistent proxy connection failures detected. Try switching to direct mode or check network.", 'warning');
+      }
+      
       return false;
     }
   }
   
   public updateLastConnectionAttempt(): void {
     this.lastConnectionAttempt = Date.now();
+  }
+  
+  public resetConsecutiveFailures(): void {
+    this.consecutiveFailures = 0;
   }
 }

@@ -2,13 +2,15 @@
 import { LogManager } from './logManager';
 
 export class ReconnectionManager {
-  private reconnectDelay: number = 5000; // 5 seconds between reconnection attempts
-  private maxReconnectAttempts: number = 5; // Increased from 3 to 5
+  private reconnectDelay: number = 2000; // Reduced initial delay to 2 seconds
+  private maxReconnectAttempts: number = 10; // Increased from 5 to 10 attempts
   private reconnectAttempts: number = 0;
   private reconnectTimer: number | null = null;
   private logManager: LogManager;
   private onReconnect: () => Promise<boolean>;
-  private backoffFactor: number = 1.5; // Add exponential backoff
+  private backoffFactor: number = 1.5; // Exponential backoff multiplier
+  private maxDelay: number = 60000; // Maximum delay cap at 1 minute
+  private reconnectInProgress: boolean = false;
   
   constructor(logManager: LogManager, onReconnect: () => Promise<boolean>) {
     this.logManager = logManager;
@@ -16,6 +18,11 @@ export class ReconnectionManager {
   }
   
   public scheduleReconnect(): void {
+    if (this.reconnectInProgress) {
+      console.log("Reconnection already in progress, not scheduling another");
+      return;
+    }
+    
     if (this.reconnectTimer !== null) {
       window.clearTimeout(this.reconnectTimer);
     }
@@ -24,38 +31,59 @@ export class ReconnectionManager {
     // Use exponential backoff for more reliable reconnection
     const delay = this.calculateBackoffDelay();
     
-    console.log(`Scheduling reconnection attempt ${this.reconnectAttempts} in ${delay}ms`);
-    this.logManager.addTradingLog(`Connection failed, retrying in ${Math.round(delay / 1000)} seconds...`, 'info');
+    console.log(`Scheduling reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`);
+    this.logManager.addTradingLog(`Connection issue detected, retrying in ${Math.round(delay / 1000)} seconds... (Attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`, 'info');
     
-    this.reconnectTimer = window.setTimeout(() => {
-      console.log(`Executing reconnection attempt ${this.reconnectAttempts}`);
-      this.onReconnect().then(success => {
-        if (success) {
-          this.logManager.addTradingLog("Reconnected to API successfully", 'success');
-          this.resetReconnectAttempts(); // Reset attempts on success
-        } else if (this.reconnectAttempts < this.maxReconnectAttempts) {
-          // Schedule another attempt if unsuccessful and under max attempts
-          this.scheduleReconnect();
-        } else {
-          this.logManager.addTradingLog("Max reconnection attempts reached. Please check your API settings.", 'error');
-        }
-      });
-    }, delay);
+    this.reconnectTimer = window.setTimeout(() => this.executeReconnect(), delay);
+  }
+  
+  private async executeReconnect(): Promise<void> {
+    if (this.reconnectInProgress) {
+      return;
+    }
+    
+    this.reconnectInProgress = true;
+    console.log(`Executing reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
+    
+    try {
+      const success = await this.onReconnect();
+      
+      if (success) {
+        this.logManager.addTradingLog("Reconnected to Binance API successfully", 'success');
+        this.resetReconnectAttempts();
+      } else if (this.reconnectAttempts < this.maxReconnectAttempts) {
+        // Schedule another attempt if unsuccessful and under max attempts
+        this.scheduleReconnect();
+      } else {
+        this.logManager.addTradingLog(`Maximum reconnection attempts (${this.maxReconnectAttempts}) reached. Please check your API settings or try again later.`, 'error');
+      }
+    } catch (error) {
+      console.error("Error during reconnection attempt:", error);
+      if (this.reconnectAttempts < this.maxReconnectAttempts) {
+        this.scheduleReconnect();
+      } else {
+        this.logManager.addTradingLog(`Reconnection failed after ${this.maxReconnectAttempts} attempts. Please verify your network connection and API settings.`, 'error');
+      }
+    } finally {
+      this.reconnectInProgress = false;
+    }
   }
   
   private calculateBackoffDelay(): number {
     // Exponential backoff formula: initialDelay * (backoffFactor ^ attemptNumber)
-    // Cap at 30 seconds
+    // With jitter to prevent thundering herd problem
     const calculatedDelay = this.reconnectDelay * Math.pow(this.backoffFactor, this.reconnectAttempts - 1);
-    return Math.min(calculatedDelay, 30000); // Cap at 30 seconds
+    const jitter = Math.random() * 0.3 * calculatedDelay; // Add up to 30% random jitter
+    return Math.min(calculatedDelay + jitter, this.maxDelay);
   }
   
   public cancelReconnect(): void {
     if (this.reconnectTimer !== null) {
       window.clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
-      this.reconnectAttempts = 0;
+      this.reconnectInProgress = false;
     }
+    this.resetReconnectAttempts();
   }
   
   public getReconnectAttempts(): number {
@@ -68,5 +96,10 @@ export class ReconnectionManager {
   
   public resetReconnectAttempts(): void {
     this.reconnectAttempts = 0;
+    this.reconnectInProgress = false;
+    if (this.reconnectTimer !== null) {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
   }
 }
