@@ -9,6 +9,7 @@ export const NetworkStatusAlert = () => {
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [isVisible, setIsVisible] = useState<boolean>(false);
   const [connectionAttempts, setConnectionAttempts] = useState<number>(0);
+  const [isCheckingConnection, setIsCheckingConnection] = useState<boolean>(false);
   
   useEffect(() => {
     const handleOnline = () => {
@@ -30,17 +31,20 @@ export const NetworkStatusAlert = () => {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     
-    // Initial check
-    if (!navigator.onLine) {
-      setIsVisible(true);
-    } else {
-      // Verify real connectivity on mount
-      checkRealConnectivity().then(hasRealConnectivity => {
-        if (!hasRealConnectivity) {
-          setIsVisible(true);
-        }
-      });
-    }
+    // Initial check - but with a short delay to let the network stabilize
+    setTimeout(() => {
+      if (!navigator.onLine) {
+        setIsVisible(true);
+      } else {
+        // Verify real connectivity on mount, but don't show alert unless we're certain
+        checkRealConnectivity().then(hasRealConnectivity => {
+          // Only show the alert if we're definitely offline
+          if (!hasRealConnectivity && !navigator.onLine) {
+            setIsVisible(true);
+          }
+        });
+      }
+    }, 1000);
     
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -51,24 +55,32 @@ export const NetworkStatusAlert = () => {
   // Check real connectivity beyond just the browser's online status
   const checkRealConnectivity = async (): Promise<boolean> => {
     try {
+      setIsCheckingConnection(true);
+      
       // Test connectivity to multiple endpoints for better accuracy
+      // More reliable endpoints that are less likely to be blocked
       const endpoints = [
         'https://www.google.com/generate_204',
-        'https://www.cloudflare.com/cdn-cgi/trace',
-        'https://api.binance.com/api/v3/time'
+        'https://www.cloudflare.com/cdn-cgi/trace'
       ];
       
       // Try each endpoint with a short timeout
       for (const endpoint of endpoints) {
         try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3000);
+          
           const response = await fetch(endpoint, {
             method: 'HEAD',
             cache: 'no-cache',
             headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
-            signal: AbortSignal.timeout(3000) // Short timeout
+            signal: controller.signal
           });
           
+          clearTimeout(timeoutId);
+          
           if (response.ok) {
+            setIsCheckingConnection(false);
             return true; // We have connectivity
           }
         } catch {
@@ -77,9 +89,33 @@ export const NetworkStatusAlert = () => {
         }
       }
       
+      // Check Binance specific connectivity as a last resort
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        
+        const response = await fetch('https://api.binance.com/api/v3/time', {
+          method: 'HEAD',
+          cache: 'no-cache',
+          headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+          setIsCheckingConnection(false);
+          return true; // We have Binance connectivity
+        }
+      } catch {
+        // Binance-specific check failed
+      }
+      
       // All endpoints failed
+      setIsCheckingConnection(false);
       return false;
     } catch {
+      setIsCheckingConnection(false);
       return false;
     }
   };
@@ -87,6 +123,7 @@ export const NetworkStatusAlert = () => {
   // Handle check connection button
   const handleCheckConnection = async () => {
     setConnectionAttempts(prev => prev + 1);
+    setIsCheckingConnection(true);
     
     // Test internet connection
     const hasConnectivity = await checkRealConnectivity();
@@ -94,6 +131,8 @@ export const NetworkStatusAlert = () => {
     if (hasConnectivity) {
       setIsOnline(true);
       setIsVisible(false);
+      setIsCheckingConnection(false);
+      
       // If we previously thought we were offline, test Binance connection
       if (!isOnline) {
         binanceService.testConnection().catch(() => {
@@ -103,6 +142,7 @@ export const NetworkStatusAlert = () => {
     } else {
       setIsOnline(false);
       setIsVisible(true);
+      setIsCheckingConnection(false);
       
       // If multiple connection attempts have failed, suggest offline mode
       if (connectionAttempts >= 2 && !binanceService.isInOfflineMode()) {
@@ -145,9 +185,19 @@ export const NetworkStatusAlert = () => {
                   : "bg-red-800/30 border-red-700 text-red-200 hover:bg-red-800"
                 }
                 onClick={handleCheckConnection}
+                disabled={isCheckingConnection}
               >
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Check Connection
+                {isCheckingConnection ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Checking...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Check Connection
+                  </>
+                )}
               </Button>
               
               {!binanceService.isInOfflineMode() && (
