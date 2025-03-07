@@ -1,3 +1,4 @@
+
 import { BinanceCredentials } from './types';
 
 export class BinanceApiClient {
@@ -7,10 +8,13 @@ export class BinanceApiClient {
   private proxyConnectionSuccessful: boolean = false;
   private lastProxyConnectionAttempt: number = 0;
   private proxyRetries: number = 3;
+  private directApiAvailable: boolean = false;
   
   constructor(credentials: BinanceCredentials | null, useLocalProxy: boolean) {
     this.credentials = credentials;
     this.useLocalProxy = useLocalProxy;
+    // Check if direct API is available on initialization
+    this.checkDirectApiAvailability();
   }
   
   public setCredentials(credentials: BinanceCredentials | null): void {
@@ -30,12 +34,30 @@ export class BinanceApiClient {
     return this.proxyConnectionSuccessful;
   }
   
+  public isDirectApiAvailable(): boolean {
+    return this.directApiAvailable;
+  }
+  
   public hasCredentials(): boolean {
     return this.credentials !== null && !!this.credentials.apiKey && !!this.credentials.secretKey;
   }
   
   public getApiKey(): string {
     return this.credentials?.apiKey || '';
+  }
+
+  private async checkDirectApiAvailability(): Promise<void> {
+    try {
+      const response = await fetch('https://api.binance.com/api/v3/ping', {
+        method: 'GET',
+        signal: AbortSignal.timeout(5000)
+      });
+      this.directApiAvailable = response.ok;
+      console.log(`Direct Binance API availability: ${this.directApiAvailable}`);
+    } catch (error) {
+      console.warn('Direct Binance API check failed:', error);
+      this.directApiAvailable = false;
+    }
   }
 
   public async fetchWithProxy(endpoint: string, params: Record<string, string> = {}, method: string = 'GET'): Promise<any> {
@@ -90,7 +112,45 @@ export class BinanceApiClient {
     
     this.proxyConnectionSuccessful = false;
     console.error(`All ${this.proxyRetries} proxy attempts failed for ${endpoint}`);
+    
+    // If we're using proxy mode but it fails, try direct API if possible
+    if (this.directApiAvailable && endpoint.match(/^(ping|ticker|klines)/)) {
+      console.log(`Falling back to direct API for ${endpoint}...`);
+      try {
+        return await this.attemptDirectApiCall(endpoint, params);
+      } catch (directError) {
+        console.error('Direct API fallback failed:', directError);
+      }
+    }
+    
     throw lastError;
+  }
+  
+  private async attemptDirectApiCall(endpoint: string, params: Record<string, string>): Promise<any> {
+    const apiBase = 'https://api.binance.com/api/v3';
+    let url: string;
+    
+    // Convert proxy endpoints to direct API endpoints
+    switch (endpoint) {
+      case 'ping':
+        url = `${apiBase}/ping`;
+        break;
+      case 'ticker/price':
+        if (params.symbol) {
+          url = `${apiBase}/ticker/price?symbol=${params.symbol}`;
+        } else {
+          url = `${apiBase}/ticker/price`;
+        }
+        break;
+      case 'klines':
+        url = `${apiBase}/klines?symbol=${params.symbol}&interval=${params.interval}&limit=${params.limit || 100}`;
+        break;
+      default:
+        throw new Error(`Endpoint ${endpoint} not supported for direct API fallback`);
+    }
+    
+    const response = await this.fetchWithRetry(url);
+    return await response.json();
   }
 
   public async fetchWithRetry(url: string, options: RequestInit = {}, retries = 3): Promise<Response> {

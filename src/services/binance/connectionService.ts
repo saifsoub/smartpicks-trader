@@ -66,11 +66,17 @@ export class ConnectionService {
           if (this.apiClient.getProxyMode()) {
             // If proxy mode is enabled but proxy isn't working, notify the user
             toast.error("Proxy connection failed. The proxy server might be temporarily unavailable.");
-            this.logManager.addTradingLog("Proxy connection failed. This may be a temporary issue with our proxy server.", 'error');
+            this.logManager.addTradingLog("Proxy connection failed. This may be a temporary issue with our proxy server.", 'warning');
+            
+            if (directApiWorks) {
+              toast.info("Falling back to direct API for basic market data.");
+              this.logManager.addTradingLog("Using direct API for basic market data. Portfolio data may be limited.", 'info');
+            }
           }
         }
       }
       
+      // Consider connection valid if either direct or proxy works
       if (directApiWorks || proxyWorks) {
         this.accountService.setConnectionStatus('connected');
         this.accountService.setLastConnectionError(null);
@@ -84,7 +90,7 @@ export class ConnectionService {
           
           if (!permissions.read) {
             console.warn("API key doesn't have read permission or can't verify it");
-            this.logManager.addTradingLog("We couldn't verify if your API key has read permissions. You may still be able to use basic functionality.", 'info');
+            this.logManager.addTradingLog("We couldn't verify if your API key has read permissions. Basic market data will still be available.", 'info');
             this.accountService.setLastConnectionError("Connected to API, but couldn't verify your API permissions. You can still use basic features, but portfolio data may be limited.");
           } else if (!proxyWorks && this.apiClient.getProxyMode()) {
             this.accountService.setLastConnectionError("API connected, but proxy mode is having issues. You may need to disable proxy mode if you don't need it.");
@@ -98,7 +104,7 @@ export class ConnectionService {
       } else {
         this.accountService.setConnectionStatus('disconnected');
         if (this.apiClient.getProxyMode()) {
-          this.accountService.setLastConnectionError("Both direct API and proxy connections failed. Check your network connection and API credentials.");
+          this.accountService.setLastConnectionError("Both direct API and proxy connections failed. Check your network connection and API credentials. The proxy server may be temporarily unavailable.");
         } else {
           this.accountService.setLastConnectionError("API connection failed. Try enabling proxy mode in settings, which helps bypass CORS restrictions.");
         }
