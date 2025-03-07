@@ -1,3 +1,4 @@
+
 export interface TradingStrategy {
   id: string;
   name: string;
@@ -109,5 +110,5 @@ export interface Position {
 export interface BalanceInfo {
   available: string;
   total: string;
-  usdValue?: number; // Added to match usage in tradeExecutor.ts
+  usdValue?: number;
 }

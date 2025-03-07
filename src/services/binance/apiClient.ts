@@ -46,6 +46,39 @@ export class BinanceApiClient {
     return this.credentials?.apiKey || '';
   }
 
+  // Add the generateSignature method
+  public async generateSignature(queryString: string): Promise<string> {
+    if (!this.credentials || !this.credentials.secretKey) {
+      throw new Error('API secret key not configured');
+    }
+    
+    try {
+      // In a browser environment, we need to use the subtle crypto API
+      const encoder = new TextEncoder();
+      const data = encoder.encode(queryString);
+      const key = encoder.encode(this.credentials.secretKey);
+      
+      // Create the HMAC signature using crypto.subtle
+      const cryptoKey = await crypto.subtle.importKey(
+        'raw',
+        key,
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+      
+      const signature = await crypto.subtle.sign('HMAC', cryptoKey, data);
+      
+      // Convert the signature to hex
+      return Array.from(new Uint8Array(signature))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    } catch (error) {
+      console.error('Error generating signature:', error);
+      throw new Error('Failed to generate API signature');
+    }
+  }
+
   private async checkDirectApiAvailability(): Promise<void> {
     try {
       const response = await fetch('https://api.binance.com/api/v3/ping', {

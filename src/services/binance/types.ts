@@ -7,17 +7,13 @@ export interface BinanceCredentials {
 export interface BalanceInfo {
   available: string;
   total: string;
+  usdValue?: number;
 }
 
 export interface BinanceBalance {
   asset: string;
   free: string;
   locked: string;
-}
-
-export interface BinanceSymbol {
-  symbol: string;
-  priceChangePercent: string;
 }
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'unknown';
