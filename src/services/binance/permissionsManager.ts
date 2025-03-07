@@ -25,7 +25,7 @@ export class PermissionsManager {
   public setApiPermissions(readPermission: boolean, tradingPermission: boolean): void {
     this.readPermission = readPermission;
     this.tradingPermission = tradingPermission;
-    StorageManager.saveApiPermissions(readPermission, tradingPermission);
+    StorageManager.saveApiPermissions({read: readPermission, trading: tradingPermission});
   }
   
   public getApiPermissions() {
