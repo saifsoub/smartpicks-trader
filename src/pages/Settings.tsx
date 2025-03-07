@@ -163,14 +163,30 @@ const Settings = () => {
             // Try to access actual account data for full verification
             try {
               const accountData = await binanceService.getAccountInfo();
-              if (accountData && accountData.balances && accountData.balances.length > 0) {
-                toast.success("Successfully verified account data from Binance");
-                setPortfolioVerified(true);
+              if (accountData && accountData.balances) {
+                // Consider API connected even if balances are placeholders
+                toast.success("Successfully connected to Binance API");
+                setConnectionStatus('success');
+                
+                // Check if we got real portfolio data or just placeholder data
+                const hasRealBalances = accountData.balances.some(
+                  balance => parseFloat(balance.free) > 0 || parseFloat(balance.locked) > 0
+                );
+                
+                if (hasRealBalances) {
+                  setPortfolioVerified(true);
+                  toast.success("Full portfolio access verified");
+                } else {
+                  setPortfolioVerified(false);
+                  toast.warning("Connected to Binance API, but limited portfolio access. Try enabling proxy mode.");
+                }
+                
+                window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
               } else {
                 toast.warning("Connected to Binance API, but couldn't verify portfolio data");
                 setPortfolioVerified(false);
+                window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
               }
-              window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
             } catch (portfolioError) {
               console.error("Portfolio verification error:", portfolioError);
               toast.warning("Connected to Binance API, but couldn't verify portfolio access");

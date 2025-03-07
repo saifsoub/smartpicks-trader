@@ -98,6 +98,19 @@ const PortfolioSummary: React.FC = () => {
         return;
       }
 
+      // Check if we have any real balances or just placeholder zero balances
+      const hasRealBalances = accountInfo.balances.some(
+        balance => parseFloat(balance.free) > 0 || parseFloat(balance.locked) > 0
+      );
+      
+      if (!hasRealBalances) {
+        console.warn("Only zero balances received - likely limited API access");
+        setLoadError("Connected to Binance API, but limited account data access. Your API key may have restricted permissions, or you may need to enable proxy mode in settings.");
+        setBalances([]);
+        setTotalValue(0);
+        return;
+      }
+      
       if (accountInfo.balances.length === 0) {
         console.warn("Empty balances array received");
         setLoadError("No assets found in your Binance account. Your account may be empty or API permissions might be limited.");
