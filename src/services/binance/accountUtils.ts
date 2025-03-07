@@ -1,5 +1,5 @@
 
-import { BinanceBalance, AccountInfoResponse } from './types';
+import { BinanceBalance, AccountInfoResponse, BalanceInfo } from './types';
 import { FallbackDataProvider } from './fallbackDataProvider';
 
 /**
@@ -24,17 +24,40 @@ export function checkHasRealBalances(balances: BinanceBalance[]): boolean {
 }
 
 /**
+ * Determines if a balance or array of balances is from default/demo data
+ */
+export function isDefaultBalance(balance: BinanceBalance | BinanceBalance[]): boolean {
+  if (Array.isArray(balance)) {
+    // For arrays, check if it matches our default balance pattern
+    return FallbackDataProvider.isDefaultBalanceArray(balance);
+  }
+  
+  // For single balances, check against known default values
+  const defaultBalances = FallbackDataProvider.getSafeBalances();
+  return defaultBalances.some(defaultBal => 
+    defaultBal.asset === balance.asset && 
+    defaultBal.free === balance.free && 
+    defaultBal.locked === balance.locked
+  );
+}
+
+/**
  * Formats raw balance data into a more usable format
  */
-export function formatBalanceData(balances: BinanceBalance[]): Record<string, { asset: string, free: string, locked: string }> {
-  const result: Record<string, { asset: string, free: string, locked: string }> = {};
+export function formatBalanceData(balances: BinanceBalance[]): Record<string, BalanceInfo> {
+  const result: Record<string, BalanceInfo> = {};
   
   balances.forEach(balance => {
     if (parseFloat(balance.free) > 0 || parseFloat(balance.locked) > 0) {
+      const freeAmount = parseFloat(balance.free);
+      const lockedAmount = parseFloat(balance.locked);
+      const total = (freeAmount + lockedAmount).toString();
+      
       result[balance.asset] = {
-        asset: balance.asset,
-        free: balance.free,
-        locked: balance.locked
+        available: balance.free,
+        total: total,
+        usdValue: balance.asset === 'USDT' ? freeAmount + lockedAmount : 0,
+        rawAsset: balance.asset
       };
     }
   });

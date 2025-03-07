@@ -2,6 +2,7 @@
 import { BinanceApiClient } from './apiClient';
 import { LogManager } from './logManager';
 import { StorageManager } from './storageManager';
+import { AccountInfoResponse } from './types';
 
 export class PermissionsManager {
   private apiClient: BinanceApiClient;
@@ -49,10 +50,11 @@ export class PermissionsManager {
     
     try {
       this.logManager.addTradingLog("Detecting API key permissions...", 'info');
+      let accountInfo: AccountInfoResponse | null = null;
       
       // Test read permission with account endpoint
       try {
-        const accountInfo = await this.apiClient.fetchWithProxy('account', { recvWindow: '5000' }, 'GET');
+        accountInfo = await this.apiClient.fetchWithProxy('account', { recvWindow: '5000' }, 'GET');
         if (accountInfo && Array.isArray(accountInfo.balances)) {
           permissions.read = true;
           this.logManager.addTradingLog("READ permission detected for API key", 'success');
@@ -73,16 +75,16 @@ export class PermissionsManager {
         }
       }
       
-      // Test trading permission by creating a test order
-      if (permissions.read) {
+      // Test trading permission by checking account info if available
+      if (permissions.read && accountInfo) {
         try {
           // First check account for trading status
-          if (accountInfo && accountInfo.canTrade) {
+          if (accountInfo.canTrade) {
             permissions.trading = true;
             this.logManager.addTradingLog("TRADING permission detected from account info", 'info');
           } else {
             // Test with API permissions array if available
-            if (accountInfo && Array.isArray(accountInfo.permissions)) {
+            if (Array.isArray(accountInfo.permissions)) {
               if (accountInfo.permissions.includes('SPOT') || 
                   accountInfo.permissions.includes('MARGIN') ||
                   accountInfo.permissions.includes('FUTURES')) {

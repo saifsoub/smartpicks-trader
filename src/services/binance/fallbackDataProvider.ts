@@ -54,6 +54,28 @@ export class FallbackDataProvider {
   }
   
   /**
+   * Checks if an array of balances matches the demo/default data pattern
+   */
+  public static isDefaultBalanceArray(balances: BinanceBalance[]): boolean {
+    if (!Array.isArray(balances) || balances.length === 0) {
+      return false;
+    }
+    
+    // Look for the exact match of our default assets
+    const defaultAssets = this.DEFAULT_ASSETS;
+    const matchCount = defaultAssets.filter(defaultAsset => 
+      balances.some(balance => 
+        balance.asset === defaultAsset.asset && 
+        balance.free === defaultAsset.free && 
+        balance.locked === defaultAsset.locked
+      )
+    ).length;
+    
+    // If more than half the default assets match, consider it default data
+    return matchCount >= Math.floor(defaultAssets.length / 2);
+  }
+  
+  /**
    * Returns mockprices for common trading pairs when the API fails
    */
   public static getMockPrices(): Record<string, string> {
