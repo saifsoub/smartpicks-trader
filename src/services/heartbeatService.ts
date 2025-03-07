@@ -17,6 +17,7 @@ class HeartbeatService {
   private heartbeatInfo: HeartbeatInfo;
   private readonly HEARTBEAT_FREQUENCY = 60000; // 1 minute
   private readonly MAX_INACTIVE_TIME = 180000; // 3 minutes before considering inactive
+  private eventListeners: Array<(running: boolean) => void> = [];
   
   constructor() {
     // Initialize heartbeat info from localStorage or with defaults
@@ -73,12 +74,28 @@ class HeartbeatService {
     }
     this.saveHeartbeatInfo();
     this.startHeartbeat();
+    
+    // Notify event listeners
+    this.notifyListeners(true);
+    
+    // Notify users
+    toast.success("Trading bot activated", {
+      description: "The automated trading system is now running"
+    });
   }
   
   public stopBot(): void {
     this.heartbeatInfo.botRunning = false;
     this.saveHeartbeatInfo();
     this.stopHeartbeat();
+    
+    // Notify event listeners
+    this.notifyListeners(false);
+    
+    // Notify users
+    toast.info("Trading bot deactivated", {
+      description: "The automated trading system has been stopped"
+    });
   }
   
   public getHeartbeatInfo(): HeartbeatInfo {
@@ -112,6 +129,26 @@ class HeartbeatService {
     } else {
       return `${seconds}s`;
     }
+  }
+  
+  // Subscribe to bot status changes
+  public subscribeToStatusChanges(callback: (running: boolean) => void): () => void {
+    this.eventListeners.push(callback);
+    
+    // Return unsubscribe function
+    return () => {
+      this.eventListeners = this.eventListeners.filter(cb => cb !== callback);
+    };
+  }
+  
+  private notifyListeners(running: boolean): void {
+    this.eventListeners.forEach(callback => {
+      try {
+        callback(running);
+      } catch (error) {
+        console.error('Error in heartbeat listener callback:', error);
+      }
+    });
   }
   
   private startHeartbeat(): void {

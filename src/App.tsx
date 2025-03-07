@@ -11,6 +11,7 @@ import NotFound from "./pages/NotFound";
 import Settings from "./pages/Settings";
 import Strategies from "./pages/Strategies";
 import StrategyDetail from "./pages/StrategyDetail";
+import BotDashboard from "./pages/BotDashboard";
 
 const App = () => {
   // Create a client instance inside the component
@@ -28,6 +29,7 @@ const App = () => {
               <Route path="/settings" element={<Settings />} />
               <Route path="/strategies" element={<Strategies />} />
               <Route path="/strategies/:id" element={<StrategyDetail />} />
+              <Route path="/bot-dashboard" element={<BotDashboard />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

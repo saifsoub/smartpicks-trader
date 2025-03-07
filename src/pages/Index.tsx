@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Brain, Zap, Layout, BarChart2, Bot, Lightbulb, ArrowRight, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
+import { Link } from "react-router-dom";
 
 import Header from "@/components/dashboard/Header";
 import TradingChart from "@/components/TradingChart";
@@ -83,6 +84,13 @@ const Index: React.FC = () => {
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
+              
+              <Link to="/bot-dashboard">
+                <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+                  <Bot className="mr-2 h-4 w-4" />
+                  Advanced Bot Dashboard
+                </Button>
+              </Link>
             </div>
           </div>
           
