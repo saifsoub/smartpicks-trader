@@ -1,90 +1,68 @@
 
-import { BalanceInfo, BinanceBalance, AccountInfoResponse } from './types';
+import { BinanceBalance, AccountInfoResponse } from './types';
+import { FallbackDataProvider } from './fallbackDataProvider';
 
-export const formatBalanceData = (
-  balances: BinanceBalance[],
-  isDefaultData: boolean = false
-): Record<string, BalanceInfo> => {
-  const balanceMap: Record<string, BalanceInfo> = {};
+/**
+ * Returns default account information when real data cannot be fetched
+ */
+export function getDefaultAccountInfo(tradingPairs: string[]): AccountInfoResponse {
+  const mockData = FallbackDataProvider.getMockAccountInfo();
+  return {
+    balances: mockData.balances,
+    isDefault: true,
+    isLimitedAccess: true
+  };
+}
+
+/**
+ * Checks if the account has any non-zero balances
+ */
+export function checkHasRealBalances(balances: BinanceBalance[]): boolean {
+  return balances.some(
+    balance => parseFloat(balance.free) > 0 || parseFloat(balance.locked) > 0
+  );
+}
+
+/**
+ * Formats raw balance data into a more usable format
+ */
+export function formatBalanceData(balances: BinanceBalance[]): Record<string, { asset: string, free: string, locked: string }> {
+  const result: Record<string, { asset: string, free: string, locked: string }> = {};
   
-  for (const balance of balances) {
-    // Consider even very small balances (some exchanges return very small dust amounts)
-    if (parseFloat(balance.free) > 0.000000001 || parseFloat(balance.locked) > 0.000000001) {
-      balanceMap[balance.asset] = {
-        available: balance.free,
-        total: (parseFloat(balance.free) + parseFloat(balance.locked)).toString(),
-        usdValue: 0, // Will be filled in by binanceService
-        rawAsset: balance.asset,
-        isDefault: isDefaultData
+  balances.forEach(balance => {
+    if (parseFloat(balance.free) > 0 || parseFloat(balance.locked) > 0) {
+      result[balance.asset] = {
+        asset: balance.asset,
+        free: balance.free,
+        locked: balance.locked
       };
     }
-  }
-  
-  console.log(`Formatted ${Object.keys(balanceMap).length} non-zero balances (isDefault: ${isDefaultData})`);
-  return balanceMap;
-};
-
-export const getDefaultAccountInfo = (defaultTradingPairs: string[]): AccountInfoResponse => {
-  console.warn("Using default balances as fallback - THIS IS NOT REAL DATA");
-  
-  // Create some sample balances for testing when API isn't working
-  const defaultBalances = [
-    { asset: 'BTC', free: '0.01', locked: '0' },
-    { asset: 'ETH', free: '0.5', locked: '0' },
-    { asset: 'BNB', free: '2', locked: '0' },
-    { asset: 'USDT', free: '100', locked: '0' }
-  ];
-  
-  // Add any missing pairs from defaultTradingPairs
-  const existingAssets = defaultBalances.map(b => b.asset);
-  defaultTradingPairs.forEach(pair => {
-    const asset = pair.replace('USDT', '');
-    if (!existingAssets.includes(asset) && asset !== '') {
-      defaultBalances.push({ asset, free: '0', locked: '0' });
-    }
   });
   
-  return { 
-    balances: defaultBalances,
-    isDefault: true 
+  return result;
+}
+
+/**
+ * Creates a unique ID for an account to help with caching
+ */
+export function generateAccountCacheKey(apiKey: string, useProxy: boolean): string {
+  // Use just part of the API key for privacy
+  const keyFragment = apiKey.substring(0, 6) + apiKey.substring(apiKey.length - 6);
+  return `account_${keyFragment}_${useProxy ? 'proxy' : 'direct'}`;
+}
+
+/**
+ * Extracts a safer version of account info for logging, removing sensitive data
+ */
+export function getSafeAccountInfoForLogging(accountInfo: AccountInfoResponse): object {
+  return {
+    balancesCount: accountInfo.balances ? accountInfo.balances.length : 0,
+    accountType: accountInfo.accountType,
+    canTrade: accountInfo.canTrade,
+    canDeposit: accountInfo.canDeposit,
+    canWithdraw: accountInfo.canWithdraw,
+    isDefault: accountInfo.isDefault,
+    isLimitedAccess: accountInfo.isLimitedAccess,
+    permissionsCount: accountInfo.permissions ? accountInfo.permissions.length : 0
   };
-};
-
-export const checkHasRealBalances = (balances: BinanceBalance[]): boolean => {
-  // Check if we have any non-zero balances
-  const hasNonZeroBalance = balances.some(
-    balance => parseFloat(balance.free) > 0.000000001 || parseFloat(balance.locked) > 0.000000001
-  );
-  
-  // Also check if this looks like our default data
-  const looksLikeDefaultData = isDefaultBalance(balances);
-  
-  return hasNonZeroBalance && !looksLikeDefaultData;
-};
-
-export const logBalanceSummary = (balances: Record<string, BalanceInfo>): void => {
-  if (Object.keys(balances).length === 0) {
-    console.log("No non-zero balances found");
-    return;
-  }
-  
-  const isDefaultData = Object.values(balances).some(balance => balance.isDefault);
-  
-  if (isDefaultData) {
-    console.warn("USING DEFAULT BALANCE DATA - NOT REAL BALANCES");
-  }
-  
-  console.log(`Found ${Object.keys(balances).length} assets with non-zero balances:`);
-  Object.keys(balances).forEach(asset => {
-    console.log(`${asset}: ${balances[asset].total} (${balances[asset].usdValue} USD) ${balances[asset].isDefault ? '[DEFAULT DATA]' : ''}`);
-  });
-};
-
-export const isDefaultBalance = (balances: BinanceBalance[]): boolean => {
-  // Check if this matches our default data pattern
-  return balances.length >= 4 && 
-    balances.some(b => b.asset === 'BTC' && b.free === '0.01') &&
-    balances.some(b => b.asset === 'ETH' && b.free === '0.5') &&
-    balances.some(b => b.asset === 'BNB' && b.free === '2') &&
-    balances.some(b => b.asset === 'USDT' && b.free === '100');
-};
+}

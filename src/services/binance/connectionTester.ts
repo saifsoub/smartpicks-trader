@@ -2,18 +2,14 @@
 import { BinanceApiClient } from './apiClient';
 import { LogManager } from './logManager';
 import { AccountService } from './accountService';
-import { toast } from 'sonner';
 
 export class ConnectionTester {
   private apiClient: BinanceApiClient;
   private logManager: LogManager;
   private accountService: AccountService;
-  private lastConnectionAttempt: number = 0;
-  private connectionCooldown: number = 1000; // 1 second cooldown to allow more frequent tests
-  private connectionTimeout: number = 30000; // Increased to 30 seconds for slower networks
-  private consecutiveFailures: number = 0;
-  private maxConsecutiveFailures: number = 3;
-  private hasReadPermission: boolean = false;
+  private lastTestTime: number = 0;
+  private testingInProgress: boolean = false;
+  private minTestInterval: number = 5000; // Minimum 5 seconds between tests
   
   constructor(apiClient: BinanceApiClient, logManager: LogManager, accountService: AccountService) {
     this.apiClient = apiClient;
@@ -21,220 +17,179 @@ export class ConnectionTester {
     this.accountService = accountService;
   }
   
+  /**
+   * Checks if we can perform a connection test based on time interval
+   */
   public canTest(): boolean {
-    if (!this.apiClient.hasCredentials()) {
-      console.warn("Cannot test connection: No credentials found");
-      this.accountService.setConnectionStatus('disconnected');
-      this.accountService.setLastConnectionError("No API credentials found");
-      return false;
-    }
-
-    // Prevent multiple connection tests in quick succession
     const now = Date.now();
-    if (now - this.lastConnectionAttempt < this.connectionCooldown) {
-      console.log(`Connection test throttled, try again in ${Math.ceil((this.connectionCooldown - (now - this.lastConnectionAttempt))/1000)} seconds`);
+    return !this.testingInProgress && (now - this.lastTestTime >= this.minTestInterval);
+  }
+  
+  /**
+   * Tests the direct API connection to Binance
+   */
+  public async testDirectConnection(): Promise<boolean> {
+    if (!this.apiClient.hasCredentials()) {
       return false;
     }
     
-    this.lastConnectionAttempt = now;
-    return true;
-  }
-  
-  public async testDirectConnection(): Promise<boolean> {
     try {
-      console.log("Testing direct connection to Binance...");
+      this.testingInProgress = true;
+      this.lastTestTime = Date.now();
       
-      // Test 1: Simple ping test
+      // Try to ping Binance API directly
+      console.log('Testing direct API connection to Binance...');
+      
+      // Start with simple ping
       const pingResponse = await fetch('https://api.binance.com/api/v3/ping', {
         method: 'GET',
-        signal: AbortSignal.timeout(this.connectionTimeout),
-        cache: 'no-store' // Prevent caching
+        signal: AbortSignal.timeout(5000)
       });
       
-      console.log("Basic ping test response:", pingResponse.status, pingResponse.statusText);
       if (!pingResponse.ok) {
-        console.warn("Basic ping test failed with status:", pingResponse.status);
-        this.consecutiveFailures++;
+        console.log('Direct API ping failed');
         return false;
       }
       
-      // Test 2: Get ticker price data (public endpoint)
-      const tickerResponse = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT', {
-        signal: AbortSignal.timeout(this.connectionTimeout),
-        cache: 'no-store'
+      // Try to get server time
+      const timeResponse = await fetch('https://api.binance.com/api/v3/time', {
+        method: 'GET',
+        signal: AbortSignal.timeout(5000)
       });
       
-      if (!tickerResponse.ok) {
-        console.warn("Ticker test failed with status:", tickerResponse.status);
-        this.consecutiveFailures++;
+      if (!timeResponse.ok) {
+        console.log('Direct API time check failed');
         return false;
       }
       
-      const tickerData = await tickerResponse.json();
-      if (!tickerData.price) {
-        console.warn("Invalid ticker data:", tickerData);
-        this.consecutiveFailures++;
-        return false;
-      }
-      
-      console.log("Direct API ticker test successful:", tickerData.price);
-      this.consecutiveFailures = 0;
-      
-      // Test 3: Try a signed test if API key/secret are available
+      // If we have credentials, try to get account data
       if (this.apiClient.hasCredentials()) {
         try {
-          // First get server time to sync timestamp
-          const serverTimeResponse = await fetch('https://api.binance.com/api/v3/time', {
-            cache: 'no-store',
-            signal: AbortSignal.timeout(this.connectionTimeout)
-          });
-          const serverTimeData = await serverTimeResponse.json();
+          // Get server time for accurate timestamp
+          const timeData = await timeResponse.json();
+          const timestamp = timeData.serverTime;
           
-          if (!serverTimeData.serverTime) {
-            console.warn("Failed to get server time:", serverTimeData);
-            // Continue with local time as fallback
-          }
-          
-          const timestamp = serverTimeData.serverTime || Date.now();
-          const queryString = `timestamp=${timestamp}&recvWindow=10000`;
+          // Add recvWindow param for better time handling
+          const queryString = `timestamp=${timestamp}&recvWindow=5000`;
           const signature = await this.apiClient.generateSignature(queryString);
           
-          // Try to check account endpoint directly - this will verify read access
-          const accountTestUrl = `https://api.binance.com/api/v3/account?${queryString}&signature=${signature}`;
-          
-          const accountTestResponse = await fetch(accountTestUrl, {
+          const accountResponse = await fetch(`https://api.binance.com/api/v3/account?${queryString}&signature=${signature}`, {
             method: 'GET',
             headers: {
               'X-MBX-APIKEY': this.apiClient.getApiKey()
             },
-            signal: AbortSignal.timeout(this.connectionTimeout),
-            cache: 'no-store'
+            signal: AbortSignal.timeout(10000)
           });
           
-          if (accountTestResponse.ok) {
-            console.log("Direct API account request test successful");
-            const accountData = await accountTestResponse.json();
-            
-            if (accountData && Array.isArray(accountData.balances)) {
-              this.hasReadPermission = true;
-              console.log("Account data access confirmed:", accountData.balances.length, "assets found");
-              // If we can access account data, we have read permissions
-              return true;
-            }
-          } else {
-            const errorText = await accountTestResponse.text();
-            console.warn("Direct API account test failed:", errorText);
-            
-            // Check if error is permission related
-            if (errorText.includes("API-key has no permission")) {
-              console.log("API key permission issue detected:", errorText);
-              // Mark that we have limited permissions, but basic connectivity works
-              this.hasReadPermission = false;
-            }
-            
-            // Even if account test fails, basic connectivity is working
+          if (accountResponse.ok) {
+            console.log('Direct API account check successful');
             return true;
           }
-        } catch (signedTestError) {
-          console.warn("Direct API signed request test error:", signedTestError);
-          // Don't fail the whole connection test for this optional test
+          
+          const errorText = await accountResponse.text();
+          console.log('Direct API account check failed:', errorText);
+          
+          // If we get specific errors about API permissions, consider the connection working
+          // but with limited permissions
+          if (errorText.includes("API-key has no permission")) {
+            console.log('Direct API connection works but has permission limitations');
+            return true;
+          }
+        } catch (error) {
+          console.warn('Direct API account check error:', error);
         }
       }
       
+      // If we can ping and get time, consider basic API working
+      console.log('Basic direct API connection successful');
       return true;
-    } catch (directError) {
-      console.warn("Direct connection failed:", directError);
-      this.consecutiveFailures++;
-      
-      if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
-        console.error(`Direct API connection failed ${this.consecutiveFailures} consecutive times`);
-        this.logManager.addTradingLog("Multiple connection failures detected. Your network may be blocking Binance.", 'warning');
-      }
-      
+    } catch (error) {
+      console.error('Direct API connection test failed:', error);
       return false;
+    } finally {
+      this.testingInProgress = false;
     }
   }
   
+  /**
+   * Tests the proxy connection to Binance
+   */
   public async testProxyConnection(): Promise<boolean> {
+    if (!this.apiClient.hasCredentials()) {
+      return false;
+    }
+    
     try {
-      console.log("Testing proxy connection...");
+      this.testingInProgress = true;
       
-      // Try multiple proxy endpoints to better validate the connection
-      // Start with a simple ping test
-      const pingResult = await this.apiClient.fetchWithProxy('ping', {}, 'GET', false);
-      if (!pingResult) {
-        console.warn("Proxy ping test failed");
-        return false;
-      }
+      // Test the proxy connection using our proxy endpoints
+      console.log('Testing proxy connection to Binance...');
       
-      // Try to get a public endpoint that doesn't require auth
+      // Start with a simple ping through the proxy
       try {
-        const tickerResult = await this.apiClient.fetchWithProxy('ticker/price', { symbol: 'BTCUSDT' }, 'GET', false);
-        if (tickerResult && tickerResult.price) {
-          console.log("Proxy ticker test successful:", tickerResult.price);
-        } else {
-          console.warn("Proxy ticker test returned invalid data:", tickerResult);
-        }
-      } catch (tickerError) {
-        console.warn("Proxy ticker test failed:", tickerError);
-        // Continue with other tests
-      }
-      
-      // Try to access account data - this will verify API permissions
-      if (this.apiClient.hasCredentials()) {
-        try {
-          // Use recvWindow parameter to allow for time differences
-          const accountResult = await this.apiClient.fetchWithProxy('account', { recvWindow: '10000' }, 'GET', false);
-          if (accountResult && Array.isArray(accountResult.balances)) {
-            console.log("Proxy account data access successful");
-            this.hasReadPermission = true;
-          }
-        } catch (accountError) {
-          console.warn("Proxy account access failed:", accountError);
-          this.hasReadPermission = false;
-          // Continue with other tests - basic connection might still work
-        }
+        const pingData = await this.apiClient.fetchWithProxy('ping', {}, 'GET', true);
         
-        // Try an alternative endpoint for checking API permissions
-        try {
-          const userDataResult = await this.apiClient.fetchWithProxy('userDataStream', {}, 'POST', false);
-          if (userDataResult && userDataResult.listenKey) {
-            console.log("Proxy user data stream access successful");
-            this.hasReadPermission = true;
+        if (pingData) {
+          console.log('Proxy ping successful');
+          
+          // Try to get more specific data if we have credentials
+          try {
+            // Try reading ticker data which doesn't require special permissions
+            const tickerData = await this.apiClient.fetchWithProxy(
+              'ticker/price',
+              { symbol: 'BTCUSDT' },
+              'GET',
+              true
+            );
+            
+            if (tickerData && tickerData.price) {
+              console.log('Proxy ticker check successful');
+              
+              // Try to check account access only if we have credentials
+              if (this.apiClient.hasCredentials()) {
+                try {
+                  // User data stream creation is a good test for basic API access
+                  const userData = await this.apiClient.fetchWithProxy(
+                    'userDataStream',
+                    {},
+                    'POST',
+                    true
+                  );
+                  
+                  if (userData && userData.listenKey) {
+                    console.log('Proxy user data stream check successful');
+                    return true;
+                  }
+                } catch (userDataError) {
+                  console.warn('Proxy user data stream check failed:', userDataError);
+                  // Still return true if ticker worked but user data failed
+                  // This indicates the proxy works but possibly with limited permissions
+                  return true;
+                }
+              }
+              
+              // If ticker worked, consider the proxy connection working
+              return true;
+            }
+          } catch (tickerError) {
+            console.warn('Proxy ticker check failed:', tickerError);
+            // Still return true if ping worked
+            return true;
           }
-        } catch (userDataError) {
-          console.warn("Proxy user data stream access failed:", userDataError);
-          // Continue with other tests
+          
+          // If ping worked, consider the proxy connection working
+          return true;
         }
-      }
-      
-      console.log("Proxy connection test completed with some success");
-      this.apiClient.setProxyConnectionSuccessful(true);
-      this.consecutiveFailures = 0;
-      return true;
-    } catch (proxyError) {
-      console.warn("Proxy connection failed:", proxyError);
-      this.apiClient.setProxyConnectionSuccessful(false);
-      this.consecutiveFailures++;
-      
-      if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
-        console.error(`Proxy connection failed ${this.consecutiveFailures} consecutive times`);
-        this.logManager.addTradingLog("Persistent proxy connection failures detected. Try switching to direct mode or check network.", 'warning');
+      } catch (pingError) {
+        console.error('Proxy ping failed:', pingError);
       }
       
       return false;
+    } catch (error) {
+      console.error('Proxy connection test failed:', error);
+      return false;
+    } finally {
+      this.testingInProgress = false;
     }
-  }
-  
-  public hasReadAccess(): boolean {
-    return this.hasReadPermission;
-  }
-  
-  public updateLastConnectionAttempt(): void {
-    this.lastConnectionAttempt = Date.now();
-  }
-  
-  public resetConsecutiveFailures(): void {
-    this.consecutiveFailures = 0;
   }
 }

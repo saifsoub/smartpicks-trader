@@ -9,6 +9,7 @@ import { BalanceService } from './binance/balanceService';
 import { TradingService } from './binance/tradingService';
 import { CredentialsService } from './binance/credentialsService';
 import { FallbackDataProvider } from './binance/fallbackDataProvider';
+import { ConnectionStatusManager } from './binance/connectionStatusManager';
 import { 
   BinanceCredentials, 
   BinanceBalance, 
@@ -27,14 +28,13 @@ class BinanceService {
   private balanceService: BalanceService;
   private tradingService: TradingService;
   private credentialsService: CredentialsService;
-  private connectionErrors: number = 0;
-  private maxConnectionErrors: number = 5;
-  private lastSuccessfulConnection: number = 0;
+  private connectionStatusManager: ConnectionStatusManager;
   
   constructor() {
     const credentials = StorageManager.loadCredentials();
     const useLocalProxy = StorageManager.getProxyMode();
     
+    this.connectionStatusManager = new ConnectionStatusManager();
     this.apiClient = new BinanceApiClient(credentials, useLocalProxy);
     this.logManager = new LogManager();
     this.accountService = new AccountService(this.apiClient, this.logManager);
@@ -52,19 +52,13 @@ class BinanceService {
       console.warn("Failed to check server time:", err);
     });
     
-    // Initialize with last successful connection time if available
-    const lastConnection = localStorage.getItem('lastSuccessfulConnection');
-    if (lastConnection) {
-      this.lastSuccessfulConnection = parseInt(lastConnection);
-    }
-    
     // Set up auto-reconnect on window focus
     window.addEventListener('focus', this.handleWindowFocus.bind(this));
   }
   
   private handleWindowFocus(): void {
     // Only auto-reconnect if we haven't had a successful connection in a while
-    const hoursSinceLastConnection = (Date.now() - this.lastSuccessfulConnection) / (1000 * 60 * 60);
+    const hoursSinceLastConnection = this.connectionStatusManager.getHoursSinceLastConnection();
     if (hoursSinceLastConnection > 1 && this.hasCredentials()) {
       console.log("Window focused, testing connection after inactivity...");
       this.testConnection().catch(err => {
@@ -86,19 +80,9 @@ class BinanceService {
       this.balanceService.resetCache(); // Clear cache when credentials change
       
       // After saving credentials, immediately test the connection
-      // This helps users get feedback right away
       this.logManager.addTradingLog("API credentials updated, testing connection...", 'info');
       
-      setTimeout(() => {
-        this.testConnection().then(success => {
-          if (success) {
-            this.logManager.addTradingLog("Successfully connected with new credentials", 'success');
-            this.getAccountBalance(true);
-          } else {
-            this.logManager.addTradingLog("Connection test with new credentials failed", 'error');
-          }
-        });
-      }, 500);
+      this.scheduleConnectionTest();
       
       return success;
     } catch (error) {
@@ -106,6 +90,19 @@ class BinanceService {
       this.logManager.addTradingLog(`Failed to save credentials: ${error instanceof Error ? error.message : String(error)}`, 'error');
       return false;
     }
+  }
+  
+  private scheduleConnectionTest(): void {
+    setTimeout(() => {
+      this.testConnection().then(success => {
+        if (success) {
+          this.logManager.addTradingLog("Successfully connected with new credentials", 'success');
+          this.getAccountBalance(true);
+        } else {
+          this.logManager.addTradingLog("Connection test with new credentials failed", 'error');
+        }
+      });
+    }, 500);
   }
 
   public getApiKey(): string {
@@ -119,13 +116,7 @@ class BinanceService {
     this.accountService.setLastConnectionError(null);
     this.balanceService.resetCache(); // Clear cache when proxy mode changes
     
-    setTimeout(() => {
-      this.testConnection().then(success => {
-        if (success) {
-          this.getAccountBalance(true);
-        }
-      });
-    }, 500);
+    this.scheduleConnectionTest();
     
     return true;
   }
@@ -174,20 +165,12 @@ class BinanceService {
       const result = await this.connectionService.testConnection();
       if (result) {
         this.balanceService.resetCache();
-        // Store the successful connection
-        this.lastSuccessfulConnection = Date.now();
-        localStorage.setItem('lastSuccessfulConnection', this.lastSuccessfulConnection.toString());
-        this.connectionErrors = 0;
+        this.connectionStatusManager.recordSuccessfulConnection();
       } else {
-        this.connectionErrors++;
+        const connectionErrors = this.connectionStatusManager.incrementConnectionErrors();
+        this.connectionStatusManager.checkConnectionTimeAndNotify();
         
-        // Check when was the last successful connection
-        const hoursSinceLastConnection = (Date.now() - this.lastSuccessfulConnection) / (1000 * 60 * 60);
-        if (hoursSinceLastConnection > 24) {
-          toast.warning("No successful connection in over 24 hours. Consider updating your API keys or checking network.");
-        }
-        
-        if (this.connectionErrors >= this.maxConnectionErrors) {
+        if (connectionErrors >= this.connectionStatusManager.getMaxConnectionErrors()) {
           toast.error("Multiple connection failures. Switching to offline demo mode.");
           this.logManager.addTradingLog("Multiple connection failures. Using offline demo mode.", 'warning');
         }
@@ -195,7 +178,7 @@ class BinanceService {
       return result;
     } catch (error) {
       console.error("Test connection error:", error);
-      this.connectionErrors++;
+      this.connectionStatusManager.incrementConnectionErrors();
       return false;
     }
   }
@@ -261,6 +244,7 @@ class BinanceService {
     }
   }
 
+  // Market and trading operations
   public async placeMarketOrder(
     symbol: string,
     side: 'BUY' | 'SELL',
@@ -271,6 +255,7 @@ class BinanceService {
     return result;
   }
 
+  // Market data methods
   public async getSymbols(): Promise<BinanceSymbol[]> {
     return this.marketDataService.getSymbols();
   }
@@ -291,6 +276,7 @@ class BinanceService {
     return this.marketDataService.getKlines(symbol, interval, limit);
   }
 
+  // Trading log management
   public getTradingLogs() {
     return this.logManager.getTradingLogs();
   }
