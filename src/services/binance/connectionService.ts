@@ -203,7 +203,7 @@ export class ConnectionService {
   private async handleConnectionResults(directApiWorks: boolean, proxyWorks: boolean): Promise<boolean> {
     if (directApiWorks || proxyWorks) {
       this.reconnectionManager.resetReconnectAttempts();
-      this.connectionTester.resetErrorCounters();
+      this.connectionTester.resetNetworkErrorCount();
       this.accountService.setConnectionStatus('connected');
       this.accountService.setLastConnectionError(null);
       
@@ -289,4 +289,3 @@ export class ConnectionService {
     }
   }
 }
-
