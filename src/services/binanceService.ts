@@ -217,14 +217,18 @@ class BinanceService {
           console.error('Error fetching account info via proxy:', error);
           this.addTradingLog("Failed to fetch account info via proxy: " + (error instanceof Error ? error.message : String(error)), 'error');
           
-          // Fallback to mock data
+          // Fallback to more realistic mock data
           return {
             balances: [
               { asset: "BTC", free: "0.00125000", locked: "0.00000000" },
               { asset: "ETH", free: "0.05230000", locked: "0.00000000" },
-              { asset: "USDT", free: "680.50000000", locked: "0.00000000" },
+              { asset: "USDT", free: "125.50000000", locked: "0.00000000" },
               { asset: "BNB", free: "0.00850000", locked: "0.00000000" },
-              { asset: "SOL", free: "1.20000000", locked: "0.00000000" }
+              { asset: "SOL", free: "1.20000000", locked: "0.00000000" },
+              { asset: "ADA", free: "120.00000000", locked: "0.00000000" },
+              { asset: "DOT", free: "4.75000000", locked: "0.00000000" },
+              { asset: "XRP", free: "75.50000000", locked: "0.00000000" },
+              { asset: "MATIC", free: "35.25000000", locked: "0.00000000" }
             ]
           };
         }
@@ -234,21 +238,27 @@ class BinanceService {
           balances: [
             { asset: "BTC", free: "0.00125000", locked: "0.00000000" },
             { asset: "ETH", free: "0.05230000", locked: "0.00000000" },
-            { asset: "USDT", free: "680.50000000", locked: "0.00000000" },
+            { asset: "USDT", free: "125.50000000", locked: "0.00000000" },
             { asset: "BNB", free: "0.00850000", locked: "0.00000000" },
-            { asset: "SOL", free: "1.20000000", locked: "0.00000000" }
+            { asset: "SOL", free: "1.20000000", locked: "0.00000000" },
+            { asset: "ADA", free: "120.00000000", locked: "0.00000000" },
+            { asset: "DOT", free: "4.75000000", locked: "0.00000000" },
+            { asset: "XRP", free: "75.50000000", locked: "0.00000000" },
+            { asset: "MATIC", free: "35.25000000", locked: "0.00000000" }
           ]
         };
       }
     } catch (error) {
       console.error('Error fetching account info:', error);
-      // For demo purposes, return real balances even on error
+      // For demo purposes, return realistic balances even on error
       this.addTradingLog("Failed to fetch account info: " + (error instanceof Error ? error.message : String(error)), 'error');
       return { 
         balances: [
           { asset: "BTC", free: "0.00125000", locked: "0.00000000" },
           { asset: "ETH", free: "0.05230000", locked: "0.00000000" },
-          { asset: "USDT", free: "680.50000000", locked: "0.00000000" },
+          { asset: "USDT", free: "125.50000000", locked: "0.00000000" },
+          { asset: "BNB", free: "0.00850000", locked: "0.00000000" },
+          { asset: "SOL", free: "1.20000000", locked: "0.00000000" }
         ] 
       };
     }
