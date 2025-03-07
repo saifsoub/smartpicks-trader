@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -5,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { ArrowLeft, ArrowUpDown, Save, RefreshCw, CheckCircle, AlertCircle, Loader2, Info } from "lucide-react";
+import { ArrowLeft, ArrowUpDown, Save, RefreshCw, CheckCircle, AlertCircle, Loader2, Info, Globe, Server } from "lucide-react";
 import { toast } from "sonner";
 import binanceService from "@/services/binanceService";
 import notificationService from "@/services/notificationService";
@@ -19,6 +20,7 @@ const Settings = () => {
   
   const [apiKey, setApiKey] = useState("");
   const [secretKey, setSecretKey] = useState("");
+  const [useProxyMode, setUseProxyMode] = useState(binanceService.getProxyMode());
   
   const [telegramEnabled, setTelegramEnabled] = useState(false);
   const [telegramChatId, setTelegramChatId] = useState("");
@@ -42,6 +44,8 @@ const Settings = () => {
       }
     }
     
+    setUseProxyMode(binanceService.getProxyMode());
+    
     const settings = notificationService.getSettings();
     setTelegramEnabled(settings.telegramEnabled);
     setTelegramChatId(settings.telegramChatId);
@@ -63,7 +67,7 @@ const Settings = () => {
       const connectionTest = await binanceService.testConnection();
       if (connectionTest) {
         setConnectionStatus('success');
-        setConnectedMessage("Connected to Binance API (Live Trading Mode)");
+        setConnectedMessage(`Connected to Binance API (${useProxyMode ? 'Proxy Mode' : 'Direct API Mode'})`);
       } else {
         setConnectionStatus('error');
         setConnectedMessage("Connection failed. Please check your API keys.");
@@ -78,6 +82,16 @@ const Settings = () => {
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+  
+  const handleToggleProxyMode = (checked: boolean) => {
+    setUseProxyMode(checked);
+    const success = binanceService.setProxyMode(checked);
+    if (success) {
+      toast.success(`API connection mode set to: ${checked ? 'Proxy Mode' : 'Direct API Mode'}`);
+      // Retest connection with new mode
+      checkConnection();
     }
   };
   
@@ -118,7 +132,7 @@ const Settings = () => {
           if (connectionTest) {
             toast.success("Connection to Binance API successful");
             setConnectionStatus('success');
-            setConnectedMessage("Connected to Binance API (Live Trading Mode)");
+            setConnectedMessage(`Connected to Binance API (${useProxyMode ? 'Proxy Mode' : 'Direct API Mode'})`);
             window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
           } else {
             toast.warning("API keys saved but connection test couldn't be completed. We'll proceed assuming your keys are valid.");
@@ -262,7 +276,7 @@ const Settings = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="apiKey" className="text-slate-200">API Key</Label>
+                <Label htmlFor="apiKey" className="text-sm text-slate-400">API Key</Label>
                 <Input 
                   id="apiKey" 
                   value={apiKey}
@@ -275,7 +289,7 @@ const Settings = () => {
                 </p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="secretKey" className="text-slate-200">Secret Key</Label>
+                <Label htmlFor="secretKey" className="text-sm text-slate-400">Secret Key</Label>
                 <Input 
                   id="secretKey" 
                   type="password" 
@@ -289,14 +303,37 @@ const Settings = () => {
                 </p>
               </div>
               
-              <div className="bg-yellow-900/20 p-3 rounded-md border border-yellow-800 my-2">
-                <div className="flex items-start">
-                  <Info className="h-5 w-5 text-yellow-300 mr-2 mt-0.5" />
-                  <p className="text-sm text-yellow-200">
-                    Due to browser security restrictions (CORS), API connection testing may not work directly from this web app. Make sure your API keys are correct even if the connection test passes.
+              <div className="flex items-center justify-between bg-slate-800 p-3 rounded-md border border-slate-700">
+                <div className="space-y-0.5">
+                  <Label className="text-sm text-slate-300 flex items-center">
+                    {useProxyMode ? 
+                      <><Server className="h-4 w-4 mr-1.5 text-blue-400" /> Use API Proxy</> : 
+                      <><Globe className="h-4 w-4 mr-1.5 text-green-400" /> Direct API Mode</>
+                    }
+                  </Label>
+                  <p className="text-xs text-slate-400">
+                    {useProxyMode ? 
+                      "Proxy mode avoids CORS issues by using a secure server relay" : 
+                      "Direct connection to Binance API (may have CORS issues)"
+                    }
                   </p>
                 </div>
+                <Switch 
+                  checked={useProxyMode}
+                  onCheckedChange={handleToggleProxyMode}
+                />
               </div>
+              
+              {!useProxyMode && (
+                <div className="bg-yellow-900/20 p-3 rounded-md border border-yellow-800 my-2">
+                  <div className="flex items-start">
+                    <Info className="h-5 w-5 text-yellow-300 mr-2 mt-0.5" />
+                    <p className="text-sm text-yellow-200">
+                      Due to browser security restrictions (CORS), direct API connection testing may not work. Use Proxy Mode for reliable connectivity.
+                    </p>
+                  </div>
+                </div>
+              )}
               
               <Button 
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white" 
