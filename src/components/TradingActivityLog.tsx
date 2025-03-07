@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,9 +7,10 @@ import { RefreshCw, Clock, Check, AlertTriangle, Info, Trash2, ArrowDownUp } fro
 import binanceService from "@/services/binanceService";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
+import { LogType, TradingLog } from "@/services/binance/types";
 
 const TradingActivityLog: React.FC = () => {
-  const [logs, setLogs] = useState<{timestamp: Date, message: string, type: 'info' | 'success' | 'error'}[]>([]);
+  const [logs, setLogs] = useState<TradingLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [tradeSymbol, setTradeSymbol] = useState("BTCUSDT");
   const [tradeAction, setTradeAction] = useState<"BUY" | "SELL">("BUY");
@@ -177,12 +177,14 @@ const TradingActivityLog: React.FC = () => {
     }
   };
   
-  const getIconForLogType = (type: 'info' | 'success' | 'error') => {
+  const getIconForLogType = (type: LogType) => {
     switch (type) {
       case 'success':
         return <Check className="h-4 w-4 text-green-500" />;
       case 'error':
         return <AlertTriangle className="h-4 w-4 text-red-500" />;
+      case 'warning':
+        return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
       case 'info':
       default:
         return <Info className="h-4 w-4 text-blue-500" />;
