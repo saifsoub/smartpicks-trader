@@ -1,19 +1,20 @@
 
 import { BinanceApiClient } from './apiClient';
 import { LogManager } from './logManager';
-import { BalanceInfo, AccountInfoResponse } from './types';
-import { formatBalanceData, logBalanceSummary, isDefaultBalance } from './accountUtils';
+import { BinanceBalance, BalanceInfo, AccountInfoResponse } from './types';
+import { FallbackDataProvider } from './fallbackDataProvider';
 import { toast } from 'sonner';
 
 export class BalanceService {
   private apiClient: BinanceApiClient;
   private logManager: LogManager;
-  private lastBalanceCheck: number = 0;
-  private cachedBalances: Record<string, BalanceInfo> | null = null;
-  private isGettingBalances: boolean = false;
-  private retryDelay: number = 2000;
-  private maxBalanceCacheAge: number = 30000; // 30 seconds
-  private balanceFetchPromise: Promise<Record<string, BalanceInfo>> | null = null;
+  private balanceCache: Record<string, BalanceInfo> | null = null;
+  private lastCacheTime: number = 0;
+  private cacheTTL: number = 30000; // 30 seconds
+  private accountInfoCache: AccountInfoResponse | null = null;
+  private fetchInProgress: boolean = false;
+  private retryCount: number = 0;
+  private maxRetries: number = 3;
   
   constructor(apiClient: BinanceApiClient, logManager: LogManager) {
     this.apiClient = apiClient;
@@ -21,175 +22,270 @@ export class BalanceService {
   }
   
   public resetCache(): void {
-    this.cachedBalances = null;
-  }
-  
-  public async getAccountBalance(forceRefresh: boolean = false): Promise<Record<string, BalanceInfo>> {
-    if (this.isGettingBalances) {
-      console.log("Already retrieving balances, waiting for completion");
-      
-      if (this.balanceFetchPromise) {
-        return this.balanceFetchPromise;
-      }
-      
-      if (this.cachedBalances) {
-        return this.cachedBalances;
-      }
-      
-      return new Promise((resolve, reject) => {
-        setTimeout(() => {
-          if (this.isGettingBalances) {
-            reject(new Error("Balance retrieval still in progress after waiting"));
-          } else {
-            this.getAccountBalance(forceRefresh).then(resolve).catch(reject);
-          }
-        }, this.retryDelay);
-      });
-    }
-    
-    const now = Date.now();
-    if (!forceRefresh && this.cachedBalances && now - this.lastBalanceCheck < this.maxBalanceCacheAge) {
-      console.log("Using cached balance data (less than 30 seconds old)");
-      return this.cachedBalances;
-    }
-    
-    try {
-      this.isGettingBalances = true;
-      
-      this.balanceFetchPromise = (async () => {
-        console.log("Getting fresh account balances");
-        
-        if (!this.apiClient.hasCredentials()) {
-          throw new Error('API credentials not configured');
-        }
-        
-        const balances = await this.fetchBalancesFromApi();
-        console.log("Raw balances received:", balances);
-        
-        const usingDefaultBalances = Object.values(balances).length >= 4 && 
-          Object.keys(balances).includes('BTC') && 
-          Object.keys(balances).includes('ETH') && 
-          Object.keys(balances).includes('BNB') && 
-          Object.keys(balances).includes('USDT') &&
-          balances['BTC'].total === '0.01' &&
-          balances['ETH'].total === '0.5' &&
-          balances['BNB'].total === '2' &&
-          balances['USDT'].total === '100';
-          
-        if (usingDefaultBalances) {
-          console.warn("WARNING: Using default balances, not real data");
-          Object.keys(balances).forEach(key => {
-            balances[key].isDefault = true;
-          });
-        }
-        
-        if (Object.keys(balances).length > 0) {
-          await this.enrichBalancesWithUsdValues(balances);
-        }
-        
-        logBalanceSummary(balances);
-        
-        this.cachedBalances = balances;
-        this.lastBalanceCheck = now;
-        
-        return balances;
-      })();
-      
-      return await this.balanceFetchPromise;
-    } catch (error) {
-      console.error('Error in getAccountBalance:', error);
-      toast.error('Failed to fetch account balance. Please check your connection settings.');
-      throw error;
-    } finally {
-      this.isGettingBalances = false;
-      this.balanceFetchPromise = null;
-    }
-  }
-  
-  private async fetchBalancesFromApi(): Promise<Record<string, BalanceInfo>> {
-    try {
-      const accountInfo = await this.getAccountInfo();
-      
-      if (accountInfo && accountInfo.balances) {
-        const balances = formatBalanceData(accountInfo.balances);
-        return balances;
-      }
-      
-      throw new Error('Failed to retrieve balances from API');
-    } catch (error) {
-      console.error('Error fetching account balances:', error);
-      throw error;
-    }
+    this.balanceCache = null;
+    this.accountInfoCache = null;
+    this.lastCacheTime = 0;
+    console.log("Balance cache reset");
   }
   
   public async getAccountInfo(): Promise<AccountInfoResponse> {
+    if (this.fetchInProgress) {
+      console.log("Account info fetch already in progress, waiting...");
+      await this.waitForFetchToComplete();
+    }
+    
+    // Return cached account info if available and recent
+    if (this.accountInfoCache && Date.now() - this.lastCacheTime < this.cacheTTL) {
+      console.log("Using cached account info");
+      return this.accountInfoCache;
+    }
+    
+    this.fetchInProgress = true;
+    
     try {
-      const accountInfo = await this.apiClient.fetchWithProxy('account');
+      console.log("Fetching account information from Binance API");
       
-      if (accountInfo && Array.isArray(accountInfo.balances)) {
-        const isDefaultData = isDefaultBalance(accountInfo.balances);
-        accountInfo.isDefault = isDefaultData;
-        
-        if (isDefaultData) {
-          console.warn("WARNING: Using default account data, not real balances");
-        }
-        
-        return accountInfo;
+      if (!this.apiClient.hasCredentials()) {
+        console.log("No API credentials available, returning default account data");
+        const mockData = FallbackDataProvider.getMockAccountInfo();
+        this.accountInfoCache = {
+          balances: mockData.balances,
+          isDefault: true,
+          isLimitedAccess: true
+        };
+        return this.accountInfoCache;
       }
       
-      throw new Error('Invalid account data received');
-    } catch (error) {
-      console.error('Error in getAccountInfo:', error);
-      toast.error('Failed to fetch account information. Please check your connection settings.');
-      throw error;
+      let data;
+      
+      try {
+        // Try to get real account data from Binance
+        data = await this.apiClient.fetchWithProxy('account', { recvWindow: '30000' }, 'GET');
+        
+        if (data && Array.isArray(data.balances)) {
+          console.log(`Successfully fetched account data with ${data.balances.length} assets`);
+          this.retryCount = 0;
+          
+          // Store the successful data in cache
+          this.accountInfoCache = {
+            ...data,
+            isDefault: false,
+            isLimitedAccess: false
+          };
+          
+          this.lastCacheTime = Date.now();
+          return this.accountInfoCache;
+        } else {
+          console.warn("Invalid account data format received:", data);
+          throw new Error("Invalid account data format received");
+        }
+      } catch (err) {
+        console.error("Error fetching account data:", err);
+        
+        // Check if we can try alternative endpoints for read-only API keys
+        if (this.retryCount < this.maxRetries) {
+          this.retryCount++;
+          console.log(`Retry ${this.retryCount}/${this.maxRetries}: Attempting alternative endpoints for account data`);
+          
+          try {
+            // Try capital/config/getall endpoint which sometimes works with read-only keys
+            const assetData = await this.apiClient.fetchWithProxy('capital/config/getall', {}, 'GET');
+            
+            if (Array.isArray(assetData) && assetData.length > 0) {
+              console.log(`Successfully fetched ${assetData.length} assets via alternative endpoint`);
+              
+              // Format the data to match account info structure
+              const balances: BinanceBalance[] = assetData
+                .filter(asset => asset.free !== undefined)
+                .map(asset => ({
+                  asset: asset.coin,
+                  free: asset.free || '0',
+                  locked: asset.locked || '0'
+                }));
+              
+              this.accountInfoCache = {
+                balances,
+                isDefault: false,
+                isLimitedAccess: true
+              };
+              
+              this.lastCacheTime = Date.now();
+              return this.accountInfoCache;
+            }
+          } catch (altErr) {
+            console.error("Alternative endpoint also failed:", altErr);
+          }
+        }
+        
+        // If we reach here, both approaches failed
+        // Provide fallback data while showing the appropriate error
+        this.logManager.addTradingLog("Unable to fetch your account data. Using sample data for demonstration.", 'warning');
+        
+        const mockData = FallbackDataProvider.getMockAccountInfo();
+        this.accountInfoCache = {
+          balances: mockData.balances,
+          isDefault: true,
+          isLimitedAccess: true
+        };
+        
+        this.lastCacheTime = Date.now();
+        return this.accountInfoCache;
+      }
+    } finally {
+      this.fetchInProgress = false;
     }
   }
   
-  private async enrichBalancesWithUsdValues(balances: Record<string, BalanceInfo>): Promise<void> {
-    try {
-      const prices = await this.getPrices();
-      
-      for (const asset in balances) {
-        if (asset === 'USDT') {
-          const total = parseFloat(balances[asset].total);
-          balances[asset].usdValue = total;
-          continue;
-        }
-        
-        const symbol = `${asset}USDT`;
-        const price = prices[symbol];
-        
-        if (price) {
-          const total = parseFloat(balances[asset].total);
-          balances[asset].usdValue = total * parseFloat(price);
-        }
-      }
-    } catch (error) {
-      console.error('Error enriching balances with USD values:', error);
+  private async waitForFetchToComplete(timeout: number = 10000): Promise<void> {
+    const startTime = Date.now();
+    while (this.fetchInProgress && Date.now() - startTime < timeout) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    if (this.fetchInProgress) {
+      console.warn(`Wait for fetch to complete timed out after ${timeout}ms`);
     }
   }
   
-  private async getPrices(): Promise<Record<string, string>> {
-    // This is a simplified version - in a real implementation, 
-    // you might want to use the MarketDataService
+  public async getAccountBalance(forceRefresh: boolean = false): Promise<Record<string, BalanceInfo>> {
+    if (this.balanceCache && !forceRefresh && Date.now() - this.lastCacheTime < this.cacheTTL) {
+      console.log("Using cached balance data");
+      return this.balanceCache;
+    }
+    
     try {
-      const response = await fetch('https://api.binance.com/api/v3/ticker/price');
+      console.log("Fetching account balance");
       
-      if (!response.ok) {
-        throw new Error(`Error fetching prices: ${response.statusText}`);
+      // Get fresh account info
+      const accountInfo = await this.getAccountInfo();
+      
+      // Get prices for converting to USD values
+      let prices: Record<string, string> = {};
+      try {
+        prices = await this.apiClient.fetchWithProxy('ticker/price', {}, 'GET', true);
+        
+        // Convert to a more usable format
+        if (Array.isArray(prices)) {
+          prices = prices.reduce((acc, item) => {
+            if (item.symbol && item.price) {
+              acc[item.symbol] = item.price;
+            }
+            return acc;
+          }, {} as Record<string, string>);
+        }
+      } catch (priceError) {
+        console.error("Error fetching prices:", priceError);
+        // Use mock prices as fallback
+        prices = FallbackDataProvider.getMockPrices();
       }
       
-      const data = await response.json();
-      
-      const priceMap: Record<string, string> = {};
-      for (const item of data) {
-        priceMap[item.symbol] = item.price;
+      if (!accountInfo || !Array.isArray(accountInfo.balances)) {
+        throw new Error('Invalid account info format');
       }
       
-      return priceMap;
+      // Process balances
+      const balanceInfo: Record<string, BalanceInfo> = {};
+      
+      // Helper to get USD value of an asset
+      const getUsdValue = (asset: string, amount: number): number => {
+        if (asset === 'USDT' || asset === 'BUSD' || asset === 'USDC' || asset === 'DAI') {
+          return amount;
+        }
+        
+        // Try common pairs first
+        const symbolsToTry = [`${asset}USDT`, `${asset}BUSD`, `${asset}USDC`];
+        
+        for (const symbol of symbolsToTry) {
+          if (prices[symbol]) {
+            return amount * parseFloat(prices[symbol]);
+          }
+        }
+        
+        // If no direct USD pair, try BTC pairs and convert BTC to USD
+        const btcSymbol = `${asset}BTC`;
+        if (prices[btcSymbol] && prices['BTCUSDT']) {
+          return amount * parseFloat(prices[btcSymbol]) * parseFloat(prices['BTCUSDT']);
+        }
+        
+        return 0; // Unable to determine USD value
+      };
+      
+      // Process each balance
+      for (const balance of accountInfo.balances) {
+        const free = parseFloat(balance.free);
+        const locked = parseFloat(balance.locked);
+        const total = free + locked;
+        
+        // Skip assets with zero balance
+        if (total <= 0) continue;
+        
+        const usdValue = getUsdValue(balance.asset, total);
+        
+        // Standardize the format
+        balanceInfo[balance.asset] = {
+          available: balance.free,
+          total: total.toString(),
+          usdValue,
+          rawAsset: balance.asset,
+          isDefault: accountInfo.isDefault || false
+        };
+      }
+      
+      // Include small subset of important assets even if zero balance
+      const importantAssets = ['BTC', 'ETH', 'BNB', 'USDT'];
+      for (const asset of importantAssets) {
+        if (!balanceInfo[asset]) {
+          balanceInfo[asset] = {
+            available: '0',
+            total: '0',
+            usdValue: 0,
+            rawAsset: asset,
+            isDefault: accountInfo.isDefault || false
+          };
+        }
+      }
+      
+      // Sort assets by USD value (descending)
+      const sortedBalances = Object.entries(balanceInfo)
+        .sort(([, a], [, b]) => b.usdValue - a.usdValue)
+        .reduce((acc, [key, value]) => {
+          acc[key] = value;
+          return acc;
+        }, {} as Record<string, BalanceInfo>);
+      
+      // Cache the result
+      this.balanceCache = sortedBalances;
+      this.lastCacheTime = Date.now();
+      
+      console.log(`Processed ${Object.keys(sortedBalances).length} assets with balance`);
+      return sortedBalances;
     } catch (error) {
-      console.error('Error fetching prices:', error);
-      throw new Error('Could not fetch current market prices');
+      console.error("Error in getAccountBalance:", error);
+      
+      // If this is a total failure, provide mock data
+      if (!this.balanceCache) {
+        console.log("Generating fallback balance data");
+        const mockBalances = FallbackDataProvider.getSafeBalances();
+        const fallbackData: Record<string, BalanceInfo> = {};
+        
+        mockBalances.forEach(balance => {
+          fallbackData[balance.asset] = {
+            available: balance.free,
+            total: (parseFloat(balance.free) + parseFloat(balance.locked)).toString(),
+            usdValue: balance.asset === 'USDT' ? parseFloat(balance.free) : 0,
+            rawAsset: balance.asset,
+            isDefault: true
+          };
+        });
+        
+        this.balanceCache = fallbackData;
+        this.lastCacheTime = Date.now();
+      }
+      
+      this.logManager.addTradingLog("Error fetching balance data. Using cached or sample data.", 'error');
+      toast.error("Failed to fetch latest balance data");
+      
+      return this.balanceCache || {};
     }
   }
 }

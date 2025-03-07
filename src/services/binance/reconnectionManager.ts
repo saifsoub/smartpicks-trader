@@ -3,7 +3,7 @@ import { LogManager } from './logManager';
 
 export class ReconnectionManager {
   private reconnectDelay: number = 2000; // Initial delay at 2 seconds
-  private maxReconnectAttempts: number = 15; // Increased from 10 to 15 attempts
+  private maxReconnectAttempts: number = 20; // Increased from 15 to 20 attempts
   private reconnectAttempts: number = 0;
   private reconnectTimer: number | null = null;
   private logManager: LogManager;
@@ -12,7 +12,8 @@ export class ReconnectionManager {
   private maxDelay: number = 60000; // Maximum delay cap at 1 minute
   private reconnectInProgress: boolean = false;
   private lastReconnectAttempt: number = 0;
-  private reconnectCooldown: number = 5000; // 5 second cooldown between reconnection attempts
+  private reconnectCooldown: number = 3000; // Reduced from 5s to 3s
+  private connectionSuccessful: boolean = false;
   
   constructor(logManager: LogManager, onReconnect: () => Promise<boolean>) {
     this.logManager = logManager;
@@ -58,6 +59,7 @@ export class ReconnectionManager {
     
     try {
       const success = await this.onReconnect();
+      this.connectionSuccessful = success;
       
       if (success) {
         this.logManager.addTradingLog("Reconnected to Binance API successfully", 'success');
@@ -103,6 +105,10 @@ export class ReconnectionManager {
   
   public getMaxReconnectAttempts(): number {
     return this.maxReconnectAttempts;
+  }
+  
+  public isConnectionSuccessful(): boolean {
+    return this.connectionSuccessful;
   }
   
   public resetReconnectAttempts(): void {

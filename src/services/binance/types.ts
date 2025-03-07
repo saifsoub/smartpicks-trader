@@ -46,4 +46,11 @@ export interface AccountInfoResponse {
   updateTime?: number;
   isDefault?: boolean; // Flag to indicate if this is default/demo data
   isLimitedAccess?: boolean; // Flag to indicate limited API access permissions
+  permissions?: string[]; // Raw permissions from Binance
+}
+
+// Add additional mock balances interface to handle fallback data
+export interface MockAccountInfo {
+  isDefault: true;
+  balances: BinanceBalance[];
 }

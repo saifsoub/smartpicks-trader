@@ -7,16 +7,21 @@ export class BinanceApiClient {
   private useLocalProxy: boolean = true;
   private proxyConnectionSuccessful: boolean = false;
   private lastProxyConnectionAttempt: number = 0;
-  private proxyRetries: number = 3;
+  private proxyRetries: number = 5; // Increased from 3 to 5
   private directApiAvailable: boolean = false;
   private fallbackProxyUrl: string = 'https://binance-bridge-proxy.onrender.com/api'; // Fallback proxy
   private useFallbackProxy: boolean = false;
+  private secondaryFallbackProxyUrl: string = 'https://binance-api-proxy.up.railway.app/api'; // Additional fallback
+  private useSecondaryFallback: boolean = false;
+  private timeDifference: number = 0;
   
   constructor(credentials: BinanceCredentials | null, useLocalProxy: boolean) {
     this.credentials = credentials;
     this.useLocalProxy = useLocalProxy;
     // Check if direct API is available on initialization
     this.checkDirectApiAvailability();
+    // Initialize time difference check
+    this.checkServerTimeDifference();
   }
   
   public setCredentials(credentials: BinanceCredentials | null): void {
@@ -112,17 +117,37 @@ export class BinanceApiClient {
     let lastError;
     const maxRetries = skipRetryOnFailure ? 1 : this.proxyRetries;
     
+    // Add timestamp and recvWindow to signed requests if not already present
+    if (!params.timestamp && this.requiresSignature(endpoint) && method !== 'DELETE') {
+      // Use server time with adjustment if available, otherwise use local time
+      const timestamp = Date.now() + this.timeDifference;
+      params.timestamp = timestamp.toString();
+      
+      // Add recvWindow for all signed requests to handle time differences
+      if (!params.recvWindow) {
+        params.recvWindow = '10000'; // 10 seconds
+      }
+    }
+    
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         const queryString = Object.entries(params)
           .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
           .join('&');
 
-        const currentProxyUrl = this.useFallbackProxy ? this.fallbackProxyUrl : this.proxyUrl;
+        // Determine which proxy URL to use
+        let currentProxyUrl = this.proxyUrl;
+        if (this.useFallbackProxy) {
+          currentProxyUrl = this.fallbackProxyUrl;
+        } else if (this.useSecondaryFallback) {
+          currentProxyUrl = this.secondaryFallbackProxyUrl;
+        }
+        
         const url = `${currentProxyUrl}/${endpoint}${queryString ? `?${queryString}` : ''}`;
         
         const headers: Record<string, string> = {
           'Accept': 'application/json',
+          'Cache-Control': 'no-cache, no-store',
         };
         
         // Only add auth headers if we have credentials and they're needed
@@ -133,33 +158,56 @@ export class BinanceApiClient {
           }
         }
 
-        console.log(`Fetching via ${this.useFallbackProxy ? 'fallback ' : ''}proxy (attempt ${attempt + 1}/${maxRetries}): ${url}`);
+        console.log(`Fetching via ${this.getCurrentProxyName()} proxy (attempt ${attempt + 1}/${maxRetries}): ${endpoint}`);
         this.lastProxyConnectionAttempt = Date.now();
         
         const response = await fetch(url, {
           method,
           headers,
           mode: 'cors',
+          cache: 'no-store',
           signal: AbortSignal.timeout(15000)
         });
 
         if (!response.ok) {
           console.warn(`HTTP error ${response.status}: ${response.statusText}`);
-          throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+          let errorText = await response.text();
+          throw new Error(`HTTP error ${response.status}: ${errorText || response.statusText}`);
         }
 
         const data = await response.json();
         this.proxyConnectionSuccessful = true;
         console.log(`Proxy request to ${endpoint} successful`);
+        
+        // Reset fallback flags on success
+        this.useFallbackProxy = false;
+        this.useSecondaryFallback = false;
+        
         return data;
       } catch (error) {
         console.error(`Error in fetchWithProxy (attempt ${attempt + 1}/${maxRetries}):`, error);
         lastError = error;
         
-        // Try fallback proxy on next attempt if main proxy fails
-        if (attempt === 0 && !this.useFallbackProxy) {
+        // Try different proxies on subsequent attempts
+        if (attempt === 0) {
           this.useFallbackProxy = true;
-          console.log("Switching to fallback proxy for next attempt");
+          this.useSecondaryFallback = false;
+          console.log("Switching to first fallback proxy for next attempt");
+        } else if (attempt === 1) {
+          this.useFallbackProxy = false;
+          this.useSecondaryFallback = true;
+          console.log("Switching to secondary fallback proxy for next attempt");
+        } else if (attempt === 2) {
+          // Try direct API on the third attempt if available
+          if (this.directApiAvailable && this.canUseDirectApi(endpoint)) {
+            try {
+              console.log(`Attempting direct API call for ${endpoint}...`);
+              return await this.attemptDirectApiCall(endpoint, params);
+            } catch (directError) {
+              console.error('Direct API fallback failed:', directError);
+              // Continue with proxy retries
+            }
+          }
         }
         
         // Wait a bit before retrying (increasing delay for each retry)
@@ -170,64 +218,111 @@ export class BinanceApiClient {
       }
     }
     
-    // Reset fallback proxy flag after all attempts
+    // Reset fallback proxy flags after all attempts
     this.useFallbackProxy = false;
+    this.useSecondaryFallback = false;
     this.proxyConnectionSuccessful = false;
     console.error(`All ${maxRetries} proxy attempts failed for ${endpoint}`);
     
-    // If we're using proxy mode but it fails, try direct API if possible
-    if (this.directApiAvailable && endpoint.match(/^(ping|ticker|klines|time)/)) {
-      console.log(`Falling back to direct API for ${endpoint}...`);
+    // Final attempt: try direct API if possible and not already tried
+    if (this.directApiAvailable && this.canUseDirectApi(endpoint)) {
+      console.log(`Making final direct API attempt for ${endpoint}...`);
       try {
         return await this.attemptDirectApiCall(endpoint, params);
       } catch (directError) {
-        console.error('Direct API fallback failed:', directError);
+        console.error('Final direct API attempt failed:', directError);
       }
     }
     
     throw lastError;
   }
   
+  private getCurrentProxyName(): string {
+    if (this.useFallbackProxy) return 'fallback';
+    if (this.useSecondaryFallback) return 'secondary fallback';
+    return 'primary';
+  }
+  
+  private canUseDirectApi(endpoint: string): boolean {
+    // These endpoints can be used with direct API without requiring signed requests
+    return endpoint.match(/^(ping|ticker|klines|time|exchangeInfo)/) !== null;
+  }
+  
+  private requiresSignature(endpoint: string): boolean {
+    // These endpoints require signature
+    return !endpoint.match(/^(ping|ticker\/price|ticker\/24hr|time|klines|exchangeInfo)$/);
+  }
+  
   private async attemptDirectApiCall(endpoint: string, params: Record<string, string>): Promise<any> {
     const apiBase = 'https://api.binance.com/api/v3';
     let url: string;
     
-    // Convert proxy endpoints to direct API endpoints
-    switch (endpoint) {
-      case 'ping':
-        url = `${apiBase}/ping`;
-        break;
-      case 'time':
-        url = `${apiBase}/time`;
-        break;
-      case 'ticker/price':
-        if (params.symbol) {
-          url = `${apiBase}/ticker/price?symbol=${params.symbol}`;
-        } else {
-          url = `${apiBase}/ticker/price`;
-        }
-        break;
-      case 'ticker/24hr':
-        if (params.symbol) {
-          url = `${apiBase}/ticker/24hr?symbol=${params.symbol}`;
-        } else {
-          url = `${apiBase}/ticker/24hr`;
-        }
-        break;
-      case 'klines':
-        url = `${apiBase}/klines?symbol=${params.symbol}&interval=${params.interval}&limit=${params.limit || 100}`;
-        break;
-      case 'exchangeInfo':
-        url = `${apiBase}/exchangeInfo`;
-        if (params.symbol) {
-          url += `?symbol=${params.symbol}`;
-        }
-        break;
-      default:
-        throw new Error(`Endpoint ${endpoint} not supported for direct API fallback`);
+    // Add signature if needed
+    if (this.requiresSignature(endpoint) && this.credentials?.secretKey) {
+      // Make a copy of params to avoid modifying the original
+      const signedParams = { ...params };
+      
+      // Ensure timestamp is included
+      if (!signedParams.timestamp) {
+        signedParams.timestamp = (Date.now() + this.timeDifference).toString();
+      }
+      
+      // Generate signature
+      const queryString = Object.entries(signedParams)
+        .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+        .join('&');
+      
+      const signature = await this.generateSignature(queryString);
+      url = `${apiBase}/${endpoint}?${queryString}&signature=${signature}`;
+    } else {
+      // Convert proxy endpoints to direct API endpoints
+      switch (endpoint) {
+        case 'ping':
+          url = `${apiBase}/ping`;
+          break;
+        case 'time':
+          url = `${apiBase}/time`;
+          break;
+        case 'ticker/price':
+          if (params.symbol) {
+            url = `${apiBase}/ticker/price?symbol=${params.symbol}`;
+          } else {
+            url = `${apiBase}/ticker/price`;
+          }
+          break;
+        case 'ticker/24hr':
+          if (params.symbol) {
+            url = `${apiBase}/ticker/24hr?symbol=${params.symbol}`;
+          } else {
+            url = `${apiBase}/ticker/24hr`;
+          }
+          break;
+        case 'klines':
+          url = `${apiBase}/klines?symbol=${params.symbol}&interval=${params.interval}&limit=${params.limit || 100}`;
+          break;
+        case 'exchangeInfo':
+          url = `${apiBase}/exchangeInfo`;
+          if (params.symbol) {
+            url += `?symbol=${params.symbol}`;
+          }
+          break;
+        default:
+          throw new Error(`Endpoint ${endpoint} not supported for direct API fallback`);
+      }
     }
     
-    const response = await this.fetchWithRetry(url);
+    // Add API key header for authenticated requests
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+      'Cache-Control': 'no-cache, no-store'
+    };
+    
+    if (this.credentials?.apiKey) {
+      headers['X-MBX-APIKEY'] = this.credentials.apiKey;
+    }
+    
+    console.log(`Direct API request to ${endpoint}`);
+    const response = await this.fetchWithRetry(url, { headers }, 3);
     return await response.json();
   }
 
@@ -239,12 +334,14 @@ export class BinanceApiClient {
         console.log(`Attempt ${attempt + 1}: Fetching ${url}`);
         const response = await fetch(url, {
           ...options,
-          signal: AbortSignal.timeout(15000)
+          signal: AbortSignal.timeout(15000),
+          cache: 'no-store'
         });
         
         if (!response.ok) {
           console.warn(`HTTP error ${response.status}: ${response.statusText}`);
-          throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+          let errorText = await response.text();
+          throw new Error(`HTTP error ${response.status}: ${errorText || response.statusText}`);
         }
         
         console.log(`Request to ${url} successful`);
@@ -267,7 +364,8 @@ export class BinanceApiClient {
     try {
       const localTime = Date.now();
       const response = await fetch('https://api.binance.com/api/v3/time', {
-        signal: AbortSignal.timeout(5000)
+        signal: AbortSignal.timeout(5000),
+        cache: 'no-store'
       });
       
       if (!response.ok) {
@@ -284,10 +382,15 @@ export class BinanceApiClient {
       const difference = serverTime - adjustedLocalTime;
       
       console.log(`Server time difference: ${difference}ms (latency: ${latency}ms)`);
+      this.timeDifference = difference;
       return difference;
     } catch (error) {
       console.warn('Failed to check server time:', error);
       return 0;
     }
+  }
+  
+  public getTimeDifference(): number {
+    return this.timeDifference;
   }
 }

@@ -8,6 +8,7 @@ import { ConnectionService } from './binance/connectionService';
 import { BalanceService } from './binance/balanceService';
 import { TradingService } from './binance/tradingService';
 import { CredentialsService } from './binance/credentialsService';
+import { FallbackDataProvider } from './binance/fallbackDataProvider';
 import { 
   BinanceCredentials, 
   BinanceBalance, 
@@ -26,6 +27,9 @@ class BinanceService {
   private balanceService: BalanceService;
   private tradingService: TradingService;
   private credentialsService: CredentialsService;
+  private connectionErrors: number = 0;
+  private maxConnectionErrors: number = 5;
+  private lastSuccessfulConnection: number = 0;
   
   constructor() {
     const credentials = StorageManager.loadCredentials();
@@ -47,6 +51,26 @@ class BinanceService {
     this.apiClient.checkServerTimeDifference().catch(err => {
       console.warn("Failed to check server time:", err);
     });
+    
+    // Initialize with last successful connection time if available
+    const lastConnection = localStorage.getItem('lastSuccessfulConnection');
+    if (lastConnection) {
+      this.lastSuccessfulConnection = parseInt(lastConnection);
+    }
+    
+    // Set up auto-reconnect on window focus
+    window.addEventListener('focus', this.handleWindowFocus.bind(this));
+  }
+  
+  private handleWindowFocus(): void {
+    // Only auto-reconnect if we haven't had a successful connection in a while
+    const hoursSinceLastConnection = (Date.now() - this.lastSuccessfulConnection) / (1000 * 60 * 60);
+    if (hoursSinceLastConnection > 1 && this.hasCredentials()) {
+      console.log("Window focused, testing connection after inactivity...");
+      this.testConnection().catch(err => {
+        console.warn("Auto-reconnect failed:", err);
+      });
+    }
   }
 
   public hasCredentials(): boolean {
@@ -120,9 +144,17 @@ class BinanceService {
   }
 
   public async detectApiPermissions(): Promise<{ read: boolean, trading: boolean }> {
-    const permissions = await this.accountService.detectApiPermissions();
-    this.credentialsService.setApiPermissions(permissions.read, permissions.trading);
-    return permissions;
+    try {
+      const permissions = await this.accountService.detectApiPermissions();
+      this.credentialsService.setApiPermissions(permissions.read, permissions.trading);
+      return permissions;
+    } catch (error) {
+      console.error("Error detecting API permissions:", error);
+      // Default to assuming read permission if we can't detect
+      const fallback = { read: true, trading: false };
+      this.credentialsService.setApiPermissions(fallback.read, fallback.trading);
+      return fallback;
+    }
   }
 
   public getConnectionStatus(): 'connected' | 'disconnected' | 'unknown' {
@@ -138,22 +170,34 @@ class BinanceService {
   }
 
   public async testConnection(): Promise<boolean> {
-    const result = await this.connectionService.testConnection();
-    if (result) {
-      this.balanceService.resetCache();
-      // Store the successful connection
-      localStorage.setItem('lastSuccessfulConnection', Date.now().toString());
-    } else {
-      // Check when was the last successful connection
-      const lastConnection = localStorage.getItem('lastSuccessfulConnection');
-      if (lastConnection) {
-        const hoursSinceLastConnection = (Date.now() - parseInt(lastConnection)) / (1000 * 60 * 60);
+    try {
+      const result = await this.connectionService.testConnection();
+      if (result) {
+        this.balanceService.resetCache();
+        // Store the successful connection
+        this.lastSuccessfulConnection = Date.now();
+        localStorage.setItem('lastSuccessfulConnection', this.lastSuccessfulConnection.toString());
+        this.connectionErrors = 0;
+      } else {
+        this.connectionErrors++;
+        
+        // Check when was the last successful connection
+        const hoursSinceLastConnection = (Date.now() - this.lastSuccessfulConnection) / (1000 * 60 * 60);
         if (hoursSinceLastConnection > 24) {
           toast.warning("No successful connection in over 24 hours. Consider updating your API keys or checking network.");
         }
+        
+        if (this.connectionErrors >= this.maxConnectionErrors) {
+          toast.error("Multiple connection failures. Switching to offline demo mode.");
+          this.logManager.addTradingLog("Multiple connection failures. Using offline demo mode.", 'warning');
+        }
       }
+      return result;
+    } catch (error) {
+      console.error("Test connection error:", error);
+      this.connectionErrors++;
+      return false;
     }
-    return result;
   }
 
   public isInTestMode(): boolean {
@@ -161,7 +205,11 @@ class BinanceService {
   }
 
   public getDefaultTradingPairs(): string[] {
-    return this.accountService.getDefaultTradingPairs();
+    try {
+      return this.accountService.getDefaultTradingPairs();
+    } catch (error) {
+      return FallbackDataProvider.getDefaultTradingPairs();
+    }
   }
 
   public async getAccountInfo(): Promise<AccountInfoResponse> {
@@ -173,8 +221,14 @@ class BinanceService {
       return await this.balanceService.getAccountInfo();
     } catch (error) {
       console.error('Error in getAccountInfo:', error);
-      toast.error('Failed to fetch account information. Please check your connection settings.');
-      throw error;
+      toast.error('Failed to fetch account information. Using demo data.');
+      
+      // Return fallback data
+      return {
+        balances: FallbackDataProvider.getSafeBalances(),
+        isDefault: true,
+        isLimitedAccess: true
+      };
     }
   }
 
@@ -187,8 +241,23 @@ class BinanceService {
       return await this.balanceService.getAccountBalance(forceRefresh);
     } catch (error) {
       console.error('Error in getAccountBalance:', error);
-      toast.error('Failed to fetch account balance. Please check your connection settings.');
-      throw error;
+      toast.error('Failed to fetch account balance. Using demo data.');
+      
+      // Create fallback data
+      const fallbackData: Record<string, BalanceInfo> = {};
+      const mockBalances = FallbackDataProvider.getSafeBalances();
+      
+      mockBalances.forEach(balance => {
+        fallbackData[balance.asset] = {
+          available: balance.free,
+          total: (parseFloat(balance.free) + parseFloat(balance.locked)).toString(),
+          usdValue: balance.asset === 'USDT' ? parseFloat(balance.free) : 0,
+          rawAsset: balance.asset,
+          isDefault: true
+        };
+      });
+      
+      return fallbackData;
     }
   }
 
