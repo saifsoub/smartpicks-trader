@@ -5,7 +5,7 @@ import StrategyManager from "./trading/strategyManager";
 import RiskManager from "./trading/riskManager";
 import BacktestingService from "./trading/backtestingService";
 import StrategyExecutor from "./trading/strategyExecutor";
-import { TradingEventListener } from "./trading/types";
+import { TradingEventListener, Position, MarketAnalysis } from "./trading/types";
 
 // Re-export types from the trading module
 export * from "./trading/types";
@@ -21,7 +21,7 @@ class AutomatedTradingService {
     this.strategyManager = new StrategyManager(tradingEventEmitter);
     this.riskManager = new RiskManager(tradingEventEmitter);
     this.backtestingService = new BacktestingService(this.strategyManager, tradingEventEmitter);
-    this.strategyExecutor = new StrategyExecutor(this.strategyManager, tradingEventEmitter);
+    this.strategyExecutor = new StrategyExecutor(this.strategyManager, this.riskManager, tradingEventEmitter);
     
     // Start the automated trading system if the bot is running
     const heartbeatInfo = heartbeatService.getHeartbeatInfo();
@@ -101,6 +101,21 @@ class AutomatedTradingService {
   // Event subscription
   public subscribeToUpdates(listener: TradingEventListener) {
     return tradingEventEmitter.subscribe(listener);
+  }
+  
+  // Get active positions
+  public getActivePositions(): Position[] {
+    return this.strategyExecutor.getActivePositions();
+  }
+  
+  // Get market analysis data
+  public getMarketAnalysis(): Record<string, any> {
+    return this.strategyExecutor.getMarketAnalysis();
+  }
+  
+  // Get market trends
+  public getMarketTrends(): Record<string, string> {
+    return this.strategyExecutor.getMarketTrends();
   }
 }
 

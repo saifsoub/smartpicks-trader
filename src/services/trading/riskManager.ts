@@ -18,6 +18,10 @@ class RiskManager {
       this.riskSettings = this.getDefaultRiskSettings();
       this.saveRiskSettings();
     }
+    
+    // Add extended settings
+    this.riskSettings.dynamicPositionSizing = this.riskSettings.dynamicPositionSizing ?? true;
+    this.riskSettings.riskPerTrade = this.riskSettings.riskPerTrade ?? 1;
   }
   
   private getDefaultRiskSettings(): RiskManagementSettings {
@@ -27,7 +31,10 @@ class RiskManager {
       takeProfitPercentage: 5,
       maxDailyLoss: 10,
       maxOpenPositions: 3,
-      trailingStopEnabled: false
+      trailingStopEnabled: true,
+      trailingStopPercentage: 1.5,
+      dynamicPositionSizing: true,
+      riskPerTrade: 1 // 1% of portfolio per trade
     };
   }
   
@@ -39,12 +46,33 @@ class RiskManager {
     return {...this.riskSettings};
   }
   
-  public updateRiskSettings(settings: RiskManagementSettings): void {
-    this.riskSettings = settings;
+  public updateRiskSettings(settings: Partial<RiskManagementSettings>): void {
+    this.riskSettings = { ...this.riskSettings, ...settings };
     this.saveRiskSettings();
     this.eventEmitter.emit({
       event: 'risk_settings_updated'
     });
+  }
+  
+  // Calculate current risk exposure based on open positions
+  public calculateCurrentRiskExposure(positionValues: number[], portfolioValue: number): number {
+    if (portfolioValue === 0) return 0;
+    
+    const totalExposure = positionValues.reduce((sum, value) => sum + value, 0);
+    return (totalExposure / portfolioValue) * 100;
+  }
+  
+  // Check if a new position would exceed risk limits
+  public canOpenNewPosition(existingPositions: number, existingExposure: number): boolean {
+    if (existingPositions >= this.riskSettings.maxOpenPositions) {
+      return false;
+    }
+    
+    if (existingExposure >= this.riskSettings.maxPositionSize * this.riskSettings.maxOpenPositions) {
+      return false;
+    }
+    
+    return true;
   }
 }
 

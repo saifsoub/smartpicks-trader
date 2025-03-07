@@ -58,6 +58,8 @@ export interface RiskManagementSettings {
   maxOpenPositions: number;
   trailingStopEnabled: boolean;
   trailingStopPercentage?: number;
+  dynamicPositionSizing?: boolean;
+  riskPerTrade?: number; // Percentage of portfolio to risk per trade
 }
 
 export type TradingEventListener = (status: {
@@ -73,3 +75,34 @@ export const STORAGE_KEYS = {
   BACKTEST_RESULTS: 'backtestResults',
   RISK_SETTINGS: 'riskManagementSettings',
 };
+
+export interface MarketAnalysis {
+  symbol: string;
+  timeframe: string;
+  indicators: {
+    rsi: number;
+    macd: {
+      line: number;
+      signal: number;
+      histogram: number;
+    };
+    bollinger: {
+      upper: number;
+      middle: number;
+      lower: number;
+    };
+  };
+  trend: 'strong_uptrend' | 'uptrend' | 'neutral' | 'downtrend' | 'strong_downtrend';
+  signal: 'BUY' | 'SELL' | 'HOLD';
+}
+
+export interface Position {
+  symbol: string;
+  entryPrice: number;
+  quantity: number;
+  stopLoss: number | null;
+  takeProfit: number | null;
+  trailingStop: number | null;
+  entryTime: number;
+  side: 'long' | 'short';
+}
