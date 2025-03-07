@@ -16,6 +16,11 @@ export interface BinanceBalance {
   locked: string;
 }
 
+export interface BinanceSymbol {
+  symbol: string;
+  priceChangePercent: string;
+}
+
 export type ConnectionStatus = 'connected' | 'disconnected' | 'unknown';
 export type LogType = 'info' | 'success' | 'error' | 'warning';
 
