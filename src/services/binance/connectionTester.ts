@@ -2,6 +2,7 @@
 import { BinanceApiClient } from './apiClient';
 import { LogManager } from './logManager';
 import { AccountService } from './accountService';
+import { StorageManager } from './storageManager';
 
 export class ConnectionTester {
   private apiClient: BinanceApiClient;
@@ -16,6 +17,9 @@ export class ConnectionTester {
     this.apiClient = apiClient;
     this.logManager = logManager;
     this.accountService = accountService;
+    
+    // Load previous network error count
+    this.networkErrorCount = StorageManager.getNetworkErrorCount();
   }
   
   /**
@@ -42,6 +46,14 @@ export class ConnectionTester {
       // Try to ping Binance API directly
       this.logManager.addTradingLog('Testing direct API connection to Binance...', 'info');
       
+      // Check general internet connectivity first
+      const hasInternetAccess = await this.checkInternetConnectivity();
+      if (!hasInternetAccess) {
+        this.logManager.addTradingLog("Internet connectivity issues detected. Your device appears to be offline.", 'error');
+        this.recordNetworkError("Internet connectivity issues detected");
+        throw new Error("Network connectivity issue detected. Your device appears to be offline.");
+      }
+      
       // Try to get public data first which doesn't require authentication
       try {
         const timeResponse = await fetch('https://api.binance.com/api/v3/time', {
@@ -55,7 +67,7 @@ export class ConnectionTester {
         
         if (timeResponse.ok) {
           this.logManager.addTradingLog('Direct API basic connectivity confirmed', 'success');
-          this.networkErrorCount = 0; // Reset network error counter
+          this.resetNetworkErrorCount(); // Reset network error counter
           // At minimum, we have basic connectivity
           return true;
         }
@@ -64,7 +76,7 @@ export class ConnectionTester {
         this.logManager.addTradingLog(`Direct API time check failed: ${timeError instanceof Error ? timeError.message : String(timeError)}`, 'warning');
         
         if (this.isNetworkError(timeError)) {
-          this.networkErrorCount++;
+          this.recordNetworkError("Failed to connect to Binance API");
           this.logManager.addTradingLog(`Network connectivity issue detected (${this.networkErrorCount} consecutive errors)`, 'warning');
           
           if (this.networkErrorCount >= 2) { // Reduced threshold from 3 to 2
@@ -88,12 +100,12 @@ export class ConnectionTester {
         
         if (priceResponse.ok) {
           this.logManager.addTradingLog('Direct API price check successful', 'success');
-          this.networkErrorCount = 0; // Reset error count on success
+          this.resetNetworkErrorCount(); // Reset error count on success
           return true;
         }
       } catch (priceError) {
         if (this.isNetworkError(priceError)) {
-          this.networkErrorCount++;
+          this.recordNetworkError("Failed to connect to Binance API");
           this.logManager.addTradingLog(`Network connectivity issue detected (${this.networkErrorCount} consecutive errors)`, 'warning');
           
           if (this.networkErrorCount >= 2) { // Reduced threshold from 3 to 2
@@ -102,6 +114,11 @@ export class ConnectionTester {
           }
         }
         this.logManager.addTradingLog(`Direct API price check failed: ${priceError instanceof Error ? priceError.message : String(priceError)}`, 'warning');
+      }
+      
+      // If all checks fail but general internet is working, it might be specific to Binance
+      if (hasInternetAccess) {
+        this.logManager.addTradingLog('Internet is working, but Binance API seems unreachable. This may be a temporary issue with Binance.', 'warning');
       }
       
       // If all checks fail
@@ -127,6 +144,14 @@ export class ConnectionTester {
     try {
       this.testingInProgress = true;
       
+      // Check general internet connectivity first
+      const hasInternetAccess = await this.checkInternetConnectivity();
+      if (!hasInternetAccess) {
+        this.logManager.addTradingLog("Internet connectivity issues detected. Your device appears to be offline.", 'error');
+        this.recordNetworkError("Internet connectivity issues detected");
+        throw new Error("Network connectivity issue detected. Your device appears to be offline.");
+      }
+      
       // Test using the simplest public endpoint
       this.logManager.addTradingLog('Testing proxy connection to Binance...', 'info');
       
@@ -141,12 +166,12 @@ export class ConnectionTester {
         
         if (tickerData && tickerData.price) {
           this.logManager.addTradingLog('Proxy ticker check successful', 'success');
-          this.networkErrorCount = 0; // Reset error count on success
+          this.resetNetworkErrorCount(); // Reset error count on success
           return true;
         }
       } catch (tickerError) {
         if (this.isNetworkError(tickerError)) {
-          this.networkErrorCount++;
+          this.recordNetworkError("Failed to connect to Binance API proxy");
           this.logManager.addTradingLog(`Network connectivity issue detected (${this.networkErrorCount} consecutive errors)`, 'warning');
           
           if (this.networkErrorCount >= 2) { // Reduced threshold from 3 to 2
@@ -162,12 +187,12 @@ export class ConnectionTester {
         const pingData = await this.apiClient.fetchWithProxy('ping', {}, 'GET', true);
         if (pingData) {
           this.logManager.addTradingLog('Proxy ping successful', 'success');
-          this.networkErrorCount = 0; // Reset error count on success
+          this.resetNetworkErrorCount(); // Reset error count on success
           return true;
         }
       } catch (pingError) {
         if (this.isNetworkError(pingError)) {
-          this.networkErrorCount++;
+          this.recordNetworkError("Failed to connect to Binance API proxy");
           this.logManager.addTradingLog(`Network connectivity issue detected (${this.networkErrorCount} consecutive errors)`, 'warning');
           
           if (this.networkErrorCount >= 2) { // Reduced threshold from 3 to 2
@@ -184,6 +209,46 @@ export class ConnectionTester {
       return false;
     } finally {
       this.testingInProgress = false;
+    }
+  }
+  
+  /**
+   * Check for general internet connectivity
+   */
+  private async checkInternetConnectivity(): Promise<boolean> {
+    try {
+      // Try multiple endpoints to improve reliability
+      const endpoints = [
+        'https://www.google.com/generate_204',
+        'https://www.cloudflare.com/cdn-cgi/trace',
+        'https://httpbin.org/status/200'
+      ];
+      
+      for (const endpoint of endpoints) {
+        try {
+          const response = await fetch(endpoint, {
+            method: 'HEAD',
+            cache: 'no-cache',
+            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
+            signal: AbortSignal.timeout(5000) // 5 second timeout
+          });
+          
+          if (response.ok) {
+            console.log(`Internet connectivity confirmed via ${endpoint}`);
+            return true;
+          }
+        } catch {
+          // Try next endpoint
+          continue;
+        }
+      }
+      
+      // All checks failed
+      console.log('All internet connectivity checks failed');
+      return false;
+    } catch (error) {
+      console.error('Error checking internet connectivity:', error);
+      return false;
     }
   }
   
@@ -215,10 +280,20 @@ export class ConnectionTester {
   }
   
   /**
+   * Record a network error and increment the counter
+   */
+  private recordNetworkError(errorMessage: string): void {
+    this.networkErrorCount++;
+    StorageManager.saveNetworkErrorCount(this.networkErrorCount);
+    StorageManager.saveLastNetworkError(errorMessage);
+  }
+  
+  /**
    * Reset error counters
    */
-  public resetErrorCounters(): void {
+  public resetNetworkErrorCount(): void {
     this.networkErrorCount = 0;
+    StorageManager.resetNetworkErrorCount();
   }
   
   /**

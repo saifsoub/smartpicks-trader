@@ -6,6 +6,8 @@ export class StorageManager {
   private static PERMISSIONS_KEY = 'binanceApiPermissions';
   private static PROXY_MODE_KEY = 'useLocalProxy';
   private static OFFLINE_MODE_KEY = 'offlineMode';
+  private static LAST_NETWORK_ERROR_KEY = 'lastNetworkError';
+  private static NETWORK_ERROR_COUNT_KEY = 'networkErrorCount';
   
   public static loadCredentials(): BinanceCredentials | null {
     const savedCredentials = localStorage.getItem(this.CREDENTIALS_KEY);
@@ -68,5 +70,31 @@ export class StorageManager {
   public static saveOfflineMode(offlineMode: boolean): void {
     localStorage.setItem(this.OFFLINE_MODE_KEY, String(offlineMode));
     console.log(`Offline mode set to: ${offlineMode ? 'Enabled' : 'Disabled'}`);
+  }
+  
+  public static saveLastNetworkError(error: string): void {
+    localStorage.setItem(this.LAST_NETWORK_ERROR_KEY, error);
+    
+    // Increment network error count
+    const errorCount = this.getNetworkErrorCount();
+    this.saveNetworkErrorCount(errorCount + 1);
+  }
+  
+  public static getLastNetworkError(): string | null {
+    return localStorage.getItem(this.LAST_NETWORK_ERROR_KEY);
+  }
+  
+  public static saveNetworkErrorCount(count: number): void {
+    localStorage.setItem(this.NETWORK_ERROR_COUNT_KEY, String(count));
+  }
+  
+  public static getNetworkErrorCount(): number {
+    const count = localStorage.getItem(this.NETWORK_ERROR_COUNT_KEY);
+    return count ? parseInt(count, 10) : 0;
+  }
+  
+  public static resetNetworkErrorCount(): void {
+    localStorage.removeItem(this.NETWORK_ERROR_COUNT_KEY);
+    localStorage.removeItem(this.LAST_NETWORK_ERROR_KEY);
   }
 }
