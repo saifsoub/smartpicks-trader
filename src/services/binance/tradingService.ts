@@ -10,6 +10,8 @@ export class TradingService {
   private retryDelay: number = 2000; // ms
   private lastSuccessfulTrade: number = 0;
   private simulationMode: boolean = false;
+  private maxConsecutiveErrors: number = 3;
+  private consecutiveErrors: number = 0;
   
   constructor(apiClient: BinanceApiClient, logManager: LogManager) {
     this.apiClient = apiClient;
@@ -20,6 +22,13 @@ export class TradingService {
       if (event.detail && typeof event.detail.enabled === 'boolean') {
         this.simulationMode = event.detail.enabled;
         console.log(`Trading service simulation mode set to: ${this.simulationMode}`);
+        
+        // Show user feedback when simulation mode changes
+        if (this.simulationMode) {
+          toast.info("Simulation mode enabled. Trades will be simulated, not real.");
+        } else {
+          toast.info("Simulation mode disabled. Trades will be executed on Binance.");
+        }
       }
     });
     
@@ -32,6 +41,41 @@ export class TradingService {
       }
     } catch (e) {
       console.error('Error checking offline mode:', e);
+    }
+    
+    // Check network status initially
+    this.checkNetworkStatus();
+  }
+  
+  // Method to check network status
+  private async checkNetworkStatus(): Promise<void> {
+    try {
+      // Basic connectivity test to Binance
+      const response = await fetch('https://api.binance.com/api/v3/ping', {
+        method: 'GET',
+        signal: AbortSignal.timeout(5000)
+      });
+      
+      if (response.ok) {
+        console.log("Binance API is reachable");
+        this.consecutiveErrors = 0;
+        
+        // If we were previously in simulation mode due to network issues,
+        // inform the user that real trading is now possible
+        if (this.simulationMode && localStorage.getItem('autoEnabledSimulation') === 'true') {
+          toast.success("Binance API is now reachable. You can disable simulation mode in settings.");
+        }
+      }
+    } catch (error) {
+      console.warn("Binance API ping failed, might be network issues:", error);
+      this.consecutiveErrors++;
+      
+      if (this.consecutiveErrors >= this.maxConsecutiveErrors && !this.simulationMode) {
+        console.warn(`${this.consecutiveErrors} consecutive network errors. Auto-enabling simulation mode.`);
+        this.setSimulationMode(true, true);
+        toast.warning("Multiple network errors detected. Automatically enabling simulation mode.");
+        this.logManager.addTradingLog("Automatically switched to simulation mode due to network issues", 'warning');
+      }
     }
   }
   
@@ -48,6 +92,9 @@ export class TradingService {
     if (this.simulationMode) {
       return this.generateSimulatedTradeResponse(symbol, side, quantity);
     }
+
+    // Always check network status before attempting real orders
+    await this.checkNetworkStatus();
 
     for (let attempt = 0; attempt < this.retryAttempts; attempt++) {
       try {
@@ -88,6 +135,9 @@ export class TradingService {
           result = await response.json();
         }
         
+        // Reset consecutive errors on success
+        this.consecutiveErrors = 0;
+        
         // Log success and update last successful trade time
         this.lastSuccessfulTrade = Date.now();
         this.logManager.addTradingLog(`Order ${result.orderId || 'unknown'} ${result.status || 'PENDING'}`, 'success');
@@ -109,10 +159,22 @@ export class TradingService {
           this.logManager.addTradingLog(`Failed to place ${side} order for ${symbol}: ${error instanceof Error ? error.message : String(error)}`, 'error');
           toast.error(`Failed to place ${side} order for ${symbol}`);
           
+          // Increment consecutive errors
+          this.consecutiveErrors++;
+          
           // Check if it's a network error and suggest simulation mode
           if (this.isNetworkError(error)) {
-            toast.info("Network issues detected. Consider enabling offline simulation mode in settings.");
-            this.logManager.addTradingLog("Network issues detected. You can enable offline simulation mode in settings to continue testing strategies.", 'info');
+            if (this.consecutiveErrors >= this.maxConsecutiveErrors && !this.simulationMode) {
+              console.warn(`${this.consecutiveErrors} consecutive network errors. Auto-enabling simulation mode.`);
+              this.setSimulationMode(true, true);
+              toast.warning("Multiple network errors detected. Automatically enabling simulation mode.");
+              
+              // Return a simulated response instead
+              return this.generateSimulatedTradeResponse(symbol, side, quantity);
+            } else {
+              toast.info("Network issues detected. Consider enabling offline simulation mode in settings.");
+              this.logManager.addTradingLog("Network issues detected. You can enable offline simulation mode in settings.", 'info');
+            }
           }
           
           throw error;
@@ -139,8 +201,17 @@ export class TradingService {
   }
   
   // Set simulation mode
-  public setSimulationMode(enabled: boolean): void {
+  public setSimulationMode(enabled: boolean, autoEnabled: boolean = false): void {
     this.simulationMode = enabled;
+    
+    // Mark if this was auto-enabled due to network issues
+    if (autoEnabled) {
+      localStorage.setItem('autoEnabledSimulation', 'true');
+    } else if (!enabled) {
+      // Clear the auto-enabled flag when manually disabled
+      localStorage.removeItem('autoEnabledSimulation');
+    }
+    
     this.logManager.addTradingLog(`Trading simulation mode ${enabled ? 'enabled' : 'disabled'}`, 'info');
     console.log(`Trading simulation mode set to: ${enabled}`);
   }
@@ -216,6 +287,9 @@ export class TradingService {
         return this.generateSimulatedTradeResponse(symbol, side, quantity);
       }
       
+      // Check network connectivity before trying real order
+      await this.checkNetworkStatus();
+      
       // Try to place a real order
       return await this.placeMarketOrder(symbol, side, quantity);
     } catch (error) {
@@ -227,6 +301,15 @@ export class TradingService {
         this.logManager.addTradingLog(`Simulated ${side} ${quantity} ${symbol} (offline mode)`, 'warning');
         toast.info("Network issue detected. Using simulation mode for this trade.");
         
+        // Increment consecutive errors
+        this.consecutiveErrors++;
+        
+        // Auto-enable simulation mode if we've had multiple consecutive errors
+        if (this.consecutiveErrors >= this.maxConsecutiveErrors && !this.simulationMode) {
+          this.setSimulationMode(true, true);
+          toast.warning("Multiple network errors detected. Automatically enabling simulation mode for future trades.");
+        }
+        
         // Return a mock order response for offline operation
         return this.generateSimulatedTradeResponse(symbol, side, quantity);
       }
@@ -236,3 +319,4 @@ export class TradingService {
     }
   }
 }
+
