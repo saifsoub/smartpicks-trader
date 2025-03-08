@@ -8,6 +8,7 @@ export class StorageManager {
   private static OFFLINE_MODE_KEY = 'offlineMode';
   private static LAST_NETWORK_ERROR_KEY = 'lastNetworkError';
   private static NETWORK_ERROR_COUNT_KEY = 'networkErrorCount';
+  private static NOTIFICATION_SUPPRESS_KEY = 'suppressNetworkNotifications';
   
   public static loadCredentials(): BinanceCredentials | null {
     const savedCredentials = localStorage.getItem(this.CREDENTIALS_KEY);
@@ -96,5 +97,13 @@ export class StorageManager {
   public static resetNetworkErrorCount(): void {
     localStorage.removeItem(this.NETWORK_ERROR_COUNT_KEY);
     localStorage.removeItem(this.LAST_NETWORK_ERROR_KEY);
+  }
+  
+  public static suppressNotifications(suppress: boolean): void {
+    localStorage.setItem(this.NOTIFICATION_SUPPRESS_KEY, String(suppress));
+  }
+  
+  public static areNotificationsSuppressed(): boolean {
+    return localStorage.getItem(this.NOTIFICATION_SUPPRESS_KEY) === 'true';
   }
 }

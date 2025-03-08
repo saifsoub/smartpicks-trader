@@ -3,7 +3,6 @@ import React, { useEffect, useState } from 'react';
 import { Alert } from "@/components/ui/alert";
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { NetworkAlertMessage } from './network/NetworkAlertMessage';
-import { toast } from 'sonner';
 import { Wifi, WifiOff, X } from 'lucide-react';
 import { Button } from './ui/button';
 
@@ -47,7 +46,7 @@ export const NetworkStatusAlert = () => {
       // Use a session storage flag to avoid repeated notifications
       const hasNotified = sessionStorage.getItem('connection-issue-notified');
       if (!hasNotified) {
-        // Show only error notification, not toast
+        // Only log error to console, don't show toast
         console.error("Connection issues detected");
         sessionStorage.setItem('connection-issue-notified', 'true');
       }
@@ -56,7 +55,7 @@ export const NetworkStatusAlert = () => {
     // Start auto-dismiss countdown for non-critical alerts
     if (isVisible && isOnline && connectionStage.internet !== 'failed') {
       // Don't auto-dismiss critical failures
-      setDismissCountdown(15); // 15 second countdown
+      setDismissCountdown(8); // 8 second countdown (reduced from 15)
       
       const countdownInterval = setInterval(() => {
         setDismissCountdown(prev => {
@@ -72,20 +71,23 @@ export const NetworkStatusAlert = () => {
       
       return () => clearInterval(countdownInterval);
     }
-  }, [isVisible, isOnline, connectionStage.internet]);
+  }, [isVisible, isOnline, connectionStage.internet, setIsVisible]);
   
   // Determine if the alert should be positioned as a smaller notification
   const isMinorIssue = isOnline && connectionStage.internet === 'success' && 
                       (connectionStage.binanceApi === 'success' || connectionStage.binanceApi === 'unknown');
   
+  // Always show as a smaller notification to be less intrusive
+  const alertPosition = 'fixed bottom-4 right-4 max-w-md z-50 shadow-lg';
+  
   return (
     <Alert 
-      className={`${getAlertColor()} mb-4 ${isMinorIssue ? 'fixed bottom-4 right-4 max-w-md z-50 shadow-lg' : 'sticky top-0 z-50'} transition-all duration-300`}
+      className={`${getAlertColor()} mb-0 ${alertPosition} transition-all duration-300`}
       aria-live="assertive"
     >
       <div className="absolute right-2 top-2 flex items-center space-x-2 text-xs">
         {dismissCountdown !== null && (
-          <span className="text-gray-300 text-xs mr-1">Auto-dismiss in {dismissCountdown}s</span>
+          <span className="text-gray-300 text-xs mr-1">{dismissCountdown}s</span>
         )}
         {isOnline ? (
           <Wifi className="h-3 w-3 text-green-400" />

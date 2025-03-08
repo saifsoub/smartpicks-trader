@@ -26,7 +26,7 @@ export class CredentialsService {
       if (!this.isOfflineMode) {
         console.log('Network went offline, automatically enabling offline mode');
         this.setOfflineMode(true);
-        toast.info("Network is offline. Automatically switched to offline mode.");
+        // No toast notification to avoid being intrusive
       }
     });
     
@@ -42,27 +42,20 @@ export class CredentialsService {
       
       // Start the reconnection attempt
       this.attemptReconnection();
-      
-      if (this.isOfflineMode) {
-        toast.info("Network connection restored. Testing connection to Binance...", {
-          duration: 5000
-        });
-      }
     });
     
-    // Setup periodic connectivity checks
+    // Setup periodic connectivity checks, but less frequent to reduce network traffic
     setInterval(() => {
       // Only check if we're online and have credentials
       if (navigator.onLine && !this.isOfflineMode && this.hasCredentials()) {
         this.verifyConnectivity();
       }
-    }, 60000); // Check every minute
+    }, 120000); // Check every 2 minutes (increased from 1 minute)
   }
   
   private attemptReconnection(): void {
     if (this.connectionRetryCount >= this.maxConnectionRetries) {
       console.log('Maximum reconnection attempts reached');
-      toast.error("Failed to reconnect after multiple attempts. Please check settings or enable offline mode.");
       return;
     }
     
@@ -72,22 +65,16 @@ export class CredentialsService {
     // Try to ping Binance
     fetch('https://api.binance.com/api/v3/ping', {
       method: 'GET',
-      mode: 'no-cors', // Allow request without CORS
       cache: 'no-cache',
       signal: AbortSignal.timeout(5000)
     }).then(() => {
       // If we got here, we at least have some connectivity
       console.log('Basic connectivity to Binance detected');
       
-      // If we're in offline mode, suggest switching back
+      // If we're in offline mode, suggest switching back but don't show toast
       if (this.isOfflineMode) {
-        toast.info("Network connection to Binance detected. You can disable offline mode.", {
-          duration: 8000,
-          action: {
-            label: "Disable Offline Mode",
-            onClick: () => this.setOfflineMode(false)
-          }
-        });
+        // Don't show toast, just trigger an event for components to handle
+        window.dispatchEvent(new CustomEvent('binance-connectivity-restored'));
       }
     }).catch(error => {
       console.warn('Reconnection ping failed:', error);
