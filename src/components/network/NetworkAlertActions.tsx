@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Button } from "@/components/ui/button";
-import { RefreshCw, CloudOff, Settings, Wifi } from "lucide-react";
+import { RefreshCw, CloudOff, Settings, Wifi, Wrench, ActivityLog } from "lucide-react";
 import binanceService from '@/services/binanceService';
 import { toast } from "sonner";
 import { useNavigate } from 'react-router-dom';
@@ -26,16 +26,67 @@ export const NetworkAlertActions: React.FC<NetworkAlertActionsProps> = ({
   const handleCheckConnection = async () => {
     const success = await onCheckConnection();
     if (success) {
-      toast.success("Your internet connection is working");
+      toast.success("Connection successful! You are now connected to Binance.");
     } else {
-      toast.error("Internet connectivity issues detected");
+      toast.error("Connection issues detected. See detailed status above.");
     }
   };
   
   const goToSettings = () => {
     navigate('/settings');
     onDismiss();
-    toast.info("Please verify your API settings in the configuration section");
+    toast.info("Please verify your API settings");
+  };
+  
+  const runConnectionDiagnostics = async () => {
+    toast.info("Running advanced connection diagnostics...");
+    
+    try {
+      // Force a browser connectivity check
+      const online = navigator.onLine;
+      console.log("Browser reports online status:", online);
+      
+      // Try accessing a reliable third-party API
+      try {
+        const response = await fetch('https://httpbin.org/status/200', {
+          method: 'HEAD',
+          cache: 'no-cache',
+          signal: AbortSignal.timeout(5000)
+        });
+        console.log("Internet connectivity test result:", response.ok);
+      } catch (error) {
+        console.error("Internet connectivity test failed:", error);
+      }
+      
+      // Load credentials info
+      const hasCredentials = binanceService.hasCredentials();
+      const apiKey = binanceService.getApiKey();
+      const maskedKey = apiKey ? `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}` : 'Not set';
+      const proxyMode = binanceService.getProxyMode();
+      const permissions = binanceService.getApiPermissions();
+      
+      console.log("API Configuration:", {
+        hasCredentials,
+        apiKeyMasked: maskedKey,
+        proxyEnabled: proxyMode,
+        permissions
+      });
+      
+      // Display diagnostic info
+      toast.info("Check console for detailed connection diagnostics", {
+        duration: 5000,
+      });
+      
+      // Make recommendations based on diagnostics
+      if (!hasCredentials) {
+        toast.error("No API credentials configured. Please add your Binance API keys in settings.");
+      } else if (!proxyMode) {
+        toast.info("Consider enabling proxy mode in settings to bypass CORS restrictions.");
+      }
+    } catch (error) {
+      console.error("Diagnostics error:", error);
+      toast.error("Error running diagnostics");
+    }
   };
 
   return (
@@ -58,7 +109,7 @@ export const NetworkAlertActions: React.FC<NetworkAlertActionsProps> = ({
         ) : (
           <>
             <RefreshCw className="mr-2 h-4 w-4" />
-            Check Connection
+            Test Connection
           </>
         )}
       </Button>
@@ -71,6 +122,16 @@ export const NetworkAlertActions: React.FC<NetworkAlertActionsProps> = ({
       >
         <Settings className="mr-2 h-4 w-4" />
         API Settings
+      </Button>
+      
+      <Button 
+        variant="outline" 
+        size="sm"
+        className="bg-blue-800/30 border-blue-700 text-blue-200 hover:bg-blue-800"
+        onClick={runConnectionDiagnostics}
+      >
+        <Wrench className="mr-2 h-4 w-4" />
+        Diagnostics
       </Button>
       
       {!binanceService.isInOfflineMode() && (

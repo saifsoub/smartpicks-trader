@@ -10,6 +10,7 @@ export const NetworkStatusAlert = () => {
     isVisible, 
     isCheckingConnection, 
     initialCheckDone,
+    connectionStage,
     handleCheckConnection,
     handleEnableOfflineMode,
     setIsVisible
@@ -26,6 +27,7 @@ export const NetworkStatusAlert = () => {
       <NetworkAlertMessage
         isOnline={isOnline}
         isCheckingConnection={isCheckingConnection}
+        connectionStage={connectionStage}
         onCheckConnection={handleCheckConnection}
         onEnableOfflineMode={handleEnableOfflineMode}
         onDismiss={() => setIsVisible(false)}

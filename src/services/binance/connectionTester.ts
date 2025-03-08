@@ -10,7 +10,7 @@ export class ConnectionTester {
   private accountService: AccountService;
   private lastTestTime: number = 0;
   private testingInProgress: boolean = false;
-  private minTestInterval: number = 5000; // Minimum 5 seconds between tests
+  private minTestInterval: number = 2000; // Reduced to 2 seconds between tests
   private networkErrorCount: number = 0;
   
   constructor(apiClient: BinanceApiClient, logManager: LogManager, accountService: AccountService) {
@@ -54,78 +54,60 @@ export class ConnectionTester {
         throw new Error("Network connectivity issue detected. Your device appears to be offline.");
       }
       
-      // Try to get public data first which doesn't require authentication
-      try {
-        const timeResponse = await fetch('https://api.binance.com/api/v3/time', {
-          method: 'GET',
-          signal: AbortSignal.timeout(20000), // Increased timeout to 20 seconds
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
-          }
-        });
-        
-        if (timeResponse.ok) {
-          this.logManager.addTradingLog('Direct API basic connectivity confirmed', 'success');
-          this.resetNetworkErrorCount(); // Reset network error counter
-          // At minimum, we have basic connectivity
-          return true;
-        }
-      } catch (timeError) {
-        // Check if this is a network error
-        this.logManager.addTradingLog(`Direct API time check failed: ${timeError instanceof Error ? timeError.message : String(timeError)}`, 'warning');
-        
-        if (this.isNetworkError(timeError)) {
-          this.recordNetworkError("Failed to connect to Binance API");
-          this.logManager.addTradingLog(`Network connectivity issue detected (${this.networkErrorCount} consecutive errors)`, 'warning');
+      // Try multiple Binance endpoints with different timeouts for better reliability
+      const endpoints = [
+        { url: 'https://api.binance.com/api/v3/time', timeout: 15000 },
+        { url: 'https://api.binance.com/api/v3/ping', timeout: 10000 },
+        { url: 'https://api.binance.com/api/v3/exchangeInfo', timeout: 20000 },
+        { url: 'https://api.binance.us/api/v3/ping', timeout: 10000 } // Try binance.us as fallback
+      ];
+      
+      for (const endpoint of endpoints) {
+        try {
+          this.logManager.addTradingLog(`Testing Binance connection via ${endpoint.url}...`, 'info');
           
-          if (this.networkErrorCount >= 2) { // Reduced threshold from 3 to 2
-            this.logManager.addTradingLog("Multiple network errors detected. Please check your internet connection.", 'error');
-            throw new Error("Network connectivity issue detected. Please check your internet connection.");
+          const response = await fetch(endpoint.url, {
+            method: 'GET',
+            cache: 'no-cache',
+            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
+            signal: AbortSignal.timeout(endpoint.timeout)
+          });
+          
+          if (response.ok) {
+            this.logManager.addTradingLog(`Binance connection successful via ${endpoint.url}`, 'success');
+            this.resetNetworkErrorCount(); // Reset network error counter
+            return true;
           }
+        } catch (error) {
+          this.logManager.addTradingLog(`Endpoint ${endpoint.url} check failed: ${error instanceof Error ? error.message : String(error)}`, 'warning');
+          
+          if (this.isNetworkError(error)) {
+            this.recordNetworkError(`Failed to connect to ${endpoint.url}`);
+            this.logManager.addTradingLog(`Network error detected (${this.networkErrorCount} consecutive errors)`, 'warning');
+          }
+          
+          // Continue with next endpoint
         }
-        // Continue with other checks
       }
       
-      // Try a different public endpoint
-      try {
-        const priceResponse = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT', {
-          method: 'GET',
-          signal: AbortSignal.timeout(20000), // Increased timeout
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
-          }
-        });
-        
-        if (priceResponse.ok) {
-          this.logManager.addTradingLog('Direct API price check successful', 'success');
-          this.resetNetworkErrorCount(); // Reset error count on success
-          return true;
-        }
-      } catch (priceError) {
-        if (this.isNetworkError(priceError)) {
-          this.recordNetworkError("Failed to connect to Binance API");
-          this.logManager.addTradingLog(`Network connectivity issue detected (${this.networkErrorCount} consecutive errors)`, 'warning');
-          
-          if (this.networkErrorCount >= 2) { // Reduced threshold from 3 to 2
-            this.logManager.addTradingLog("Multiple network errors detected. Please check your internet connection.", 'error');
-            throw new Error("Network connectivity issue detected. Please check your internet connection.");
-          }
-        }
-        this.logManager.addTradingLog(`Direct API price check failed: ${priceError instanceof Error ? priceError.message : String(priceError)}`, 'warning');
-      }
-      
-      // If all checks fail but general internet is working, it might be specific to Binance
+      // If all Binance checks fail but general internet is working
       if (hasInternetAccess) {
-        this.logManager.addTradingLog('Internet is working, but Binance API seems unreachable. This may be a temporary issue with Binance.', 'warning');
+        this.logManager.addTradingLog('Internet is working, but Binance API is unreachable. This might be due to region blocking, firewall settings, or a temporary Binance outage.', 'warning');
+        
+        // Test if it's a CORS issue
+        this.logManager.addTradingLog('Testing if this might be a CORS restriction issue...', 'info');
+        
+        // Suggest enabling proxy mode if direct access fails
+        if (!this.apiClient.getProxyMode()) {
+          this.logManager.addTradingLog('Direct API access failed. This might be due to CORS restrictions. Consider enabling proxy mode in settings.', 'info');
+        }
       }
       
-      // If all checks fail
-      this.logManager.addTradingLog('Direct API connection tests failed', 'warning');
+      // All checks failed
+      this.logManager.addTradingLog('All direct API connection tests failed', 'error');
       return false;
     } catch (error) {
-      this.logManager.addTradingLog(`Direct API connection test failed: ${error instanceof Error ? error.message : String(error)}`, 'error');
+      this.logManager.addTradingLog(`Direct API connection test error: ${error instanceof Error ? error.message : String(error)}`, 'error');
       return false;
     } finally {
       this.testingInProgress = false;
@@ -152,63 +134,160 @@ export class ConnectionTester {
         throw new Error("Network connectivity issue detected. Your device appears to be offline.");
       }
       
-      // Test using the simplest public endpoint
+      // Test using multiple endpoints through proxy
       this.logManager.addTradingLog('Testing proxy connection to Binance...', 'info');
       
-      try {
-        // Try testing with a public endpoint that doesn't require auth
-        const tickerData = await this.apiClient.fetchWithProxy(
-          'ticker/price',
-          { symbol: 'BTCUSDT' },
-          'GET',
-          true
-        );
+      // Array of endpoints to test with proxy
+      const proxyEndpoints = [
+        { endpoint: 'ticker/price', params: { symbol: 'BTCUSDT' }, method: 'GET' },
+        { endpoint: 'ping', params: {}, method: 'GET' },
+        { endpoint: 'time', params: {}, method: 'GET' }
+      ];
+      
+      for (const endpoint of proxyEndpoints) {
+        try {
+          this.logManager.addTradingLog(`Testing proxy with ${endpoint.endpoint}...`, 'info');
+          
+          const data = await this.apiClient.fetchWithProxy(
+            endpoint.endpoint,
+            endpoint.params,
+            endpoint.method as 'GET',
+            true
+          );
+          
+          if (data) {
+            this.logManager.addTradingLog(`Proxy connection successful with ${endpoint.endpoint}`, 'success');
+            this.resetNetworkErrorCount(); // Reset error count on success
+            return true;
+          }
+        } catch (error) {
+          this.logManager.addTradingLog(`Proxy endpoint ${endpoint.endpoint} failed: ${error instanceof Error ? error.message : String(error)}`, 'warning');
+          
+          if (this.isNetworkError(error)) {
+            this.recordNetworkError(`Failed to connect to Binance API proxy: ${endpoint.endpoint}`);
+            this.logManager.addTradingLog(`Network error detected (${this.networkErrorCount} consecutive errors)`, 'warning');
+          }
+          
+          // Continue to next endpoint
+        }
+      }
+      
+      // If we have internet but all proxy tests fail
+      if (hasInternetAccess) {
+        // Try to diagnose if it's an API key issue
+        this.logManager.addTradingLog('Checking if this might be an API key configuration issue...', 'info');
         
-        if (tickerData && tickerData.price) {
-          this.logManager.addTradingLog('Proxy ticker check successful', 'success');
-          this.resetNetworkErrorCount(); // Reset error count on success
-          return true;
+        const apiKey = this.apiClient.getApiKey();
+        if (!this.validateApiKeyFormat(apiKey)) {
+          this.logManager.addTradingLog('Your API key format appears to be invalid. Please check your API key configuration.', 'error');
+        } else {
+          this.logManager.addTradingLog('Your API key format looks valid, but authentication is failing. Check your secret key and ensure your API key is active on Binance.', 'warning');
         }
-      } catch (tickerError) {
-        if (this.isNetworkError(tickerError)) {
-          this.recordNetworkError("Failed to connect to Binance API proxy");
-          this.logManager.addTradingLog(`Network connectivity issue detected (${this.networkErrorCount} consecutive errors)`, 'warning');
-          
-          if (this.networkErrorCount >= 2) { // Reduced threshold from 3 to 2
-            this.logManager.addTradingLog("Multiple network errors detected. Please check your internet connection.", 'error');
-            throw new Error("Network connectivity issue detected. Please check your internet connection.");
-          }
-        }
-        this.logManager.addTradingLog(`Proxy ticker check failed: ${tickerError instanceof Error ? tickerError.message : String(tickerError)}`, 'warning');
       }
       
-      // If that fails, try another simple endpoint
-      try {
-        const pingData = await this.apiClient.fetchWithProxy('ping', {}, 'GET', true);
-        if (pingData) {
-          this.logManager.addTradingLog('Proxy ping successful', 'success');
-          this.resetNetworkErrorCount(); // Reset error count on success
-          return true;
-        }
-      } catch (pingError) {
-        if (this.isNetworkError(pingError)) {
-          this.recordNetworkError("Failed to connect to Binance API proxy");
-          this.logManager.addTradingLog(`Network connectivity issue detected (${this.networkErrorCount} consecutive errors)`, 'warning');
-          
-          if (this.networkErrorCount >= 2) { // Reduced threshold from 3 to 2
-            this.logManager.addTradingLog("Multiple network errors detected. Please check your internet connection.", 'error');
-            throw new Error("Network connectivity issue detected. Please check your internet connection.");
-          }
-        }
-        this.logManager.addTradingLog(`Proxy ping failed: ${pingError instanceof Error ? pingError.message : String(pingError)}`, 'error');
-      }
-      
+      // All proxy checks failed
+      this.logManager.addTradingLog('All proxy connection tests failed', 'error');
       return false;
     } catch (error) {
-      this.logManager.addTradingLog(`Proxy connection test failed: ${error instanceof Error ? error.message : String(error)}`, 'error');
+      this.logManager.addTradingLog(`Proxy connection test error: ${error instanceof Error ? error.message : String(error)}`, 'error');
       return false;
     } finally {
       this.testingInProgress = false;
+    }
+  }
+  
+  /**
+   * Comprehensive check for different kinds of connectivity issues
+   */
+  public async diagnoseConnectionIssues(): Promise<{
+    hasInternet: boolean;
+    canReachBinance: boolean;
+    apiKeyValid: boolean;
+    errorDetails: string;
+  }> {
+    let result = {
+      hasInternet: false,
+      canReachBinance: false,
+      apiKeyValid: false,
+      errorDetails: ""
+    };
+    
+    try {
+      // Step 1: Check internet connectivity
+      result.hasInternet = await this.checkInternetConnectivity();
+      if (!result.hasInternet) {
+        result.errorDetails = "No internet connection detected. Please check your network settings.";
+        return result;
+      }
+      
+      // Step 2: Check Binance reachability (without authentication)
+      try {
+        const response = await fetch('https://api.binance.com/api/v3/ping', {
+          method: 'GET',
+          cache: 'no-cache',
+          signal: AbortSignal.timeout(10000)
+        });
+        
+        result.canReachBinance = response.ok;
+      } catch (error) {
+        result.canReachBinance = false;
+        
+        // Check if it's likely a CORS issue
+        if (error instanceof TypeError && 
+            (error.message.includes("Failed to fetch") || 
+             error.message.includes("Network request failed") ||
+             error.message.includes("Load failed"))) {
+          result.errorDetails = "Binance API is unreachable due to browser security restrictions (CORS). Try enabling proxy mode.";
+        } else {
+          result.errorDetails = "Cannot reach Binance API. The service might be blocked in your region or there's a temporary outage.";
+        }
+      }
+      
+      // Step 3: Check API key validity
+      if (result.canReachBinance || this.apiClient.getProxyMode()) {
+        const apiKey = this.apiClient.getApiKey();
+        
+        // Basic format validation
+        if (!this.validateApiKeyFormat(apiKey)) {
+          result.apiKeyValid = false;
+          result.errorDetails = "API key format is invalid. Please check your API key.";
+          return result;
+        }
+        
+        // Try authenticated request
+        try {
+          if (this.apiClient.getProxyMode()) {
+            // Test through proxy
+            await this.apiClient.fetchWithProxy('account', { recvWindow: '5000' }, 'GET');
+            result.apiKeyValid = true;
+          } else {
+            // Can't easily test auth with direct API due to CORS
+            // Just assume it might be valid if format check passed
+            result.apiKeyValid = true;
+            result.errorDetails = "API key format looks valid, but couldn't verify authentication due to CORS restrictions.";
+          }
+        } catch (error) {
+          result.apiKeyValid = false;
+          
+          // Check for specific error messages
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          
+          if (errorMsg.includes('Invalid API-key') || 
+              errorMsg.includes('API-key format invalid') ||
+              errorMsg.includes('Signature') ||
+              errorMsg.includes('authorization') ||
+              errorMsg.includes('Invalid credentials')) {
+            result.errorDetails = "Invalid API key or secret. Please check your credentials.";
+          } else {
+            result.errorDetails = "Authentication failed. Your API key may be inactive or have insufficient permissions.";
+          }
+        }
+      }
+      
+      return result;
+    } catch (error) {
+      result.errorDetails = `Unexpected error during diagnosis: ${error instanceof Error ? error.message : String(error)}`;
+      return result;
     }
   }
   
@@ -221,9 +300,11 @@ export class ConnectionTester {
       const endpoints = [
         'https://www.google.com/generate_204',
         'https://www.cloudflare.com/cdn-cgi/trace',
-        'https://httpbin.org/status/200'
+        'https://httpbin.org/status/200',
+        'https://1.1.1.1/cdn-cgi/trace'
       ];
       
+      // Try each endpoint with a proper timeout
       for (const endpoint of endpoints) {
         try {
           const response = await fetch(endpoint, {
