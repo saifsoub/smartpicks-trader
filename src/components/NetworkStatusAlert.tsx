@@ -1,10 +1,11 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert } from "@/components/ui/alert";
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { NetworkAlertMessage } from './network/NetworkAlertMessage';
 import { toast } from 'sonner';
-import { Wifi, WifiOff } from 'lucide-react';
+import { Wifi, WifiOff, X } from 'lucide-react';
+import { Button } from './ui/button';
 
 export const NetworkStatusAlert = () => {
   const { 
@@ -17,6 +18,9 @@ export const NetworkStatusAlert = () => {
     handleEnableOfflineMode,
     setIsVisible
   } = useNetworkStatus();
+  
+  // Auto-dismiss timer for non-critical alerts
+  const [dismissCountdown, setDismissCountdown] = useState<number | null>(null);
   
   // Skip initial render to prevent alert flickering during page load
   if (!initialCheckDone) return null;
@@ -37,18 +41,52 @@ export const NetworkStatusAlert = () => {
   };
   
   // For accessibility, announce connection issues to screen readers
-  React.useEffect(() => {
+  // But make notifications less intrusive - only show once per session
+  useEffect(() => {
     if (isVisible && !isOnline) {
-      toast.error("Connection issues detected", { id: "connection-issue" });
+      // Use a session storage flag to avoid repeated notifications
+      const hasNotified = sessionStorage.getItem('connection-issue-notified');
+      if (!hasNotified) {
+        // Show only error notification, not toast
+        console.error("Connection issues detected");
+        sessionStorage.setItem('connection-issue-notified', 'true');
+      }
     }
-  }, [isVisible, isOnline]);
+    
+    // Start auto-dismiss countdown for non-critical alerts
+    if (isVisible && isOnline && connectionStage.internet !== 'failed') {
+      // Don't auto-dismiss critical failures
+      setDismissCountdown(15); // 15 second countdown
+      
+      const countdownInterval = setInterval(() => {
+        setDismissCountdown(prev => {
+          if (prev === null || prev <= 1) {
+            clearInterval(countdownInterval);
+            // Auto-dismiss after countdown
+            setIsVisible(false);
+            return null;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      
+      return () => clearInterval(countdownInterval);
+    }
+  }, [isVisible, isOnline, connectionStage.internet]);
+  
+  // Determine if the alert should be positioned as a smaller notification
+  const isMinorIssue = isOnline && connectionStage.internet === 'success' && 
+                      (connectionStage.binanceApi === 'success' || connectionStage.binanceApi === 'unknown');
   
   return (
     <Alert 
-      className={`${getAlertColor()} mb-4 sticky top-0 z-50 transition-colors duration-300`}
+      className={`${getAlertColor()} mb-4 ${isMinorIssue ? 'fixed bottom-4 right-4 max-w-md z-50 shadow-lg' : 'sticky top-0 z-50'} transition-all duration-300`}
       aria-live="assertive"
     >
-      <div className="absolute right-2 top-2 flex items-center space-x-1 text-xs">
+      <div className="absolute right-2 top-2 flex items-center space-x-2 text-xs">
+        {dismissCountdown !== null && (
+          <span className="text-gray-300 text-xs mr-1">Auto-dismiss in {dismissCountdown}s</span>
+        )}
         {isOnline ? (
           <Wifi className="h-3 w-3 text-green-400" />
         ) : (
@@ -57,6 +95,14 @@ export const NetworkStatusAlert = () => {
         <span className={isOnline ? "text-green-400" : "text-red-400"}>
           {isOnline ? "Limited Connection" : "Disconnected"}
         </span>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="h-5 w-5 text-gray-400 hover:text-white hover:bg-gray-700/50"
+          onClick={() => setIsVisible(false)}
+        >
+          <X className="h-3 w-3" />
+        </Button>
       </div>
       
       <NetworkAlertMessage

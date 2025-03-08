@@ -128,7 +128,7 @@ export class CredentialsService {
       // Trim whitespace from credentials to prevent common errors
       const trimmedCredentials = {
         apiKey: credentials.apiKey?.trim() || '',
-        apiSecret: credentials.apiSecret?.trim() || ''
+        secretKey: credentials.secretKey?.trim() || ''
       };
       
       this.apiClient.setCredentials(trimmedCredentials);

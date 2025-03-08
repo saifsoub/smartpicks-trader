@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Button } from "@/components/ui/button";
-import { RefreshCw, CloudOff, Settings, Wifi, Wrench, Activity } from "lucide-react";
+import { RefreshCw, CloudOff, Settings, Wrench, Activity } from "lucide-react";
 import binanceService from '@/services/binanceService';
 import { toast } from "sonner";
 import { useNavigate } from 'react-router-dom';
@@ -24,10 +24,10 @@ export const NetworkAlertActions: React.FC<NetworkAlertActionsProps> = ({
   const navigate = useNavigate();
 
   const handleCheckConnection = async () => {
-    toast.info("Running comprehensive connection test...");
     const success = await onCheckConnection();
     if (success) {
       toast.success("Connection successful! You are now connected to Binance.");
+      onDismiss(); // Automatically dismiss on success
     } else {
       toast.error("Connection issues detected. See detailed status above.");
     }
@@ -35,17 +35,13 @@ export const NetworkAlertActions: React.FC<NetworkAlertActionsProps> = ({
   
   const goToSettings = () => {
     navigate('/settings');
-    toast.info("Please verify your API settings and configuration");
+    onDismiss(); // Dismiss alert when navigating
   };
   
   const runConnectionDiagnostics = async () => {
-    toast.info("Running advanced connection diagnostics...");
+    toast.info("Running connection diagnostics...");
     
     try {
-      // Force a browser connectivity check
-      const online = navigator.onLine;
-      console.log("Browser reports online status:", online);
-      
       // Try accessing a reliable third-party API
       try {
         const response = await fetch('https://httpbin.org/status/200', {
@@ -60,26 +56,14 @@ export const NetworkAlertActions: React.FC<NetworkAlertActionsProps> = ({
       
       // Load credentials info
       const hasCredentials = binanceService.hasCredentials();
-      const apiKey = binanceService.getApiKey();
-      const maskedKey = apiKey ? `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}` : 'Not set';
       const proxyMode = binanceService.getProxyMode();
-      const permissions = binanceService.getApiPermissions();
-      
-      console.log("API Configuration:", {
-        hasCredentials,
-        apiKeyMasked: maskedKey,
-        proxyEnabled: proxyMode,
-        permissions
-      });
       
       // Try a direct ping to Binance using a different method
       try {
         const img = new Image();
-        let pingSuccess = false;
         
         img.onload = () => {
           console.log("Binance favicon loaded successfully");
-          pingSuccess = true;
           toast.info("Binance website is accessible. API connectivity issue may be due to CORS or regional restrictions.");
         };
         
@@ -90,32 +74,9 @@ export const NetworkAlertActions: React.FC<NetworkAlertActionsProps> = ({
         
         // Add a random parameter to bypass cache
         img.src = `https://www.binance.com/favicon.ico?_=${Date.now()}`;
-        
-        // Try an alternative method with fetch and CORS mode 'no-cors'
-        try {
-          const corsResponse = await fetch('https://api.binance.com/api/v3/ping', {
-            method: 'GET',
-            mode: 'no-cors', // This allows the request without CORS headers
-            cache: 'no-cache',
-            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
-            signal: AbortSignal.timeout(5000)
-          });
-          
-          console.log("Binance API no-cors request completed:", corsResponse);
-          if (!pingSuccess) {
-            toast.info("Basic connectivity to Binance API detected, but full API access may be limited.");
-          }
-        } catch (corsError) {
-          console.warn("Binance API no-cors request failed:", corsError);
-        }
       } catch (pingError) {
         console.error("Error during Binance ping test:", pingError);
       }
-      
-      // Display diagnostic info
-      toast.info("Check console for detailed connection diagnostics", {
-        duration: 5000,
-      });
       
       // Make recommendations based on diagnostics
       if (!hasCredentials) {
@@ -147,34 +108,13 @@ export const NetworkAlertActions: React.FC<NetworkAlertActionsProps> = ({
       
       if (result) {
         toast.success(`Connection successful using ${!currentProxyMode ? 'proxy' : 'direct'} mode!`);
+        onDismiss(); // Auto-dismiss on successful connection
         return;
       } else {
         // Switch back if it didn't help
         binanceService.setProxyMode(currentProxyMode);
         toast.error("Alternative connection method failed. Reverting to previous settings.");
       }
-      
-      // If switching proxy mode didn't work, try other approaches
-      toast.info("Testing connection with reduced timeout...");
-      
-      // Try direct access to a different Binance endpoint
-      try {
-        const exchangeInfoResponse = await fetch('https://api.binance.com/api/v3/exchangeInfo', {
-          method: 'GET',
-          cache: 'no-cache',
-          headers: { 'Cache-Control': 'no-cache' },
-          signal: AbortSignal.timeout(3000) // shorter timeout
-        });
-        
-        if (exchangeInfoResponse.ok) {
-          toast.success("Successfully connected to Binance exchange info!");
-          console.log("Exchange info accessible, but account data might still be unavailable");
-        }
-      } catch (exchangeError) {
-        console.warn("Exchange info request failed:", exchangeError);
-      }
-      
-      toast.info("Connection troubleshooting completed. Check console for details.");
     } catch (error) {
       console.error("Alternative connection error:", error);
       toast.error("Error during alternative connection attempt");
@@ -251,10 +191,7 @@ export const NetworkAlertActions: React.FC<NetworkAlertActionsProps> = ({
       <Button 
         variant="outline" 
         size="sm" 
-        className={isOnline 
-          ? "bg-yellow-800/30 border-yellow-700 text-yellow-200 hover:bg-yellow-800" 
-          : "bg-red-800/30 border-red-700 text-red-200 hover:bg-red-800"
-        }
+        className="bg-slate-800/50 border-slate-700 text-slate-200 hover:bg-slate-800"
         onClick={onDismiss}
       >
         Dismiss
