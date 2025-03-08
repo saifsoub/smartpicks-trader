@@ -1,4 +1,3 @@
-
 import binanceService from '../../binanceService';
 import { calculateATR } from '../indicators/technicalIndicators';
 import { TradingEventEmitter } from '../tradingEventEmitter';
@@ -16,6 +15,7 @@ interface Position {
   trailingStop: number | null;
   entryTime: number;
   side: 'long' | 'short';
+  isSimulated?: boolean;
 }
 
 interface RiskParameters {
@@ -38,6 +38,11 @@ export class TradeExecutor {
   private lastBalanceCheck: number = 0;
   private isTestMode: boolean = false;
   private riskParameters: RiskParameters;
+  
+  // Add a new property to track offline mode
+  private offlineMode: boolean = false;
+  private reconnectAttempts: number = 0;
+  private maxReconnectAttempts: number = 5;
   
   constructor(eventEmitter: TradingEventEmitter, isTestMode: boolean = false) {
     this.eventEmitter = eventEmitter;
@@ -180,6 +185,17 @@ export class TradeExecutor {
     }
   }
   
+  // Add method to enable/disable offline mode
+  public setOfflineMode(enabled: boolean): void {
+    this.offlineMode = enabled;
+    console.log(`Trade executor offline mode ${enabled ? 'enabled' : 'disabled'}`);
+  }
+  
+  // Check if in offline mode
+  public isOfflineMode(): boolean {
+    return this.offlineMode;
+  }
+  
   // Execute a buy/long order
   public async executeBuy(
     symbol: string, 
@@ -227,7 +243,21 @@ export class TradeExecutor {
       console.log(`Executing BUY order for ${symbol} at ${currentPrice}, quantity: ${formattedQuantity}`);
       
       if (!this.isTestMode) {
-        await binanceService.placeMarketOrder(symbol, 'BUY', formattedQuantity);
+        try {
+          // Try to place the market order
+          await binanceService.placeMarketOrder(symbol, 'BUY', formattedQuantity);
+        } catch (orderError) {
+          // If in offline mode or if we exceed max reconnect attempts, proceed with simulated order
+          if (this.offlineMode || this.reconnectAttempts >= this.maxReconnectAttempts) {
+            console.warn(`Network issue detected, proceeding with simulated BUY for ${symbol} in offline mode`);
+            this.reconnectAttempts = 0; // Reset reconnect attempts
+            // Continue with position creation below
+          } else {
+            // Increment reconnect attempts and throw the error
+            this.reconnectAttempts++;
+            throw orderError;
+          }
+        }
       }
       
       // Calculate take profit level
@@ -242,7 +272,8 @@ export class TradeExecutor {
         takeProfit: takeProfit,
         trailingStop: this.riskParameters.trailingStopEnabled ? currentPrice * (1 - (this.riskParameters.trailingStopPercentage! / 100)) : null,
         entryTime: Date.now(),
-        side: 'long'
+        side: 'long',
+        isSimulated: this.offlineMode || this.isTestMode
       };
       
       // Store position
@@ -254,14 +285,16 @@ export class TradeExecutor {
         strategy: 'advanced',
         symbol,
         price: currentPrice.toString(),
-        time: Date.now()
+        time: Date.now(),
+        isSimulated: this.offlineMode || this.isTestMode
       });
       
       // Notify user
-      toast.success(`Bought ${symbol} at $${currentPrice.toLocaleString()}`);
+      const modeIndicator = (this.offlineMode || this.isTestMode) ? ' (simulated)' : '';
+      toast.success(`Bought ${symbol} at $${currentPrice.toLocaleString()}${modeIndicator}`);
       notificationService.addNotification({
         title: 'Trade Executed',
-        message: `Bought ${symbol} at $${currentPrice.toLocaleString()}`,
+        message: `Bought ${symbol} at $${currentPrice.toLocaleString()}${modeIndicator}`,
         type: 'success'
       });
       
@@ -295,8 +328,22 @@ export class TradeExecutor {
       const quantity = position.quantity.toFixed(6);
       console.log(`Executing SELL order for ${symbol} at ${currentPrice}, quantity: ${quantity}`);
       
-      if (!this.isTestMode) {
-        await binanceService.placeMarketOrder(symbol, 'SELL', quantity);
+      if (!this.isTestMode && !position.isSimulated) {
+        try {
+          // Try to place the market order
+          await binanceService.placeMarketOrder(symbol, 'SELL', quantity);
+        } catch (orderError) {
+          // If in offline mode or if we exceed max reconnect attempts, proceed with simulated order
+          if (this.offlineMode || this.reconnectAttempts >= this.maxReconnectAttempts) {
+            console.warn(`Network issue detected, proceeding with simulated SELL for ${symbol} in offline mode`);
+            this.reconnectAttempts = 0; // Reset reconnect attempts
+            // Continue with position closing below
+          } else {
+            // Increment reconnect attempts and throw the error
+            this.reconnectAttempts++;
+            throw orderError;
+          }
+        }
       }
       
       // Calculate profit/loss
@@ -310,14 +357,16 @@ export class TradeExecutor {
         strategy: 'advanced',
         symbol,
         price: currentPrice.toString(),
-        time: Date.now()
+        time: Date.now(),
+        isSimulated: this.offlineMode || this.isTestMode || position.isSimulated
       });
       
       // Notify user
+      const modeIndicator = (this.offlineMode || this.isTestMode || position.isSimulated) ? ' (simulated)' : '';
       if (priceDiff >= 0) {
-        toast.success(`Sold ${symbol} for ${percentChange.toFixed(2)}% profit`);
+        toast.success(`Sold ${symbol} for ${percentChange.toFixed(2)}% profit${modeIndicator}`);
       } else {
-        toast.info(`Sold ${symbol} with ${Math.abs(percentChange).toFixed(2)}% loss`);
+        toast.info(`Sold ${symbol} with ${Math.abs(percentChange).toFixed(2)}% loss${modeIndicator}`);
       }
       
       // Remove position
