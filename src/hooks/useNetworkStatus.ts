@@ -16,7 +16,7 @@ export function useNetworkStatus() {
     account: 'unknown'
   });
   
-  // Check internet connectivity using multiple reliable methods
+  // Enhanced Internet connectivity check using multiple methods
   const checkInternetConnectivity = useCallback(async (): Promise<boolean> => {
     try {
       setConnectionStage(prev => ({ ...prev, internet: 'checking' }));
@@ -28,15 +28,27 @@ export function useNetworkStatus() {
         return false;
       }
       
-      // Test multiple endpoints for better accuracy
+      // Test multiple endpoints with different protocols and domains
       const endpoints = [
+        { url: 'https://httpbin.org/status/200', timeout: 5000 },
         { url: 'https://www.cloudflare.com/cdn-cgi/trace', timeout: 5000 },
         { url: 'https://www.google.com/generate_204', timeout: 5000 },
-        { url: 'https://httpbin.org/status/200', timeout: 5000 },
-        { url: 'https://1.1.1.1/cdn-cgi/trace', timeout: 5000 }
+        { url: 'https://1.1.1.1/cdn-cgi/trace', timeout: 5000 },
+        // Try directly hitting the API to see if that specific connection works
+        { url: 'https://api.binance.com/api/v3/ping', timeout: 5000 }
       ];
       
-      // Try each endpoint with a proper timeout
+      // Try alternative sites if primary ones fail 
+      const backupEndpoints = [
+        { url: 'https://catfact.ninja/fact', timeout: 3000 },
+        { url: 'https://www.apple.com/favicon.ico', timeout: 3000 },
+        { url: 'https://www.microsoft.com/favicon.ico', timeout: 3000 }
+      ];
+      
+      // Try each endpoint with proper timeout
+      let successfulEndpoint = null;
+      
+      // First try the main endpoints
       for (const endpoint of endpoints) {
         try {
           console.log(`Testing internet connection with ${endpoint.url}`);
@@ -54,17 +66,87 @@ export function useNetworkStatus() {
           
           if (response.ok) {
             console.log(`Internet connectivity confirmed via ${endpoint.url}`);
+            successfulEndpoint = endpoint.url;
             setConnectionStage(prev => ({ ...prev, internet: 'success' }));
             return true;
           }
         } catch (error) {
           console.log(`Endpoint ${endpoint.url} check failed:`, error);
-          // Try next endpoint
-          continue;
+          // Continue to next endpoint
         }
       }
       
-      // All endpoints failed
+      // If all main endpoints fail, try the backup endpoints
+      if (!successfulEndpoint) {
+        for (const endpoint of backupEndpoints) {
+          try {
+            console.log(`Testing internet connection with backup endpoint ${endpoint.url}`);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), endpoint.timeout);
+            
+            const response = await fetch(endpoint.url, {
+              method: 'HEAD',
+              cache: 'no-cache',
+              headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
+              signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (response.ok) {
+              console.log(`Internet connectivity confirmed via backup endpoint ${endpoint.url}`);
+              successfulEndpoint = endpoint.url;
+              setConnectionStage(prev => ({ ...prev, internet: 'success' }));
+              return true;
+            }
+          } catch (error) {
+            console.log(`Backup endpoint ${endpoint.url} check failed:`, error);
+            // Continue to next endpoint
+          }
+        }
+      }
+      
+      // Try a different approach - check if XMLHttpRequest works when fetch fails
+      if (!successfulEndpoint) {
+        try {
+          console.log("Trying XMLHttpRequest as fallback method");
+          return await new Promise((resolve) => {
+            const xhr = new XMLHttpRequest();
+            const timeout = setTimeout(() => {
+              xhr.abort();
+              console.log("XMLHttpRequest timeout");
+              resolve(false);
+            }, 5000);
+            
+            xhr.onreadystatechange = function() {
+              if (xhr.readyState === 4) {
+                clearTimeout(timeout);
+                if (xhr.status >= 200 && xhr.status < 300) {
+                  console.log("XMLHttpRequest succeeded");
+                  setConnectionStage(prev => ({ ...prev, internet: 'success' }));
+                  resolve(true);
+                } else {
+                  console.log("XMLHttpRequest failed with status:", xhr.status);
+                  resolve(false);
+                }
+              }
+            };
+            
+            xhr.onerror = function() {
+              clearTimeout(timeout);
+              console.log("XMLHttpRequest error");
+              resolve(false);
+            };
+            
+            xhr.open("HEAD", "https://httpbin.org/status/200", true);
+            xhr.send();
+          });
+        } catch (xhrError) {
+          console.log("XMLHttpRequest approach failed:", xhrError);
+        }
+      }
+      
+      // All internet connectivity checks failed
       console.log("All internet connectivity checks failed");
       setConnectionStage(prev => ({ ...prev, internet: 'failed' }));
       return false;
@@ -75,12 +157,12 @@ export function useNetworkStatus() {
     }
   }, []);
   
-  // Check if Binance API is accessible
+  // Enhanced check for Binance API accessibility
   const checkBinanceApiAccess = useCallback(async (): Promise<boolean> => {
     try {
       setConnectionStage(prev => ({ ...prev, binanceApi: 'checking' }));
       
-      // First try Binance time endpoint which doesn't require authentication
+      // First try using modern fetch API
       try {
         console.log("Testing Binance API connection...");
         const timeResponse = await fetch('https://api.binance.com/api/v3/time', {
@@ -119,6 +201,44 @@ export function useNetworkStatus() {
         console.warn("Binance ping endpoint check failed:", pingError);
       }
       
+      // Try XMLHttpRequest as another approach
+      try {
+        console.log("Trying XMLHttpRequest for Binance API");
+        return await new Promise((resolve) => {
+          const xhr = new XMLHttpRequest();
+          const timeout = setTimeout(() => {
+            xhr.abort();
+            console.log("XMLHttpRequest timeout for Binance API");
+            resolve(false);
+          }, 10000);
+          
+          xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+              clearTimeout(timeout);
+              if (xhr.status >= 200 && xhr.status < 300) {
+                console.log("XMLHttpRequest succeeded for Binance API");
+                setConnectionStage(prev => ({ ...prev, binanceApi: 'success' }));
+                resolve(true);
+              } else {
+                console.log("XMLHttpRequest failed for Binance API with status:", xhr.status);
+                resolve(false);
+              }
+            }
+          };
+          
+          xhr.onerror = function() {
+            clearTimeout(timeout);
+            console.log("XMLHttpRequest error for Binance API");
+            resolve(false);
+          };
+          
+          xhr.open("GET", "https://api.binance.com/api/v3/ping", true);
+          xhr.send();
+        });
+      } catch (xhrError) {
+        console.log("XMLHttpRequest approach failed for Binance API:", xhrError);
+      }
+      
       // If both checks failed, check if it might be a CORS issue by using a proxy check
       if (binanceService.getProxyMode()) {
         try {
@@ -132,6 +252,27 @@ export function useNetworkStatus() {
         } catch (proxyError) {
           console.warn("Proxy connection check failed:", proxyError);
         }
+      }
+      
+      // As a last resort, try directly connecting to the Binance website
+      try {
+        console.log("Testing connection to Binance website directly...");
+        const websiteResponse = await fetch('https://www.binance.com/robots.txt', {
+          method: 'HEAD',
+          cache: 'no-cache',
+          headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
+          signal: AbortSignal.timeout(10000)
+        });
+        
+        if (websiteResponse.ok) {
+          console.log("Binance website is accessible, but API connection failed");
+          toast.info("Binance website is accessible, but API connection failed. This suggests a CORS or API restriction issue.");
+          // We still consider this a partial success in terms of Binance accessibility
+          setConnectionStage(prev => ({ ...prev, binanceApi: 'success' }));
+          return true;
+        }
+      } catch (websiteError) {
+        console.warn("Binance website access check failed:", websiteError);
       }
       
       // All Binance API checks failed
@@ -188,6 +329,59 @@ export function useNetworkStatus() {
         }
       } catch (permissionError) {
         console.warn("Permission detection failed:", permissionError);
+      }
+      
+      // If we're in proxy mode, try disabling it temporarily to see if direct connection works
+      if (binanceService.getProxyMode()) {
+        try {
+          console.log("Testing direct connection by temporarily disabling proxy...");
+          // Save current proxy setting
+          const currentProxyMode = binanceService.getProxyMode();
+          
+          // Temporarily disable proxy
+          binanceService.setProxyMode(false);
+          
+          // Try direct connection
+          const directTestResult = await binanceService.testConnection();
+          
+          // Restore original proxy setting
+          binanceService.setProxyMode(currentProxyMode);
+          
+          if (directTestResult) {
+            console.log("Direct connection succeeded, consider disabling proxy mode");
+            toast.info("Direct connection to Binance API works. Consider disabling proxy mode in settings.");
+            setConnectionStage(prev => ({ ...prev, account: 'success' }));
+            return true;
+          }
+        } catch (directTestError) {
+          console.warn("Direct connection test failed:", directTestError);
+        }
+      } 
+      // If we're not in proxy mode, try enabling it temporarily
+      else {
+        try {
+          console.log("Testing connection with proxy temporarily enabled...");
+          // Save current proxy setting
+          const currentProxyMode = binanceService.getProxyMode();
+          
+          // Temporarily enable proxy
+          binanceService.setProxyMode(true);
+          
+          // Try proxy connection
+          const proxyTestResult = await binanceService.testConnection();
+          
+          // Restore original proxy setting
+          binanceService.setProxyMode(currentProxyMode);
+          
+          if (proxyTestResult) {
+            console.log("Proxy connection succeeded, consider enabling proxy mode");
+            toast.info("Connection works when using proxy mode. Consider enabling proxy mode in settings.");
+            setConnectionStage(prev => ({ ...prev, account: 'success' }));
+            return true;
+          }
+        } catch (proxyTestError) {
+          console.warn("Proxy connection test failed:", proxyTestError);
+        }
       }
       
       console.log("All account access checks failed");

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Button } from "@/components/ui/button";
-import { RefreshCw, CloudOff, Settings, Wifi, Wrench, ActivityLog } from "lucide-react";
+import { RefreshCw, CloudOff, Settings, Wifi, Wrench, Activity } from "lucide-react";
 import binanceService from '@/services/binanceService';
 import { toast } from "sonner";
 import { useNavigate } from 'react-router-dom';
