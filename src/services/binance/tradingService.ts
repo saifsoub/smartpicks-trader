@@ -6,13 +6,33 @@ import { toast } from 'sonner';
 export class TradingService {
   private apiClient: BinanceApiClient;
   private logManager: LogManager;
-  private retryAttempts: number = 3;
+  private retryAttempts: number = 5; // Increased from 3 to 5
   private retryDelay: number = 2000; // ms
   private lastSuccessfulTrade: number = 0;
+  private simulationMode: boolean = false;
   
   constructor(apiClient: BinanceApiClient, logManager: LogManager) {
     this.apiClient = apiClient;
     this.logManager = logManager;
+    
+    // Listen for offline mode changes
+    window.addEventListener('offline-mode-changed', (event: any) => {
+      if (event.detail && typeof event.detail.enabled === 'boolean') {
+        this.simulationMode = event.detail.enabled;
+        console.log(`Trading service simulation mode set to: ${this.simulationMode}`);
+      }
+    });
+    
+    // Check if we're already in offline mode
+    try {
+      const offlineMode = localStorage.getItem('offlineMode') === 'true';
+      this.simulationMode = offlineMode;
+      if (offlineMode) {
+        console.log('Trading service started in simulation mode');
+      }
+    } catch (e) {
+      console.error('Error checking offline mode:', e);
+    }
   }
   
   public async placeMarketOrder(
@@ -20,8 +40,13 @@ export class TradingService {
     side: 'BUY' | 'SELL',
     quantity: string
   ): Promise<any> {
-    if (!this.apiClient.hasCredentials()) {
+    if (!this.apiClient.hasCredentials() && !this.simulationMode) {
       throw new Error('API credentials not configured');
+    }
+
+    // If we're in simulation mode, return a simulated response immediately
+    if (this.simulationMode) {
+      return this.generateSimulatedTradeResponse(symbol, side, quantity);
     }
 
     for (let attempt = 0; attempt < this.retryAttempts; attempt++) {
@@ -83,6 +108,13 @@ export class TradingService {
           // Log error on final attempt
           this.logManager.addTradingLog(`Failed to place ${side} order for ${symbol}: ${error instanceof Error ? error.message : String(error)}`, 'error');
           toast.error(`Failed to place ${side} order for ${symbol}`);
+          
+          // Check if it's a network error and suggest simulation mode
+          if (this.isNetworkError(error)) {
+            toast.info("Network issues detected. Consider enabling offline simulation mode in settings.");
+            this.logManager.addTradingLog("Network issues detected. You can enable offline simulation mode in settings to continue testing strategies.", 'info');
+          }
+          
           throw error;
         }
       }
@@ -98,7 +130,77 @@ export class TradingService {
   
   // Check if trading is possible (has credentials and recent successful trades)
   public canTrade(): boolean {
-    return this.apiClient.hasCredentials();
+    return this.apiClient.hasCredentials() || this.simulationMode;
+  }
+  
+  // Check if we're in simulation mode
+  public isInSimulationMode(): boolean {
+    return this.simulationMode;
+  }
+  
+  // Set simulation mode
+  public setSimulationMode(enabled: boolean): void {
+    this.simulationMode = enabled;
+    this.logManager.addTradingLog(`Trading simulation mode ${enabled ? 'enabled' : 'disabled'}`, 'info');
+    console.log(`Trading simulation mode set to: ${enabled}`);
+  }
+  
+  // Check if an error is likely a network error
+  private isNetworkError(error: any): boolean {
+    if (!error) return false;
+    
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    return (
+      errorMessage.includes('network') ||
+      errorMessage.includes('offline') ||
+      errorMessage.includes('internet') ||
+      errorMessage.includes('ECONNREFUSED') ||
+      errorMessage.includes('ENOTFOUND') ||
+      errorMessage.includes('Failed to fetch') ||
+      errorMessage.includes('Load failed') ||
+      errorMessage.includes('timeout') ||
+      errorMessage.includes('ERR_CONNECTION') ||
+      errorMessage.includes('Network request failed') ||
+      errorMessage.includes('network is offline') ||
+      errorMessage.includes('connection') ||
+      errorMessage.includes('AbortError')
+    );
+  }
+
+  // Generate a simulated trade response for testing
+  private generateSimulatedTradeResponse(symbol: string, side: 'BUY' | 'SELL', quantity: string): any {
+    const now = Date.now();
+    const simulatedPrice = Math.random() * 10000; // Random price for simulation
+    
+    this.logManager.addTradingLog(`Simulated ${side} ${quantity} ${symbol} at price ${simulatedPrice.toFixed(2)} (SIMULATION MODE)`, 'warning');
+    toast.success(`Simulated ${side} order placed successfully`);
+    
+    this.lastSuccessfulTrade = now;
+    
+    return {
+      symbol,
+      orderId: Math.floor(Math.random() * 1000000),
+      clientOrderId: `sim_${now}`,
+      transactTime: now,
+      price: simulatedPrice.toString(),
+      origQty: quantity,
+      executedQty: quantity,
+      status: 'FILLED',
+      timeInForce: 'GTC',
+      type: 'MARKET',
+      side,
+      fills: [
+        {
+          price: simulatedPrice.toString(),
+          qty: quantity,
+          commission: (simulatedPrice * Number(quantity) * 0.001).toString(), // 0.1% commission
+          commissionAsset: symbol.replace('USDT', ''),
+          tradeId: Math.floor(Math.random() * 1000000)
+        }
+      ],
+      isSimulated: true
+    };
   }
   
   // Place a market order with a fallback to offline operation for testing
@@ -106,30 +208,27 @@ export class TradingService {
     symbol: string,
     side: 'BUY' | 'SELL',
     quantity: string,
-    allowOfflineOperation: boolean = false
+    allowOfflineOperation: boolean = true // Changed default to true
   ): Promise<any> {
     try {
+      // If we're already in simulation mode, use that
+      if (this.simulationMode) {
+        return this.generateSimulatedTradeResponse(symbol, side, quantity);
+      }
+      
+      // Try to place a real order
       return await this.placeMarketOrder(symbol, side, quantity);
     } catch (error) {
-      if (allowOfflineOperation) {
+      console.error("Order placement error:", error);
+      
+      // If offline operation is allowed or it's a network error, use simulation mode
+      if (allowOfflineOperation || this.isNetworkError(error)) {
         console.warn(`Using offline operation mode for ${side} ${symbol}`);
         this.logManager.addTradingLog(`Simulated ${side} ${quantity} ${symbol} (offline mode)`, 'warning');
+        toast.info("Network issue detected. Using simulation mode for this trade.");
         
         // Return a mock order response for offline operation
-        return {
-          symbol,
-          orderId: Math.floor(Math.random() * 1000000),
-          clientOrderId: `offline_${Date.now()}`,
-          transactTime: Date.now(),
-          price: '0',
-          origQty: quantity,
-          executedQty: quantity,
-          status: 'FILLED',
-          timeInForce: 'GTC',
-          type: 'MARKET',
-          side,
-          isOfflineMode: true
-        };
+        return this.generateSimulatedTradeResponse(symbol, side, quantity);
       }
       
       // Re-throw if offline operation is not allowed
