@@ -4,6 +4,7 @@ import { Alert } from "@/components/ui/alert";
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { NetworkAlertMessage } from './network/NetworkAlertMessage';
 import { toast } from 'sonner';
+import { Wifi, WifiOff } from 'lucide-react';
 
 export const NetworkStatusAlert = () => {
   const { 
@@ -47,6 +48,17 @@ export const NetworkStatusAlert = () => {
       className={`${getAlertColor()} mb-4 sticky top-0 z-50 transition-colors duration-300`}
       aria-live="assertive"
     >
+      <div className="absolute right-2 top-2 flex items-center space-x-1 text-xs">
+        {isOnline ? (
+          <Wifi className="h-3 w-3 text-green-400" />
+        ) : (
+          <WifiOff className="h-3 w-3 text-red-400" />
+        )}
+        <span className={isOnline ? "text-green-400" : "text-red-400"}>
+          {isOnline ? "Limited Connection" : "Disconnected"}
+        </span>
+      </div>
+      
       <NetworkAlertMessage
         isOnline={isOnline}
         isCheckingConnection={isCheckingConnection}

@@ -7,6 +7,9 @@ import { toast } from 'sonner';
 export class CredentialsService {
   private apiClient: BinanceApiClient;
   private isOfflineMode: boolean = false;
+  private autoReconnectTimer: NodeJS.Timeout | null = null;
+  private connectionRetryCount: number = 0;
+  private maxConnectionRetries: number = 5;
   
   constructor(apiClient: BinanceApiClient) {
     this.apiClient = apiClient;
@@ -27,21 +30,89 @@ export class CredentialsService {
       }
     });
     
-    // When coming back online, suggest disabling offline mode
+    // When coming back online, try to reconnect automatically
     window.addEventListener('online', () => {
+      console.log('Network came back online, attempting to reconnect');
+      this.connectionRetryCount = 0;
+      
+      // Cancel any existing reconnect timer
+      if (this.autoReconnectTimer) {
+        clearTimeout(this.autoReconnectTimer);
+      }
+      
+      // Start the reconnection attempt
+      this.attemptReconnection();
+      
       if (this.isOfflineMode) {
-        console.log('Network came back online, suggesting to disable offline mode');
-        setTimeout(() => {
-          toast.info("Network connection restored. You can disable offline mode in settings.", {
-            duration: 8000,
-            action: {
-              label: "Disable Offline Mode",
-              onClick: () => this.setOfflineMode(false)
-            }
-          });
-        }, 2000); // Short delay to ensure network is stable
+        toast.info("Network connection restored. Testing connection to Binance...", {
+          duration: 5000
+        });
       }
     });
+    
+    // Setup periodic connectivity checks
+    setInterval(() => {
+      // Only check if we're online and have credentials
+      if (navigator.onLine && !this.isOfflineMode && this.hasCredentials()) {
+        this.verifyConnectivity();
+      }
+    }, 60000); // Check every minute
+  }
+  
+  private attemptReconnection(): void {
+    if (this.connectionRetryCount >= this.maxConnectionRetries) {
+      console.log('Maximum reconnection attempts reached');
+      toast.error("Failed to reconnect after multiple attempts. Please check settings or enable offline mode.");
+      return;
+    }
+    
+    this.connectionRetryCount++;
+    console.log(`Reconnection attempt ${this.connectionRetryCount}/${this.maxConnectionRetries}`);
+    
+    // Try to ping Binance
+    fetch('https://api.binance.com/api/v3/ping', {
+      method: 'GET',
+      mode: 'no-cors', // Allow request without CORS
+      cache: 'no-cache',
+      signal: AbortSignal.timeout(5000)
+    }).then(() => {
+      // If we got here, we at least have some connectivity
+      console.log('Basic connectivity to Binance detected');
+      
+      // If we're in offline mode, suggest switching back
+      if (this.isOfflineMode) {
+        toast.info("Network connection to Binance detected. You can disable offline mode.", {
+          duration: 8000,
+          action: {
+            label: "Disable Offline Mode",
+            onClick: () => this.setOfflineMode(false)
+          }
+        });
+      }
+    }).catch(error => {
+      console.warn('Reconnection ping failed:', error);
+      
+      // Schedule another attempt with exponential backoff
+      const backoffTime = Math.min(5000 * Math.pow(1.5, this.connectionRetryCount), 30000);
+      console.log(`Scheduling next reconnection attempt in ${backoffTime}ms`);
+      
+      this.autoReconnectTimer = setTimeout(() => {
+        this.attemptReconnection();
+      }, backoffTime);
+    });
+  }
+  
+  private verifyConnectivity(): void {
+    // Simple connectivity check
+    const img = new Image();
+    img.onload = () => {
+      console.log('Binance connectivity verified');
+    };
+    img.onerror = () => {
+      console.warn('Periodic connectivity check failed');
+      // We don't auto-switch to offline here to avoid disrupting the user
+    };
+    img.src = `https://www.binance.com/favicon.ico?_=${Date.now()}`;
   }
   
   public hasCredentials(): boolean {
@@ -54,11 +125,19 @@ export class CredentialsService {
   
   public saveCredentials(credentials: BinanceCredentials): boolean {
     try {
-      this.apiClient.setCredentials(credentials);
-      const success = StorageManager.saveCredentials(credentials);
+      // Trim whitespace from credentials to prevent common errors
+      const trimmedCredentials = {
+        apiKey: credentials.apiKey?.trim() || '',
+        apiSecret: credentials.apiSecret?.trim() || ''
+      };
+      
+      this.apiClient.setCredentials(trimmedCredentials);
+      const success = StorageManager.saveCredentials(trimmedCredentials);
       
       if (success) {
         window.dispatchEvent(new CustomEvent('binance-credentials-updated'));
+        // Reset connection retry count when credentials change
+        this.connectionRetryCount = 0;
       }
       
       return success;
@@ -71,6 +150,10 @@ export class CredentialsService {
   public setProxyMode(useLocalProxy: boolean): boolean {
     this.apiClient.setProxyMode(useLocalProxy);
     StorageManager.saveProxyMode(useLocalProxy);
+    
+    // Reset connection retry count when proxy mode changes
+    this.connectionRetryCount = 0;
+    
     return true;
   }
   
@@ -96,6 +179,11 @@ export class CredentialsService {
     }));
     
     console.log(`Offline mode ${enabled ? 'enabled' : 'disabled'}`);
+    
+    if (!enabled) {
+      // Reset connection retry count when exiting offline mode
+      this.connectionRetryCount = 0;
+    }
   }
   
   public isInOfflineMode(): boolean {
