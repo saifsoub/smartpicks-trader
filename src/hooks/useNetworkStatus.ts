@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import binanceService from '@/services/binanceService';
 import { toast } from 'sonner';
@@ -345,25 +346,57 @@ export function useNetworkStatus() {
     }
   };
   
-  // Handle force direct API connections
+  // Handle force direct API connections - improved implementation
   const handleForceDirectApi = () => {
     const currentValue = StorageManager.shouldForceDirectApi();
+    
+    // Log the current state before change
+    console.log(`Force Direct API: Current state = ${currentValue}, changing to ${!currentValue}`);
+    
+    // Update the direct API mode in binanceService
     binanceService.forceDirectApi(!currentValue);
     
-    if (!currentValue) {
+    // Get updated state
+    const newValue = StorageManager.shouldForceDirectApi();
+    console.log(`Force Direct API: New state = ${newValue}`);
+    
+    if (newValue) {
       // Enabling direct API mode
       toast.info("Direct API mode enabled. Bypassing all proxies and connecting directly to Binance.");
-      // Re-run connection check after a short delay
-      setTimeout(() => {
-        checkRealConnectivity();
-      }, 500);
+      
+      // Set the connection stages to reflect the change
+      setConnectionStage(prev => ({
+        ...prev,
+        binanceApi: 'checking' // Show checking state immediately
+      }));
+      
+      // Re-run connection check immediately
+      checkRealConnectivity().then(success => {
+        if (success) {
+          toast.success("Successfully connected using direct API mode");
+        } else {
+          toast.warning("Direct API connection attempt failed. Check console for details.");
+          console.warn("Direct API connection attempt failed. This might be due to CORS restrictions or network limitations.");
+        }
+      });
     } else {
       // Disabling direct API mode
       toast.info("Direct API mode disabled. Using proxy configuration.");
-      // Re-run connection check after a short delay
-      setTimeout(() => {
-        checkRealConnectivity();
-      }, 500);
+      
+      // Set the connection stages to reflect the change
+      setConnectionStage(prev => ({
+        ...prev,
+        binanceApi: 'checking' // Show checking state immediately
+      }));
+      
+      // Re-run connection check immediately
+      checkRealConnectivity().then(success => {
+        if (success) {
+          toast.success("Successfully connected using proxy mode");
+        } else {
+          toast.warning("Proxy connection attempt failed. Check console for details.");
+        }
+      });
     }
   };
   

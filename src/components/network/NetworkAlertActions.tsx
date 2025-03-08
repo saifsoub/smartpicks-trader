@@ -56,7 +56,7 @@ export const NetworkAlertActions: React.FC<NetworkAlertActionsProps> = ({
               className={`flex-grow ${isDirectApiForced ? 'bg-green-900/50 hover:bg-green-800 border-green-700' : 'bg-purple-900/50 hover:bg-purple-800 border-purple-700'} text-white`}
             >
               <Globe className="h-4 w-4 mr-1.5" /> 
-              {isDirectApiForced ? 'Direct API Enabled' : 'Force Direct API'}
+              {isDirectApiForced ? 'Disable Direct API' : 'Enable Direct API'}
             </Button>
           )}
         </>
@@ -80,7 +80,8 @@ export const NetworkAlertActions: React.FC<NetworkAlertActionsProps> = ({
               onClick={onForceDirectApi}
               className={`flex-grow ${isDirectApiForced ? 'bg-green-900/50 hover:bg-green-800 border-green-700' : 'bg-purple-900/50 hover:bg-purple-800 border-purple-700'} text-white`}
             >
-              <Globe className="h-4 w-4 mr-1.5" /> Force Direct API
+              <Globe className="h-4 w-4 mr-1.5" /> 
+              {isDirectApiForced ? 'Disable Direct API' : 'Enable Direct API'}
             </Button>
           )}
           

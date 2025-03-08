@@ -87,6 +87,17 @@ export const NetworkStatusAlert = () => {
   const isConnectionCheckBypassed = StorageManager.shouldBypassConnectionChecks();
   const isDirectApiForced = StorageManager.shouldForceDirectApi();
   
+  // Add console logging for debugging
+  console.log('NetworkStatusAlert rendering with:', {
+    isOnline,
+    isVisible,
+    isCheckingConnection,
+    connectionStage,
+    isConnectionCheckBypassed,
+    isDirectApiForced,
+    handleForceDirectApi: !!handleForceDirectApi
+  });
+  
   return (
     <Alert 
       className={`${isDirectApiForced ? 'bg-green-900/30 border-green-700' : getAlertColor()} mb-0 ${alertPosition} transition-all duration-300`}
