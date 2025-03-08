@@ -10,7 +10,9 @@ interface NetworkAlertMessageProps {
   connectionStage: ConnectionStage;
   onCheckConnection: () => Promise<boolean>;
   onEnableOfflineMode: () => void;
+  onBypassConnectionChecks?: () => void;
   onDismiss: () => void;
+  isConnectionCheckBypassed?: boolean;
 }
 
 export type ConnectionStage = {
@@ -25,7 +27,9 @@ export const NetworkAlertMessage: React.FC<NetworkAlertMessageProps> = ({
   connectionStage,
   onCheckConnection,
   onEnableOfflineMode,
-  onDismiss
+  onBypassConnectionChecks,
+  onDismiss,
+  isConnectionCheckBypassed
 }) => {
   const getStageIcon = (stage: 'unknown' | 'checking' | 'success' | 'failed') => {
     switch (stage) {
@@ -42,6 +46,10 @@ export const NetworkAlertMessage: React.FC<NetworkAlertMessageProps> = ({
 
   // Determine which failure stage to highlight in the message
   const getMainIssueMessage = () => {
+    if (isConnectionCheckBypassed) {
+      return "Connection checks are bypassed. The application will proceed without verifying connectivity to Binance.";
+    }
+    
     if (connectionStage.internet === 'failed') {
       return "Internet connectivity issue detected. Please check your network connection.";
     } else if (connectionStage.binanceApi === 'failed') {
@@ -57,6 +65,16 @@ export const NetworkAlertMessage: React.FC<NetworkAlertMessageProps> = ({
 
   // Get recommendations based on connection stage
   const getRecommendations = () => {
+    if (isConnectionCheckBypassed) {
+      return (
+        <>
+          <li>Connection checks are bypassed - the app will work with demo data</li>
+          <li>All operations will succeed regardless of actual connectivity</li>
+          <li>This is useful for development or when Binance is inaccessible</li>
+        </>
+      );
+    }
+    
     if (connectionStage.internet === 'failed') {
       return (
         <>
@@ -90,89 +108,98 @@ export const NetworkAlertMessage: React.FC<NetworkAlertMessageProps> = ({
   return (
     <div className="flex flex-col space-y-2">
       <div className="flex items-start">
-        {isOnline ? (
+        {isConnectionCheckBypassed ? (
+          <ShieldAlert className="h-5 w-5 text-blue-400 mr-2 mt-0.5" />
+        ) : isOnline ? (
           <AlertTriangle className="h-5 w-5 text-yellow-400 mr-2 mt-0.5" />
         ) : (
           <WifiOff className="h-5 w-5 text-red-400 mr-2 mt-0.5" />
         )}
         <AlertDescription className="flex-1">
           <div className="text-sm">
-            <span className={isOnline ? "text-yellow-200" : "text-red-200"}>
+            <span className={
+              isConnectionCheckBypassed ? "text-blue-200" :
+              isOnline ? "text-yellow-200" : "text-red-200"
+            }>
               {getMainIssueMessage()}
             </span>
           </div>
         </AlertDescription>
       </div>
 
-      <div className="bg-gray-800/50 rounded-md p-3 text-sm">
-        <h4 className="font-semibold text-gray-300 mb-2">Connection Status:</h4>
-        <ul className="space-y-2">
-          <li className="flex items-center gap-2">
-            <Globe className="h-4 w-4 mr-1 text-blue-400" />
-            <span className="text-gray-300 w-28">Internet:</span> 
-            <div className="flex items-center gap-2">
-              {getStageIcon(connectionStage.internet)}
-              <span className={
-                connectionStage.internet === 'checking' ? 'text-yellow-300 animate-pulse' : 
-                connectionStage.internet === 'success' ? 'text-green-300' : 
-                connectionStage.internet === 'failed' ? 'text-red-300' : 'text-gray-300'
-              }>
-                {connectionStage.internet === 'checking' ? 'Checking...' : 
-                 connectionStage.internet === 'success' ? 'Connected' : 
-                 connectionStage.internet === 'failed' ? 'Disconnected' : 'Unknown'}
-              </span>
-            </div>
-          </li>
-          <li className="flex items-center gap-2">
-            <Server className="h-4 w-4 mr-1 text-purple-400" />
-            <span className="text-gray-300 w-28">Binance API:</span>
-            <div className="flex items-center gap-2">
-              {getStageIcon(connectionStage.binanceApi)}
-              <span className={
-                connectionStage.binanceApi === 'checking' ? 'text-yellow-300 animate-pulse' : 
-                connectionStage.binanceApi === 'success' ? 'text-green-300' : 
-                connectionStage.binanceApi === 'failed' ? 'text-red-300' : 'text-gray-300'
-              }>
-                {connectionStage.binanceApi === 'checking' ? 'Checking...' : 
-                 connectionStage.binanceApi === 'success' ? 'Reachable' : 
-                 connectionStage.binanceApi === 'failed' ? 'Unreachable' : 'Unknown'}
-              </span>
-            </div>
-          </li>
-          <li className="flex items-center gap-2">
-            <Database className="h-4 w-4 mr-1 text-green-400" />
-            <span className="text-gray-300 w-28">Account Access:</span>
-            <div className="flex items-center gap-2">
-              {getStageIcon(connectionStage.account)}
-              <span className={
-                connectionStage.account === 'checking' ? 'text-yellow-300 animate-pulse' : 
-                connectionStage.account === 'success' ? 'text-green-300' : 
-                connectionStage.account === 'failed' ? 'text-red-300' : 'text-gray-300'
-              }>
-                {connectionStage.account === 'checking' ? 'Authenticating...' : 
-                 connectionStage.account === 'success' ? 'Authenticated' : 
-                 connectionStage.account === 'failed' ? 'Failed' : 'Not Verified'}
-              </span>
-            </div>
-          </li>
-        </ul>
-        
-        {recommendations && (
-          <div className="mt-3 pt-3 border-t border-gray-700">
-            <h5 className="font-medium text-gray-300 mb-1">Recommendations:</h5>
-            <ul className="text-xs text-gray-300 space-y-1 list-disc pl-5">
-              {recommendations}
-            </ul>
-          </div>
-        )}
-      </div>
+      {!isConnectionCheckBypassed && (
+        <div className="bg-gray-800/50 rounded-md p-3 text-sm">
+          <h4 className="font-semibold text-gray-300 mb-2">Connection Status:</h4>
+          <ul className="space-y-2">
+            <li className="flex items-center gap-2">
+              <Globe className="h-4 w-4 mr-1 text-blue-400" />
+              <span className="text-gray-300 w-28">Internet:</span> 
+              <div className="flex items-center gap-2">
+                {getStageIcon(connectionStage.internet)}
+                <span className={
+                  connectionStage.internet === 'checking' ? 'text-yellow-300 animate-pulse' : 
+                  connectionStage.internet === 'success' ? 'text-green-300' : 
+                  connectionStage.internet === 'failed' ? 'text-red-300' : 'text-gray-300'
+                }>
+                  {connectionStage.internet === 'checking' ? 'Checking...' : 
+                   connectionStage.internet === 'success' ? 'Connected' : 
+                   connectionStage.internet === 'failed' ? 'Disconnected' : 'Unknown'}
+                </span>
+              </div>
+            </li>
+            <li className="flex items-center gap-2">
+              <Server className="h-4 w-4 mr-1 text-purple-400" />
+              <span className="text-gray-300 w-28">Binance API:</span>
+              <div className="flex items-center gap-2">
+                {getStageIcon(connectionStage.binanceApi)}
+                <span className={
+                  connectionStage.binanceApi === 'checking' ? 'text-yellow-300 animate-pulse' : 
+                  connectionStage.binanceApi === 'success' ? 'text-green-300' : 
+                  connectionStage.binanceApi === 'failed' ? 'text-red-300' : 'text-gray-300'
+                }>
+                  {connectionStage.binanceApi === 'checking' ? 'Checking...' : 
+                   connectionStage.binanceApi === 'success' ? 'Reachable' : 
+                   connectionStage.binanceApi === 'failed' ? 'Unreachable' : 'Unknown'}
+                </span>
+              </div>
+            </li>
+            <li className="flex items-center gap-2">
+              <Database className="h-4 w-4 mr-1 text-green-400" />
+              <span className="text-gray-300 w-28">Account Access:</span>
+              <div className="flex items-center gap-2">
+                {getStageIcon(connectionStage.account)}
+                <span className={
+                  connectionStage.account === 'checking' ? 'text-yellow-300 animate-pulse' : 
+                  connectionStage.account === 'success' ? 'text-green-300' : 
+                  connectionStage.account === 'failed' ? 'text-red-300' : 'text-gray-300'
+                }>
+                  {connectionStage.account === 'checking' ? 'Authenticating...' : 
+                   connectionStage.account === 'success' ? 'Authenticated' : 
+                   connectionStage.account === 'failed' ? 'Failed' : 'Not Verified'}
+                </span>
+              </div>
+            </li>
+          </ul>
+        </div>
+      )}
+      
+      {recommendations && (
+        <div className="mt-3 pt-3 border-t border-gray-700">
+          <h5 className="font-medium text-gray-300 mb-1">Recommendations:</h5>
+          <ul className="text-xs text-gray-300 space-y-1 list-disc pl-5">
+            {recommendations}
+          </ul>
+        </div>
+      )}
       
       <NetworkAlertActions
         isOnline={isOnline}
         isCheckingConnection={isCheckingConnection}
         onCheckConnection={onCheckConnection}
         onEnableOfflineMode={onEnableOfflineMode}
+        onBypassConnectionChecks={onBypassConnectionChecks}
         onDismiss={onDismiss}
+        isConnectionCheckBypassed={isConnectionCheckBypassed}
       />
     </div>
   );

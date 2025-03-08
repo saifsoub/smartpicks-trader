@@ -5,6 +5,7 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { NetworkAlertMessage } from './network/NetworkAlertMessage';
 import { Wifi, WifiOff, X } from 'lucide-react';
 import { Button } from './ui/button';
+import { StorageManager } from '@/services/binance/storageManager';
 
 export const NetworkStatusAlert = () => {
   const { 
@@ -15,6 +16,7 @@ export const NetworkStatusAlert = () => {
     connectionStage,
     handleCheckConnection,
     handleEnableOfflineMode,
+    handleBypassConnectionChecks,
     setIsVisible
   } = useNetworkStatus();
   
@@ -80,6 +82,9 @@ export const NetworkStatusAlert = () => {
   // Always show as a smaller notification to be less intrusive
   const alertPosition = 'fixed bottom-4 right-4 max-w-md z-50 shadow-lg';
   
+  // Check if bypass mode is enabled
+  const isConnectionCheckBypassed = StorageManager.shouldBypassConnectionChecks();
+  
   return (
     <Alert 
       className={`${getAlertColor()} mb-0 ${alertPosition} transition-all duration-300`}
@@ -89,14 +94,20 @@ export const NetworkStatusAlert = () => {
         {dismissCountdown !== null && (
           <span className="text-gray-300 text-xs mr-1">{dismissCountdown}s</span>
         )}
-        {isOnline ? (
-          <Wifi className="h-3 w-3 text-green-400" />
+        {isConnectionCheckBypassed ? (
+          <span className="text-blue-400">Connection Checks Bypassed</span>
         ) : (
-          <WifiOff className="h-3 w-3 text-red-400" />
+          <>
+            {isOnline ? (
+              <Wifi className="h-3 w-3 text-green-400" />
+            ) : (
+              <WifiOff className="h-3 w-3 text-red-400" />
+            )}
+            <span className={isOnline ? "text-green-400" : "text-red-400"}>
+              {isOnline ? "Limited Connection" : "Disconnected"}
+            </span>
+          </>
         )}
-        <span className={isOnline ? "text-green-400" : "text-red-400"}>
-          {isOnline ? "Limited Connection" : "Disconnected"}
-        </span>
         <Button 
           variant="ghost" 
           size="icon" 
@@ -113,7 +124,9 @@ export const NetworkStatusAlert = () => {
         connectionStage={connectionStage}
         onCheckConnection={handleCheckConnection}
         onEnableOfflineMode={handleEnableOfflineMode}
+        onBypassConnectionChecks={handleBypassConnectionChecks}
         onDismiss={() => setIsVisible(false)}
+        isConnectionCheckBypassed={isConnectionCheckBypassed}
       />
     </Alert>
   );

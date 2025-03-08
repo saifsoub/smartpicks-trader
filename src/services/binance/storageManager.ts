@@ -9,6 +9,8 @@ export class StorageManager {
   private static LAST_NETWORK_ERROR_KEY = 'lastNetworkError';
   private static NETWORK_ERROR_COUNT_KEY = 'networkErrorCount';
   private static NOTIFICATION_SUPPRESS_KEY = 'suppressNetworkNotifications';
+  private static BYPASS_CONNECTION_CHECKS_KEY = 'bypassConnectionChecks';
+  private static MAX_CONNECTION_RETRIES_KEY = 'maxConnectionRetries';
   
   public static loadCredentials(): BinanceCredentials | null {
     const savedCredentials = localStorage.getItem(this.CREDENTIALS_KEY);
@@ -105,5 +107,23 @@ export class StorageManager {
   
   public static areNotificationsSuppressed(): boolean {
     return localStorage.getItem(this.NOTIFICATION_SUPPRESS_KEY) === 'true';
+  }
+  
+  public static bypassConnectionChecks(bypass: boolean): void {
+    localStorage.setItem(this.BYPASS_CONNECTION_CHECKS_KEY, String(bypass));
+    console.log(`Connection checks bypass set to: ${bypass ? 'Enabled' : 'Disabled'}`);
+  }
+  
+  public static shouldBypassConnectionChecks(): boolean {
+    return localStorage.getItem(this.BYPASS_CONNECTION_CHECKS_KEY) === 'true';
+  }
+  
+  public static setMaxConnectionRetries(retries: number): void {
+    localStorage.setItem(this.MAX_CONNECTION_RETRIES_KEY, String(retries));
+  }
+  
+  public static getMaxConnectionRetries(): number {
+    const retries = localStorage.getItem(this.MAX_CONNECTION_RETRIES_KEY);
+    return retries ? parseInt(retries, 10) : 5; // Default to 5 retries
   }
 }
