@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import binanceService from '@/services/binanceService';
 import { toast } from 'sonner';
@@ -346,6 +345,28 @@ export function useNetworkStatus() {
     }
   };
   
+  // Handle force direct API connections
+  const handleForceDirectApi = () => {
+    const currentValue = StorageManager.shouldForceDirectApi();
+    binanceService.forceDirectApi(!currentValue);
+    
+    if (!currentValue) {
+      // Enabling direct API mode
+      toast.info("Direct API mode enabled. Bypassing all proxies and connecting directly to Binance.");
+      // Re-run connection check after a short delay
+      setTimeout(() => {
+        checkRealConnectivity();
+      }, 500);
+    } else {
+      // Disabling direct API mode
+      toast.info("Direct API mode disabled. Using proxy configuration.");
+      // Re-run connection check after a short delay
+      setTimeout(() => {
+        checkRealConnectivity();
+      }, 500);
+    }
+  };
+  
   // React to browser online/offline events
   useEffect(() => {
     // Initial check with short delay to avoid doing it during initial render
@@ -436,6 +457,7 @@ export function useNetworkStatus() {
     connectionAttempts,
     handleCheckConnection,
     handleEnableOfflineMode,
-    handleBypassConnectionChecks
+    handleBypassConnectionChecks,
+    handleForceDirectApi
   };
 }
