@@ -6,12 +6,14 @@ import { toast } from 'sonner';
 export class TradingService {
   private apiClient: BinanceApiClient;
   private logManager: LogManager;
-  private retryAttempts: number = 5; // Increased from 3 to 5
+  private retryAttempts: number = 5; 
   private retryDelay: number = 2000; // ms
   private lastSuccessfulTrade: number = 0;
   private simulationMode: boolean = false;
-  private maxConsecutiveErrors: number = 3;
+  private maxConsecutiveErrors: number = 2; // Reduced from 3 to 2 for quicker failover
   private consecutiveErrors: number = 0;
+  private networkCheckInterval: number | null = null;
+  private forceSimulationMode: boolean = false; // New flag to force simulation mode
   
   constructor(apiClient: BinanceApiClient, logManager: LogManager) {
     this.apiClient = apiClient;
@@ -43,31 +45,88 @@ export class TradingService {
       console.error('Error checking offline mode:', e);
     }
     
-    // Check network status initially
+    // Check network status initially and periodically
     this.checkNetworkStatus();
+    this.startNetworkMonitoring();
+  }
+  
+  private startNetworkMonitoring(): void {
+    // Check network status every 30 seconds
+    if (!this.networkCheckInterval) {
+      this.networkCheckInterval = window.setInterval(() => {
+        this.checkNetworkStatus();
+      }, 30000);
+      
+      // Also set up event listeners for online/offline events
+      window.addEventListener('online', () => {
+        console.log('Browser reports online status, checking actual connectivity...');
+        setTimeout(() => this.checkNetworkStatus(), 1000);
+      });
+      
+      window.addEventListener('offline', () => {
+        console.log('Browser reports offline status');
+        this.consecutiveErrors++;
+        if (this.consecutiveErrors >= this.maxConsecutiveErrors && !this.simulationMode) {
+          console.warn(`Device went offline. Auto-enabling simulation mode.`);
+          this.setSimulationMode(true, true);
+          toast.warning("Network disconnected. Automatically enabling simulation mode.");
+        }
+      });
+    }
   }
   
   // Method to check network status
   private async checkNetworkStatus(): Promise<void> {
     try {
-      // Basic connectivity test to Binance
-      const response = await fetch('https://api.binance.com/api/v3/ping', {
-        method: 'GET',
-        signal: AbortSignal.timeout(5000)
-      });
+      // Try multiple endpoints for more reliable checks
+      const endpoints = [
+        'https://api.binance.com/api/v3/ping',
+        'https://api.binance.com/api/v3/time',
+        'https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT'
+      ];
       
-      if (response.ok) {
-        console.log("Binance API is reachable");
-        this.consecutiveErrors = 0;
+      let connected = false;
+      
+      for (const endpoint of endpoints) {
+        try {
+          const response = await fetch(endpoint, {
+            method: 'GET',
+            cache: 'no-cache',
+            headers: { 'Cache-Control': 'no-cache' },
+            signal: AbortSignal.timeout(3000) // Shorter timeout for faster detection
+          });
+          
+          if (response.ok) {
+            console.log(`Binance API is reachable via ${endpoint}`);
+            connected = true;
+            this.consecutiveErrors = 0;
+            
+            // If we were previously in simulation mode due to network issues,
+            // inform the user that real trading is now possible
+            if (this.simulationMode && localStorage.getItem('autoEnabledSimulation') === 'true' && !this.forceSimulationMode) {
+              toast.success("Binance API is now reachable. You can disable simulation mode in settings.");
+              break;
+            }
+          }
+        } catch (error) {
+          // Continue to next endpoint
+          console.warn(`Failed to connect to ${endpoint}:`, error);
+        }
+      }
+      
+      if (!connected) {
+        console.warn("All Binance API endpoints unreachable, likely network issues");
+        this.consecutiveErrors++;
         
-        // If we were previously in simulation mode due to network issues,
-        // inform the user that real trading is now possible
-        if (this.simulationMode && localStorage.getItem('autoEnabledSimulation') === 'true') {
-          toast.success("Binance API is now reachable. You can disable simulation mode in settings.");
+        if (this.consecutiveErrors >= this.maxConsecutiveErrors && !this.simulationMode) {
+          console.warn(`${this.consecutiveErrors} consecutive network errors. Auto-enabling simulation mode.`);
+          this.setSimulationMode(true, true);
+          toast.warning("Multiple network errors detected. Automatically enabling simulation mode.");
+          this.logManager.addTradingLog("Automatically switched to simulation mode due to network issues", 'warning');
         }
       }
     } catch (error) {
-      console.warn("Binance API ping failed, might be network issues:", error);
+      console.warn("Network status check failed:", error);
       this.consecutiveErrors++;
       
       if (this.consecutiveErrors >= this.maxConsecutiveErrors && !this.simulationMode) {
@@ -200,6 +259,14 @@ export class TradingService {
     return this.simulationMode;
   }
   
+  // Force simulation mode regardless of network status
+  public forceSimulation(force: boolean): void {
+    this.forceSimulationMode = force;
+    if (force) {
+      this.setSimulationMode(true);
+    }
+  }
+  
   // Set simulation mode
   public setSimulationMode(enabled: boolean, autoEnabled: boolean = false): void {
     this.simulationMode = enabled;
@@ -216,12 +283,13 @@ export class TradingService {
     console.log(`Trading simulation mode set to: ${enabled}`);
   }
   
-  // Check if an error is likely a network error
+  // Check if an error is likely a network error - enhanced with more patterns
   private isNetworkError(error: any): boolean {
     if (!error) return false;
     
     const errorMessage = error instanceof Error ? error.message : String(error);
     
+    // Enhanced list of network error patterns
     return (
       errorMessage.includes('network') ||
       errorMessage.includes('offline') ||
@@ -235,7 +303,16 @@ export class TradingService {
       errorMessage.includes('Network request failed') ||
       errorMessage.includes('network is offline') ||
       errorMessage.includes('connection') ||
-      errorMessage.includes('AbortError')
+      errorMessage.includes('AbortError') ||
+      errorMessage.includes('net::') ||
+      errorMessage.includes('NetworkError') ||
+      errorMessage.includes('cors') ||
+      errorMessage.includes('CORS') ||
+      errorMessage.includes('SSL') ||
+      errorMessage.includes('ssl') ||
+      errorMessage.includes('certificate') ||
+      errorMessage.includes('socket') ||
+      errorMessage.includes('Socket')
     );
   }
 
@@ -279,7 +356,7 @@ export class TradingService {
     symbol: string,
     side: 'BUY' | 'SELL',
     quantity: string,
-    allowOfflineOperation: boolean = true // Changed default to true
+    allowOfflineOperation: boolean = true
   ): Promise<any> {
     try {
       // If we're already in simulation mode, use that
@@ -318,5 +395,12 @@ export class TradingService {
       throw error;
     }
   }
+  
+  // Clean up resources when the service is destroyed
+  public destroy(): void {
+    if (this.networkCheckInterval) {
+      window.clearInterval(this.networkCheckInterval);
+      this.networkCheckInterval = null;
+    }
+  }
 }
-

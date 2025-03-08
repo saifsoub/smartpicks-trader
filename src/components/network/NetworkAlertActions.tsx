@@ -1,9 +1,10 @@
 
 import React from 'react';
 import { Button } from "@/components/ui/button";
-import { RefreshCw, CloudOff } from "lucide-react";
+import { RefreshCw, CloudOff, Settings, Wifi } from "lucide-react";
 import binanceService from '@/services/binanceService';
 import { toast } from "sonner";
+import { useNavigate } from 'react-router-dom';
 
 interface NetworkAlertActionsProps {
   isOnline: boolean;
@@ -20,6 +21,8 @@ export const NetworkAlertActions: React.FC<NetworkAlertActionsProps> = ({
   onEnableOfflineMode,
   onDismiss
 }) => {
+  const navigate = useNavigate();
+
   const handleCheckConnection = async () => {
     const success = await onCheckConnection();
     if (success) {
@@ -27,6 +30,12 @@ export const NetworkAlertActions: React.FC<NetworkAlertActionsProps> = ({
     } else {
       toast.error("Internet connectivity issues detected");
     }
+  };
+  
+  const goToSettings = () => {
+    navigate('/settings');
+    onDismiss();
+    toast.info("Please verify your API settings in the configuration section");
   };
 
   return (
@@ -52,6 +61,16 @@ export const NetworkAlertActions: React.FC<NetworkAlertActionsProps> = ({
             Check Connection
           </>
         )}
+      </Button>
+      
+      <Button 
+        variant="outline" 
+        size="sm"
+        className="bg-blue-800/30 border-blue-700 text-blue-200 hover:bg-blue-800"
+        onClick={goToSettings}
+      >
+        <Settings className="mr-2 h-4 w-4" />
+        API Settings
       </Button>
       
       {!binanceService.isInOfflineMode() && (
