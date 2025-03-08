@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Button } from "@/components/ui/button";
-import { RefreshCcw, WifiOff, X, Zap, ShieldAlert } from "lucide-react";
+import { RefreshCcw, WifiOff, X, Zap, ShieldAlert, Globe } from "lucide-react";
 
 interface NetworkAlertActionsProps {
   isOnline: boolean;
@@ -9,8 +9,10 @@ interface NetworkAlertActionsProps {
   onCheckConnection: () => Promise<boolean>;
   onEnableOfflineMode: () => void;
   onBypassConnectionChecks?: () => void;
+  onForceDirectApi?: () => void;
   onDismiss: () => void;
   isConnectionCheckBypassed?: boolean;
+  isDirectApiForced?: boolean;
 }
 
 export const NetworkAlertActions: React.FC<NetworkAlertActionsProps> = ({
@@ -19,8 +21,10 @@ export const NetworkAlertActions: React.FC<NetworkAlertActionsProps> = ({
   onCheckConnection,
   onEnableOfflineMode,
   onBypassConnectionChecks,
+  onForceDirectApi,
   onDismiss,
-  isConnectionCheckBypassed
+  isConnectionCheckBypassed,
+  isDirectApiForced
 }) => {
   return (
     <div className="flex flex-wrap gap-2 mt-2">
@@ -44,6 +48,17 @@ export const NetworkAlertActions: React.FC<NetworkAlertActionsProps> = ({
               <ShieldAlert className="h-4 w-4 mr-1.5" /> Disable Bypass
             </Button>
           )}
+          {onForceDirectApi && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onForceDirectApi}
+              className={`flex-grow ${isDirectApiForced ? 'bg-green-900/50 hover:bg-green-800 border-green-700' : 'bg-purple-900/50 hover:bg-purple-800 border-purple-700'} text-white`}
+            >
+              <Globe className="h-4 w-4 mr-1.5" /> 
+              {isDirectApiForced ? 'Direct API Enabled' : 'Force Direct API'}
+            </Button>
+          )}
         </>
       ) : (
         <>
@@ -57,6 +72,17 @@ export const NetworkAlertActions: React.FC<NetworkAlertActionsProps> = ({
             <RefreshCcw className={`h-4 w-4 mr-1.5 ${isCheckingConnection ? 'animate-spin' : ''}`} />
             {isCheckingConnection ? 'Checking...' : 'Verify Connection'}
           </Button>
+          
+          {onForceDirectApi && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onForceDirectApi}
+              className={`flex-grow ${isDirectApiForced ? 'bg-green-900/50 hover:bg-green-800 border-green-700' : 'bg-purple-900/50 hover:bg-purple-800 border-purple-700'} text-white`}
+            >
+              <Globe className="h-4 w-4 mr-1.5" /> Force Direct API
+            </Button>
+          )}
           
           <Button
             variant="outline"

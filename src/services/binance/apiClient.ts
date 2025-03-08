@@ -1,5 +1,5 @@
-
 import { BinanceCredentials } from './types';
+import { StorageManager } from './storageManager';
 
 export class BinanceApiClient {
   private proxyUrl: string = 'https://binance-proxy.vercel.app/api';
@@ -57,7 +57,6 @@ export class BinanceApiClient {
     return this.credentials?.apiKey || '';
   }
 
-  // Add the generateSignature method
   public async generateSignature(queryString: string): Promise<string> {
     if (!this.credentials || !this.credentials.secretKey) {
       throw new Error('API secret key not configured');
@@ -110,6 +109,14 @@ export class BinanceApiClient {
     method: string = 'GET',
     skipRetryOnFailure: boolean = false
   ): Promise<any> {
+    const forceDirectApi = StorageManager.shouldForceDirectApi();
+    
+    // If force direct API is enabled, attempt to use the direct API immediately
+    if (forceDirectApi) {
+      console.log('Force direct API mode enabled, bypassing proxies');
+      return this.attemptDirectApiCall(endpoint, params, method);
+    }
+    
     if (!this.hasCredentials() && !endpoint.match(/^(ping|ticker|time|klines)/)) {
       throw new Error('API credentials not configured');
     }
@@ -197,12 +204,12 @@ export class BinanceApiClient {
           this.useFallbackProxy = false;
           this.useSecondaryFallback = true;
           console.log("Switching to secondary fallback proxy for next attempt");
-        } else if (attempt === 2) {
+        } else if (attempt === 2 || forceDirectApi) {
           // Try direct API on the third attempt if available
           if (this.directApiAvailable && this.canUseDirectApi(endpoint)) {
             try {
               console.log(`Attempting direct API call for ${endpoint}...`);
-              return await this.attemptDirectApiCall(endpoint, params);
+              return await this.attemptDirectApiCall(endpoint, params, method);
             } catch (directError) {
               console.error('Direct API fallback failed:', directError);
               // Continue with proxy retries
@@ -225,19 +232,20 @@ export class BinanceApiClient {
     console.error(`All ${maxRetries} proxy attempts failed for ${endpoint}`);
     
     // Final attempt: try direct API if possible and not already tried
-    if (this.directApiAvailable && this.canUseDirectApi(endpoint)) {
+    if (!forceDirectApi && this.directApiAvailable && this.canUseDirectApi(endpoint)) {
       console.log(`Making final direct API attempt for ${endpoint}...`);
       try {
-        return await this.attemptDirectApiCall(endpoint, params);
+        return await this.attemptDirectApiCall(endpoint, params, method);
       } catch (directError) {
         console.error('Final direct API attempt failed:', directError);
       }
     }
     
-    throw lastError;
+    throw lastError || new Error(`Failed to fetch data from ${endpoint}`);
   }
   
   private getCurrentProxyName(): string {
+    if (StorageManager.shouldForceDirectApi()) return 'forced direct API';
     if (this.useFallbackProxy) return 'fallback';
     if (this.useSecondaryFallback) return 'secondary fallback';
     return 'primary';
@@ -253,7 +261,7 @@ export class BinanceApiClient {
     return !endpoint.match(/^(ping|ticker\/price|ticker\/24hr|time|klines|exchangeInfo)$/);
   }
   
-  private async attemptDirectApiCall(endpoint: string, params: Record<string, string>): Promise<any> {
+  private async attemptDirectApiCall(endpoint: string, params: Record<string, string>, method: string = 'GET'): Promise<any> {
     const apiBase = 'https://api.binance.com/api/v3';
     let url: string;
     
@@ -322,7 +330,7 @@ export class BinanceApiClient {
     }
     
     console.log(`Direct API request to ${endpoint}`);
-    const response = await this.fetchWithRetry(url, { headers }, 3);
+    const response = await this.fetchWithRetry(url, { method, headers }, 3);
     return await response.json();
   }
 
@@ -359,7 +367,6 @@ export class BinanceApiClient {
     throw lastError;
   }
   
-  // Add a method to check server time difference
   public async checkServerTimeDifference(): Promise<number> {
     try {
       const localTime = Date.now();

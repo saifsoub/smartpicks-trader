@@ -311,7 +311,39 @@ class BinanceService {
     }
   }
 
-  // Market and trading operations
+  public forceDirectApi(enabled: boolean): void {
+    StorageManager.forceDirectApi(enabled);
+    if (enabled) {
+      this.accountService.setConnectionStatus('unknown');
+      this.accountService.setLastConnectionError(null);
+      this.balanceService.resetCache();
+      this.logManager.addTradingLog("Force direct API enabled. Bypassing all proxies.", 'info');
+      toast.success("Direct API mode enabled. Bypassing all proxies.");
+      this.scheduleConnectionTest();
+    } else {
+      this.logManager.addTradingLog("Direct API mode disabled. Using proxy configuration.", 'info');
+      toast.info("Direct API mode disabled.");
+      this.scheduleConnectionTest();
+    }
+  }
+  
+  public isDirectApiForced(): boolean {
+    return StorageManager.shouldForceDirectApi();
+  }
+  
+  public bypassConnectionChecks(bypass: boolean): void {
+    StorageManager.bypassConnectionChecks(bypass);
+    if (bypass) {
+      this.logManager.addTradingLog("Connection checks bypassed. All operations will proceed regardless of actual connectivity.", 'warning');
+    } else {
+      this.logManager.addTradingLog("Connection check bypass disabled. Normal connectivity checks restored.", 'info');
+    }
+  }
+  
+  public areConnectionChecksBypassed(): boolean {
+    return StorageManager.shouldBypassConnectionChecks();
+  }
+
   public async placeMarketOrder(
     symbol: string,
     side: 'BUY' | 'SELL',
@@ -322,7 +354,6 @@ class BinanceService {
     return result;
   }
 
-  // Market data methods
   public async getSymbols(): Promise<BinanceSymbol[]> {
     return this.marketDataService.getSymbols();
   }
@@ -343,7 +374,6 @@ class BinanceService {
     return this.marketDataService.getKlines(symbol, interval, limit);
   }
 
-  // Trading log management
   public getTradingLogs() {
     return this.logManager.getTradingLogs();
   }

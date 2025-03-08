@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert } from "@/components/ui/alert";
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { NetworkAlertMessage } from './network/NetworkAlertMessage';
-import { Wifi, WifiOff, X } from 'lucide-react';
+import { Wifi, WifiOff, X, Globe } from 'lucide-react';
 import { Button } from './ui/button';
 import { StorageManager } from '@/services/binance/storageManager';
 
@@ -17,6 +17,7 @@ export const NetworkStatusAlert = () => {
     handleCheckConnection,
     handleEnableOfflineMode,
     handleBypassConnectionChecks,
+    handleForceDirectApi,
     setIsVisible
   } = useNetworkStatus();
   
@@ -84,10 +85,11 @@ export const NetworkStatusAlert = () => {
   
   // Check if bypass mode is enabled
   const isConnectionCheckBypassed = StorageManager.shouldBypassConnectionChecks();
+  const isDirectApiForced = StorageManager.shouldForceDirectApi();
   
   return (
     <Alert 
-      className={`${getAlertColor()} mb-0 ${alertPosition} transition-all duration-300`}
+      className={`${isDirectApiForced ? 'bg-green-900/30 border-green-700' : getAlertColor()} mb-0 ${alertPosition} transition-all duration-300`}
       aria-live="assertive"
     >
       <div className="absolute right-2 top-2 flex items-center space-x-2 text-xs">
@@ -95,7 +97,11 @@ export const NetworkStatusAlert = () => {
           <span className="text-gray-300 text-xs mr-1">{dismissCountdown}s</span>
         )}
         {isConnectionCheckBypassed ? (
-          <span className="text-blue-400">Connection Checks Bypassed</span>
+          isDirectApiForced ? (
+            <span className="text-green-400">Direct API Enabled</span>
+          ) : (
+            <span className="text-blue-400">Connection Checks Bypassed</span>
+          )
         ) : (
           <>
             {isOnline ? (
@@ -125,8 +131,10 @@ export const NetworkStatusAlert = () => {
         onCheckConnection={handleCheckConnection}
         onEnableOfflineMode={handleEnableOfflineMode}
         onBypassConnectionChecks={handleBypassConnectionChecks}
+        onForceDirectApi={handleForceDirectApi}
         onDismiss={() => setIsVisible(false)}
         isConnectionCheckBypassed={isConnectionCheckBypassed}
+        isDirectApiForced={isDirectApiForced}
       />
     </Alert>
   );

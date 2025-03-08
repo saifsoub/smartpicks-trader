@@ -11,8 +11,10 @@ interface NetworkAlertMessageProps {
   onCheckConnection: () => Promise<boolean>;
   onEnableOfflineMode: () => void;
   onBypassConnectionChecks?: () => void;
+  onForceDirectApi?: () => void;
   onDismiss: () => void;
   isConnectionCheckBypassed?: boolean;
+  isDirectApiForced?: boolean;
 }
 
 export type ConnectionStage = {
@@ -28,8 +30,10 @@ export const NetworkAlertMessage: React.FC<NetworkAlertMessageProps> = ({
   onCheckConnection,
   onEnableOfflineMode,
   onBypassConnectionChecks,
+  onForceDirectApi,
   onDismiss,
-  isConnectionCheckBypassed
+  isConnectionCheckBypassed,
+  isDirectApiForced
 }) => {
   const getStageIcon = (stage: 'unknown' | 'checking' | 'success' | 'failed') => {
     switch (stage) {
@@ -47,7 +51,9 @@ export const NetworkAlertMessage: React.FC<NetworkAlertMessageProps> = ({
   // Determine which failure stage to highlight in the message
   const getMainIssueMessage = () => {
     if (isConnectionCheckBypassed) {
-      return "Connection checks are bypassed. The application will proceed without verifying connectivity to Binance.";
+      return isDirectApiForced 
+        ? "Connection checks bypassed with direct API mode. Attempting to connect directly to Binance."
+        : "Connection checks are bypassed. The application will proceed without verifying connectivity to Binance.";
     }
     
     if (connectionStage.internet === 'failed') {
@@ -66,7 +72,13 @@ export const NetworkAlertMessage: React.FC<NetworkAlertMessageProps> = ({
   // Get recommendations based on connection stage
   const getRecommendations = () => {
     if (isConnectionCheckBypassed) {
-      return (
+      return isDirectApiForced ? (
+        <>
+          <li>Direct API mode enabled - bypassing all proxies</li>
+          <li>Connecting directly to Binance API endpoints</li>
+          <li>Use this if your connection supports direct Binance access</li>
+        </>
+      ) : (
         <>
           <li>Connection checks are bypassed - the app will work with demo data</li>
           <li>All operations will succeed regardless of actual connectivity</li>
@@ -86,7 +98,7 @@ export const NetworkAlertMessage: React.FC<NetworkAlertMessageProps> = ({
     } else if (connectionStage.binanceApi === 'failed') {
       return (
         <>
-          <li>Try enabling proxy mode in settings</li>
+          <li>Try enabling Force Direct API mode</li>
           <li>Check if Binance is accessible in your region</li>
           <li>Consider using a VPN service if Binance is blocked</li>
         </>
@@ -109,7 +121,11 @@ export const NetworkAlertMessage: React.FC<NetworkAlertMessageProps> = ({
     <div className="flex flex-col space-y-2">
       <div className="flex items-start">
         {isConnectionCheckBypassed ? (
-          <ShieldAlert className="h-5 w-5 text-blue-400 mr-2 mt-0.5" />
+          isDirectApiForced ? (
+            <Globe className="h-5 w-5 text-green-400 mr-2 mt-0.5" />
+          ) : (
+            <ShieldAlert className="h-5 w-5 text-blue-400 mr-2 mt-0.5" />
+          )
         ) : isOnline ? (
           <AlertTriangle className="h-5 w-5 text-yellow-400 mr-2 mt-0.5" />
         ) : (
@@ -118,6 +134,7 @@ export const NetworkAlertMessage: React.FC<NetworkAlertMessageProps> = ({
         <AlertDescription className="flex-1">
           <div className="text-sm">
             <span className={
+              isDirectApiForced ? "text-green-200" :
               isConnectionCheckBypassed ? "text-blue-200" :
               isOnline ? "text-yellow-200" : "text-red-200"
             }>
@@ -198,8 +215,10 @@ export const NetworkAlertMessage: React.FC<NetworkAlertMessageProps> = ({
         onCheckConnection={onCheckConnection}
         onEnableOfflineMode={onEnableOfflineMode}
         onBypassConnectionChecks={onBypassConnectionChecks}
+        onForceDirectApi={onForceDirectApi}
         onDismiss={onDismiss}
         isConnectionCheckBypassed={isConnectionCheckBypassed}
+        isDirectApiForced={isDirectApiForced}
       />
     </div>
   );

@@ -1,4 +1,3 @@
-
 import { BinanceCredentials, ApiPermissions } from './types';
 
 export class StorageManager {
@@ -11,6 +10,7 @@ export class StorageManager {
   private static NOTIFICATION_SUPPRESS_KEY = 'suppressNetworkNotifications';
   private static BYPASS_CONNECTION_CHECKS_KEY = 'bypassConnectionChecks';
   private static MAX_CONNECTION_RETRIES_KEY = 'maxConnectionRetries';
+  private static FORCE_DIRECT_API_KEY = 'forceDirectApi';
   
   public static loadCredentials(): BinanceCredentials | null {
     const savedCredentials = localStorage.getItem(this.CREDENTIALS_KEY);
@@ -125,5 +125,14 @@ export class StorageManager {
   public static getMaxConnectionRetries(): number {
     const retries = localStorage.getItem(this.MAX_CONNECTION_RETRIES_KEY);
     return retries ? parseInt(retries, 10) : 5; // Default to 5 retries
+  }
+  
+  public static forceDirectApi(enabled: boolean): void {
+    localStorage.setItem(this.FORCE_DIRECT_API_KEY, String(enabled));
+    console.log(`Force direct API connections: ${enabled ? 'Enabled' : 'Disabled'}`);
+  }
+  
+  public static shouldForceDirectApi(): boolean {
+    return localStorage.getItem(this.FORCE_DIRECT_API_KEY) === 'true';
   }
 }
