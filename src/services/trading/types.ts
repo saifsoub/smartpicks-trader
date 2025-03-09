@@ -25,6 +25,10 @@ export interface TradingStrategy {
     averageProfit: number;
     lastUpdated: number;
   };
+  // New fields for ML strategies
+  mlEnabled?: boolean;
+  mlModel?: string;
+  sentimentAnalysis?: boolean;
 }
 
 export interface BacktestResult {
@@ -74,6 +78,8 @@ export const STORAGE_KEYS = {
   STRATEGIES: 'tradingStrategies',
   BACKTEST_RESULTS: 'backtestResults',
   RISK_SETTINGS: 'riskManagementSettings',
+  ML_MODELS: 'mlModels',
+  ML_SETTINGS: 'mlSettings'
 };
 
 export interface MarketAnalysis {
@@ -94,6 +100,19 @@ export interface MarketAnalysis {
   };
   trend: 'strong_uptrend' | 'uptrend' | 'neutral' | 'downtrend' | 'strong_downtrend';
   signal: 'BUY' | 'SELL' | 'HOLD';
+  currentPrice?: number;
+  // New fields for sentiment analysis
+  sentiment?: {
+    score: number;
+    source: string;
+    sentiment: 'positive' | 'negative' | 'neutral';
+  };
+  // New fields for ML predictions
+  prediction?: {
+    predictedPrice: number;
+    confidence: number;
+    direction: 'up' | 'down' | 'neutral';
+  };
 }
 
 export interface Position {
@@ -111,4 +130,42 @@ export interface BalanceInfo {
   available: string;
   total: string;
   usdValue?: number;
+}
+
+// New interfaces for ML/AI features
+
+export interface MLModel {
+  id: string;
+  name: string;
+  type: 'price_prediction' | 'sentiment_analysis' | 'reinforcement_learning';
+  description: string;
+  status: 'training' | 'ready' | 'failed';
+  accuracy: number;
+  lastUpdated: number;
+  parameters: Record<string, any>;
+}
+
+export interface MLPrediction {
+  modelId: string;
+  symbol: string;
+  timestamp: number;
+  predictedValue: number;
+  actualValue?: number;
+  confidence: number;
+  features: string[];
+}
+
+export interface SentimentSource {
+  id: string;
+  name: string;
+  type: 'news' | 'social' | 'forum';
+  url: string;
+  weight: number;
+  enabled: boolean;
+}
+
+export interface WebSocketStreamData {
+  stream: string;
+  data: any;
+  timestamp: number;
 }
