@@ -104,7 +104,7 @@ export class NetworkEventHandler {
     // If we haven't already, set offline mode
     if (StorageManager.getNetworkErrorCount() > 1) {
       console.log("Auto-enabling offline mode due to previous connection issues");
-      StorageManager.saveOfflineMode(true); // Changed from setOfflineMode to saveOfflineMode
+      StorageManager.saveOfflineMode(true); // Corrected method name
     }
   }
 }

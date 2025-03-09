@@ -32,6 +32,7 @@ export const NetworkStatusAlert = () => {
 
   // Helper function to determine alert severity color
   const getAlertColor = () => {
+    // Use type-safe string comparisons that TypeScript understands
     if (connectionStage.internet === 'failed') {
       return 'bg-red-900/30 border-red-700'; // Critical error - no internet
     } else if (connectionStage.binanceApi === 'failed') {
@@ -74,7 +75,7 @@ export const NetworkStatusAlert = () => {
       
       return () => clearInterval(countdownInterval);
     }
-  }, [isVisible, isOnline, connectionStage.internet, setIsVisible]);
+  }, [isVisible, isOnline, connectionStage, setIsVisible]);
   
   // Determine if the alert should be positioned as a smaller notification
   const isMinorIssue = isOnline && connectionStage.internet === 'success' && 

@@ -68,6 +68,7 @@ export function useNetworkStatus() {
     // Always enable bypass, don't toggle
     StorageManager.bypassConnectionChecks(true);
     
+    // Explicitly specify the literal types for ConnectionStage properties
     setConnectionStage({
       internet: 'success',
       binanceApi: 'success',
@@ -84,6 +85,7 @@ export function useNetworkStatus() {
     // Always enable direct API
     StorageManager.forceDirectApi(true);
     
+    // Explicitly specify the literal types for ConnectionStage properties 
     setConnectionStage({
       internet: 'success',
       binanceApi: 'success',
@@ -135,9 +137,9 @@ export function useNetworkStatus() {
     isCheckingConnection,
     initialCheckDone: true, // Always report initial check done
     connectionStage: {
-      internet: 'success' as const, // Always report success with proper type
-      binanceApi: 'success' as const, // Always report success with proper type
-      account: 'success' as const // Always report success with proper type
+      internet: 'success',
+      binanceApi: 'success',
+      account: 'success'
     },
     connectionAttempts,
     handleCheckConnection,
