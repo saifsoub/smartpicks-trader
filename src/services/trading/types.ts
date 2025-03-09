@@ -79,7 +79,11 @@ export const STORAGE_KEYS = {
   BACKTEST_RESULTS: 'backtestResults',
   RISK_SETTINGS: 'riskManagementSettings',
   ML_MODELS: 'mlModels',
-  ML_SETTINGS: 'mlSettings'
+  ML_SETTINGS: 'mlSettings',
+  NETWORK_STATUS: 'networkStatus',
+  CONNECTION_BYPASS: 'connectionBypass',
+  DIRECT_API: 'directApi',
+  OFFLINE_MODE: 'offlineMode'
 };
 
 export interface MarketAnalysis {
@@ -168,4 +172,14 @@ export interface WebSocketStreamData {
   stream: string;
   data: any;
   timestamp: number;
+}
+
+// New type for network status
+export interface NetworkStatus {
+  isOnline: boolean;
+  lastSuccessfulConnection: number;
+  connectionErrors: number;
+  bypassChecks: boolean;
+  directApi: boolean;
+  offlineMode: boolean;
 }
