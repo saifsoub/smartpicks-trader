@@ -13,17 +13,26 @@ export class ConnectivityChecker {
     shouldBypassChecks: boolean = false
   ): Promise<boolean> {
     if (shouldBypassChecks) {
-      setConnectionStage(prev => ({ ...prev, internet: 'success' }));
+      setConnectionStage({
+        ...connectionStage,
+        internet: 'success'
+      });
       return true;
     }
     
     try {
-      setConnectionStage(prev => ({ ...prev, internet: 'checking' }));
+      setConnectionStage({
+        ...connectionStage,
+        internet: 'checking'
+      });
       
       // First try navigator.onLine as a quick check
       if (!navigator.onLine) {
         console.log("Browser reports device is offline");
-        setConnectionStage(prev => ({ ...prev, internet: 'failed' }));
+        setConnectionStage({
+          ...connectionStage,
+          internet: 'failed'
+        });
         return false;
       }
       
@@ -66,7 +75,10 @@ export class ConnectivityChecker {
           if (response.ok) {
             console.log(`Internet connectivity confirmed via ${endpoint.url}`);
             successfulEndpoint = endpoint.url;
-            setConnectionStage(prev => ({ ...prev, internet: 'success' }));
+            setConnectionStage({
+              ...connectionStage,
+              internet: 'success'
+            });
             return true;
           }
         } catch (error) {
@@ -95,7 +107,10 @@ export class ConnectivityChecker {
             if (response.ok) {
               console.log(`Internet connectivity confirmed via backup endpoint ${endpoint.url}`);
               successfulEndpoint = endpoint.url;
-              setConnectionStage(prev => ({ ...prev, internet: 'success' }));
+              setConnectionStage({
+                ...connectionStage,
+                internet: 'success'
+              });
               return true;
             }
           } catch (error) {
@@ -108,13 +123,19 @@ export class ConnectivityChecker {
       // For simplicity, if we can't check connectivity but navigator says we're online, assume we're online
       if (navigator.onLine) {
         console.log("Navigator reports online, assuming limited connectivity");
-        setConnectionStage(prev => ({ ...prev, internet: 'success' }));
+        setConnectionStage({
+          ...connectionStage,
+          internet: 'success'
+        });
         return true;
       }
       
       // All internet connectivity checks failed
       console.log("All internet connectivity checks failed");
-      setConnectionStage(prev => ({ ...prev, internet: 'failed' }));
+      setConnectionStage({
+        ...connectionStage,
+        internet: 'failed'
+      });
       return false;
     } catch (error) {
       console.error("Error checking internet connectivity:", error);
@@ -122,11 +143,17 @@ export class ConnectivityChecker {
       // For simplicity, if we can't check connectivity but navigator says we're online, assume we're online
       if (navigator.onLine) {
         console.log("Navigator reports online, assuming limited connectivity despite check error");
-        setConnectionStage(prev => ({ ...prev, internet: 'success' }));
+        setConnectionStage({
+          ...connectionStage,
+          internet: 'success'
+        });
         return true;
       }
       
-      setConnectionStage(prev => ({ ...prev, internet: 'failed' }));
+      setConnectionStage({
+        ...connectionStage,
+        internet: 'failed'
+      });
       return false;
     }
   }
@@ -141,22 +168,34 @@ export class ConnectivityChecker {
     shouldBypassChecks: boolean = false
   ): Promise<boolean> {
     if (shouldBypassChecks) {
-      setConnectionStage(prev => ({ ...prev, binanceApi: 'success' }));
+      setConnectionStage({
+        ...connectionStage,
+        binanceApi: 'success'
+      });
       return true;
     }
     
     try {
-      setConnectionStage(prev => ({ ...prev, binanceApi: 'checking' }));
+      setConnectionStage({
+        ...connectionStage,
+        binanceApi: 'checking'
+      });
       
       // In case of repeated failures, just assume it works to let the user proceed
       if (connectionAttempts >= 2) {
         console.log("Multiple connection attempts failed, assuming Binance API might be accessible");
-        setConnectionStage(prev => ({ ...prev, binanceApi: 'success' }));
+        setConnectionStage({
+          ...connectionStage,
+          binanceApi: 'success'
+        });
         return true;
       }
       
       // For simplicity, let's just say it works after checking
-      setConnectionStage(prev => ({ ...prev, binanceApi: 'success' }));
+      setConnectionStage({
+        ...connectionStage,
+        binanceApi: 'success'
+      });
       return true;
       
     } catch (error) {
@@ -165,11 +204,17 @@ export class ConnectivityChecker {
       // If we've tried multiple times, just assume it works to avoid blocking the user
       if (connectionAttempts >= 2) {
         console.log("Multiple connection attempts failed, assuming Binance API might be accessible despite error");
-        setConnectionStage(prev => ({ ...prev, binanceApi: 'success' }));
+        setConnectionStage({
+          ...connectionStage,
+          binanceApi: 'success'
+        });
         return true;
       }
       
-      setConnectionStage(prev => ({ ...prev, binanceApi: 'failed' }));
+      setConnectionStage({
+        ...connectionStage,
+        binanceApi: 'failed'
+      });
       return false;
     }
   }
@@ -184,22 +229,34 @@ export class ConnectivityChecker {
     shouldBypassChecks: boolean = false
   ): Promise<boolean> {
     if (shouldBypassChecks) {
-      setConnectionStage(prev => ({ ...prev, account: 'success' }));
+      setConnectionStage({
+        ...connectionStage,
+        account: 'success'
+      });
       return true;
     }
     
     try {
-      setConnectionStage(prev => ({ ...prev, account: 'checking' }));
+      setConnectionStage({
+        ...connectionStage,
+        account: 'checking'
+      });
       
       if (!binanceService.hasCredentials()) {
         console.log("No API credentials configured");
         // Don't mark as failed, just unknown
-        setConnectionStage(prev => ({ ...prev, account: 'unknown' }));
+        setConnectionStage({
+          ...connectionStage,
+          account: 'unknown'
+        });
         return true;
       }
       
       // For simplicity, let's just say it works after checking
-      setConnectionStage(prev => ({ ...prev, account: 'success' }));
+      setConnectionStage({
+        ...connectionStage,
+        account: 'success'
+      });
       return true;
       
     } catch (error) {
@@ -208,11 +265,17 @@ export class ConnectivityChecker {
       // If we've tried multiple times, just assume it works to avoid blocking the user
       if (connectionAttempts >= 2) {
         console.log("Multiple connection attempts failed, assuming account access might work despite error");
-        setConnectionStage(prev => ({ ...prev, account: 'success' }));
+        setConnectionStage({
+          ...connectionStage,
+          account: 'success'
+        });
         return true;
       }
       
-      setConnectionStage(prev => ({ ...prev, account: 'failed' }));
+      setConnectionStage({
+        ...connectionStage,
+        account: 'failed'
+      });
       return false;
     }
   }

@@ -223,10 +223,10 @@ export class ConnectionManager {
       toast.info("Direct API mode enabled. Bypassing all proxies and connecting directly to Binance.");
       
       // Set the connection stages to reflect the change
-      setConnectionStage(prev => ({
-        ...prev,
+      setConnectionStage({
+        ...connectionStage,
         binanceApi: 'checking' // Show checking state immediately
-      }));
+      });
       
       // Re-run connection check immediately
       ConnectionManager.checkRealConnectivity(
@@ -248,10 +248,10 @@ export class ConnectionManager {
       toast.info("Direct API mode disabled. Using proxy configuration.");
       
       // Set the connection stages to reflect the change
-      setConnectionStage(prev => ({
-        ...prev,
+      setConnectionStage({
+        ...connectionStage,
         binanceApi: 'checking' // Show checking state immediately
-      }));
+      });
       
       // Re-run connection check immediately
       ConnectionManager.checkRealConnectivity(

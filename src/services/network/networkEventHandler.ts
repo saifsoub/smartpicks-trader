@@ -35,10 +35,17 @@ export class NetworkEventHandler {
       if (!StorageManager.shouldBypassConnectionChecks()) {
         setIsOnline(false);
         setIsVisible(true);
-        setConnectionStage(prev => ({
-          ...prev,
-          internet: 'failed'
-        }));
+        setConnectionStage({
+          ...StorageManager.shouldBypassConnectionChecks() ? {
+            internet: 'success',
+            binanceApi: 'success',
+            account: 'success'
+          } : {
+            internet: 'failed',
+            binanceApi: 'unknown',
+            account: 'unknown'
+          }
+        });
       }
     };
     
