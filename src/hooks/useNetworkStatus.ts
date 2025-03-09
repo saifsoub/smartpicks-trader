@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { ConnectionStage } from '@/components/network/NetworkAlertMessage';
@@ -135,9 +134,9 @@ export function useNetworkStatus() {
     isCheckingConnection,
     initialCheckDone: true, // Always report initial check done
     connectionStage: {
-      internet: 'success', // Always report success
-      binanceApi: 'success', // Always report success
-      account: 'success' // Always report success
+      internet: 'success' as const, // Always report success with proper type
+      binanceApi: 'success' as const, // Always report success with proper type
+      account: 'success' as const // Always report success with proper type
     },
     connectionAttempts,
     handleCheckConnection,
