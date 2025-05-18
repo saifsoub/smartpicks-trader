@@ -32,7 +32,7 @@ export const NetworkStatusAlert = () => {
 
   // Helper function to determine alert severity color
   const getAlertColor = () => {
-    // Type-safe string comparisons
+    // Type-safe string literal comparisons
     if (connectionStage.internet === 'failed') {
       return 'bg-red-900/30 border-red-700'; // Critical error - no internet
     } else if (connectionStage.binanceApi === 'failed') {
