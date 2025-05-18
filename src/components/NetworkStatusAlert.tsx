@@ -33,11 +33,11 @@ export const NetworkStatusAlert = () => {
   // Helper function to determine alert severity color
   const getAlertColor = () => {
     // Type-safe string literal comparisons
-    if (connectionStage.internet === 'failed') {
+    if (connectionStage.internet === 'failed' as const) {
       return 'bg-red-900/30 border-red-700'; // Critical error - no internet
-    } else if (connectionStage.binanceApi === 'failed') {
+    } else if (connectionStage.binanceApi === 'failed' as const) {
       return 'bg-orange-900/30 border-orange-700'; // Serious error - can't reach Binance
-    } else if (connectionStage.account === 'failed') {
+    } else if (connectionStage.account === 'failed' as const) {
       return 'bg-yellow-900/30 border-yellow-700'; // Warning - account access issues
     }
     return isOnline ? 'bg-yellow-900/30 border-yellow-700' : 'bg-red-900/30 border-red-700';
@@ -57,7 +57,7 @@ export const NetworkStatusAlert = () => {
     }
     
     // Start auto-dismiss countdown for non-critical alerts
-    if (isVisible && isOnline && connectionStage.internet !== 'failed') {
+    if (isVisible && isOnline && connectionStage.internet !== 'failed' as const) {
       // Don't auto-dismiss critical failures
       setDismissCountdown(8); // 8 second countdown (reduced from 15)
       
@@ -78,8 +78,8 @@ export const NetworkStatusAlert = () => {
   }, [isVisible, isOnline, connectionStage, setIsVisible]);
   
   // Determine if the alert should be positioned as a smaller notification
-  const isMinorIssue = isOnline && connectionStage.internet === 'success' && 
-                      (connectionStage.binanceApi === 'success' || connectionStage.binanceApi === 'unknown');
+  const isMinorIssue = isOnline && connectionStage.internet === 'success' as const && 
+                      (connectionStage.binanceApi === 'success' as const || connectionStage.binanceApi === 'unknown' as const);
   
   // Always show as a smaller notification to be less intrusive
   const alertPosition = 'fixed bottom-4 right-4 max-w-md z-50 shadow-lg';
