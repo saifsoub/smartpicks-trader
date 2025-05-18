@@ -14,9 +14,9 @@ export function useNetworkStatus() {
   const [isCheckingConnection, setIsCheckingConnection] = useState<boolean>(false);
   const [initialCheckDone, setInitialCheckDone] = useState<boolean>(false);
   const [connectionStage, setConnectionStage] = useState<ConnectionStage>({
-    internet: 'success', // Start with success
-    binanceApi: 'success', // Start with success
-    account: 'success' // Start with success
+    internet: 'success' as const, // Use type assertion to ensure type safety
+    binanceApi: 'success' as const,
+    account: 'success' as const
   });
   
   // Always bypass connection checks for reliability
@@ -68,11 +68,11 @@ export function useNetworkStatus() {
     // Always enable bypass, don't toggle
     StorageManager.bypassConnectionChecks(true);
     
-    // Explicitly specify the literal types for ConnectionStage properties
+    // Use type assertion to ensure type safety
     setConnectionStage({
-      internet: 'success',
-      binanceApi: 'success',
-      account: 'success'
+      internet: 'success' as const,
+      binanceApi: 'success' as const,
+      account: 'success' as const
     });
     setIsOnline(true);
     setIsCheckingConnection(false);
@@ -85,11 +85,11 @@ export function useNetworkStatus() {
     // Always enable direct API
     StorageManager.forceDirectApi(true);
     
-    // Explicitly specify the literal types for ConnectionStage properties 
+    // Use type assertion to ensure type safety
     setConnectionStage({
-      internet: 'success',
-      binanceApi: 'success',
-      account: 'success'
+      internet: 'success' as const,
+      binanceApi: 'success' as const,
+      account: 'success' as const
     });
     setIsOnline(true);
     
@@ -105,9 +105,9 @@ export function useNetworkStatus() {
     setTimeout(() => {
       // Set everything to success
       setConnectionStage({
-        internet: 'success',
-        binanceApi: 'success',
-        account: 'success'
+        internet: 'success' as const,
+        binanceApi: 'success' as const,
+        account: 'success' as const
       });
       setIsOnline(true);
       setInitialCheckDone(true);
@@ -137,9 +137,9 @@ export function useNetworkStatus() {
     isCheckingConnection,
     initialCheckDone: true, // Always report initial check done
     connectionStage: {
-      internet: 'success',
-      binanceApi: 'success',
-      account: 'success'
+      internet: 'success' as const,
+      binanceApi: 'success' as const,
+      account: 'success' as const
     },
     connectionAttempts,
     handleCheckConnection,

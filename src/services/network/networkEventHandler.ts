@@ -22,9 +22,9 @@ export class NetworkEventHandler {
       // Set everything to success immediately
       setIsOnline(true);
       setConnectionStage({
-        internet: 'success',
-        binanceApi: 'success',
-        account: 'success'
+        internet: 'success' as const,
+        binanceApi: 'success' as const,
+        account: 'success' as const
       });
     };
     
@@ -34,9 +34,9 @@ export class NetworkEventHandler {
       setIsOnline(false);
       setIsVisible(true);
       setConnectionStage({
-        internet: 'failed',
-        binanceApi: 'unknown',
-        account: 'unknown'
+        internet: 'failed' as const,
+        binanceApi: 'unknown' as const,
+        account: 'unknown' as const
       });
     };
     
@@ -47,9 +47,9 @@ export class NetworkEventHandler {
         StorageManager.bypassConnectionChecks(true);
         setIsOnline(true);
         setConnectionStage({
-          internet: 'success',
-          binanceApi: 'success',
-          account: 'success'
+          internet: 'success' as const,
+          binanceApi: 'success' as const,
+          account: 'success' as const
         });
       }
     };
