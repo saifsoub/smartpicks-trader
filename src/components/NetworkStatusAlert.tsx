@@ -35,7 +35,8 @@ export const NetworkStatusAlert = () => {
 
   // Helper function to determine alert severity color
   const getAlertColor = () => {
-    if (connectionStage.internet === 'failed') {
+    const stage = connectionStage.internet;
+    if (stage === 'failed') {
       return 'bg-red-900/30 border-red-700'; // Critical error - no internet
     } else if (connectionStage.binanceApi === 'failed') {
       return 'bg-orange-900/30 border-orange-700'; // Serious error - can't reach Binance
@@ -80,7 +81,8 @@ export const NetworkStatusAlert = () => {
   }, [isVisible, isOnline, connectionStage, setIsVisible]);
   
   // Determine if the alert should be positioned as a smaller notification
-  const isMinorIssue = isOnline && connectionStage.internet === 'success' && 
+  const isMinorIssue = isOnline && 
+                      connectionStage.internet === 'success' && 
                       (connectionStage.binanceApi === 'success' || connectionStage.binanceApi === 'unknown');
   
   // Always show as a smaller notification to be less intrusive
