@@ -1,8 +1,13 @@
-
 import React from 'react';
 import { AlertDescription } from "@/components/ui/alert";
 import { Wifi, WifiOff, AlertTriangle, Globe, Server, Database, ShieldAlert, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { NetworkAlertActions } from './NetworkAlertActions';
+
+export type ConnectionStage = {
+  internet: 'unknown' | 'checking' | 'success' | 'failed';
+  binanceApi: 'unknown' | 'checking' | 'success' | 'failed';
+  account: 'unknown' | 'checking' | 'success' | 'failed';
+};
 
 interface NetworkAlertMessageProps {
   isOnline: boolean;
@@ -16,12 +21,6 @@ interface NetworkAlertMessageProps {
   isConnectionCheckBypassed?: boolean;
   isDirectApiForced?: boolean;
 }
-
-export type ConnectionStage = {
-  internet: 'unknown' | 'checking' | 'success' | 'failed';
-  binanceApi: 'unknown' | 'checking' | 'success' | 'failed';
-  account: 'unknown' | 'checking' | 'success' | 'failed';
-};
 
 export const NetworkAlertMessage: React.FC<NetworkAlertMessageProps> = ({
   isOnline,
@@ -56,11 +55,16 @@ export const NetworkAlertMessage: React.FC<NetworkAlertMessageProps> = ({
         : "Connection checks are bypassed. The application will proceed without verifying connectivity to Binance.";
     }
     
-    if (connectionStage.internet === 'failed') {
+    // Convert to string literals for safe comparison
+    const internetStatus = connectionStage.internet;
+    const binanceApiStatus = connectionStage.binanceApi;
+    const accountStatus = connectionStage.account;
+    
+    if (internetStatus === 'failed') {
       return "Internet connectivity issue detected. Please check your network connection.";
-    } else if (connectionStage.binanceApi === 'failed') {
+    } else if (binanceApiStatus === 'failed') {
       return "Can't reach Binance API servers. The service might be temporarily unavailable or blocked in your region.";
-    } else if (connectionStage.account === 'failed') {
+    } else if (accountStatus === 'failed') {
       return "Can't authenticate with your Binance account. Please verify your API keys and permissions.";
     } else if (isOnline) {
       return "Limited connection to Binance. Some features may not work correctly.";
@@ -87,7 +91,12 @@ export const NetworkAlertMessage: React.FC<NetworkAlertMessageProps> = ({
       );
     }
     
-    if (connectionStage.internet === 'failed') {
+    // Convert to string literals for safe comparison
+    const internetStatus = connectionStage.internet;
+    const binanceApiStatus = connectionStage.binanceApi;
+    const accountStatus = connectionStage.account;
+    
+    if (internetStatus === 'failed') {
       return (
         <>
           <li>Check your WiFi or ethernet connection</li>
@@ -95,7 +104,7 @@ export const NetworkAlertMessage: React.FC<NetworkAlertMessageProps> = ({
           <li>Try using a different network if available</li>
         </>
       );
-    } else if (connectionStage.binanceApi === 'failed') {
+    } else if (binanceApiStatus === 'failed') {
       return (
         <>
           <li>Try enabling Force Direct API mode</li>
@@ -103,7 +112,7 @@ export const NetworkAlertMessage: React.FC<NetworkAlertMessageProps> = ({
           <li>Consider using a VPN service if Binance is blocked</li>
         </>
       );
-    } else if (connectionStage.account === 'failed') {
+    } else if (accountStatus === 'failed') {
       return (
         <>
           <li>Verify your API keys are correct in settings</li>

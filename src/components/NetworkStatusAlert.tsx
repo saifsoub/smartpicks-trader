@@ -40,12 +40,12 @@ export const NetworkStatusAlert = () => {
     const binanceApiStage = connectionStage.binanceApi;
     const accountStage = connectionStage.account;
     
-    // Type-safe comparison using string equality
-    if (internetStage === 'failed') {
+    // Type-safe string comparison
+    if (internetStage === "failed") {
       return 'bg-red-900/30 border-red-700'; // Critical error - no internet
-    } else if (binanceApiStage === 'failed') {
+    } else if (binanceApiStage === "failed") {
       return 'bg-orange-900/30 border-orange-700'; // Serious error - can't reach Binance
-    } else if (accountStage === 'failed') {
+    } else if (accountStage === "failed") {
       return 'bg-yellow-900/30 border-yellow-700'; // Warning - account access issues
     }
     return isOnline ? 'bg-yellow-900/30 border-yellow-700' : 'bg-red-900/30 border-red-700';
@@ -65,7 +65,7 @@ export const NetworkStatusAlert = () => {
     }
     
     // Start auto-dismiss countdown for non-critical alerts
-    if (isVisible && isOnline && connectionStage.internet !== 'failed') {
+    if (isVisible && isOnline && connectionStage.internet !== "failed") {
       // Don't auto-dismiss critical failures
       setDismissCountdown(8); // 8 second countdown (reduced from 15)
       
@@ -92,8 +92,8 @@ export const NetworkStatusAlert = () => {
   
   // Type-safe string comparison
   const isMinorIssue = isOnline && 
-                      internetStage === 'success' && 
-                      (binanceApiStage === 'success' || binanceApiStage === 'unknown');
+                      internetStage === "success" && 
+                      (binanceApiStage === "success" || binanceApiStage === "unknown");
   
   // Always show as a smaller notification to be less intrusive
   const alertPosition = 'fixed bottom-4 right-4 max-w-md z-50 shadow-lg';

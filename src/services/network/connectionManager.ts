@@ -23,9 +23,9 @@ export class ConnectionManager {
       
       console.log("Bypassing connection checks for reliability");
       setConnectionStage({
-        internet: 'success' as const,
-        binanceApi: 'success' as const,
-        account: 'success' as const
+        internet: 'success',
+        binanceApi: 'success',
+        account: 'success'
       });
       setIsCheckingConnection(false);
       setIsOnline(true);
@@ -37,9 +37,9 @@ export class ConnectionManager {
       setIsCheckingConnection(false);
       setIsOnline(true);
       setConnectionStage({
-        internet: 'success' as const,
-        binanceApi: 'success' as const,
-        account: 'success' as const
+        internet: 'success',
+        binanceApi: 'success',
+        account: 'success'
       });
       return true;
     }
@@ -64,9 +64,9 @@ export class ConnectionManager {
     setIsVisible(false);
     setIsOnline(true);
     setConnectionStage({
-      internet: 'success' as const,
-      binanceApi: 'success' as const,
-      account: 'success' as const
+      internet: 'success',
+      binanceApi: 'success',
+      account: 'success'
     });
     toast.success("Successfully connected to Binance API");
     return true;
@@ -96,9 +96,9 @@ export class ConnectionManager {
     
     // Enabling bypass
     setConnectionStage({
-      internet: 'success' as const,
-      binanceApi: 'success' as const,
-      account: 'success' as const
+      internet: 'success',
+      binanceApi: 'success',
+      account: 'success'
     });
     setIsOnline(true);
     toast.success("Connection checks bypassed for better reliability");
