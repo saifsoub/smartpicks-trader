@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -32,6 +31,7 @@ const SymbolSelector: React.FC<SymbolSelectorProps> = ({ selectedSymbols, onChan
   useEffect(() => {
     const fetchSymbols = async () => {
       try {
+        setLoading(true);
         const allSymbols = await binanceService.getSymbols();
         // Filter for major USDT pairs
         const filteredSymbols = Array.isArray(allSymbols) ? 
@@ -126,7 +126,7 @@ const SymbolSelector: React.FC<SymbolSelectorProps> = ({ selectedSymbols, onChan
             <Command className="bg-transparent">
               <CommandInput placeholder="Search cryptocurrencies..." className="text-white" />
               <CommandEmpty>No cryptocurrency found.</CommandEmpty>
-              <CommandGroup className="max-h-64 overflow-y-auto">
+              <CommandGroup>
                 {safeSymbols.map((item) => {
                   const isSelected = safeSelectedSymbols.includes(item.symbol);
                   const isDisabled = safeSelectedSymbols.length >= MAX_SELECTIONS && !isSelected;
