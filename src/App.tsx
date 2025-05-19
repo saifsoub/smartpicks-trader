@@ -16,7 +16,19 @@ import EasyPeasy from "./pages/EasyPeasy";
 
 const App = () => {
   // Create a client instance inside the component
-  const [queryClient] = useState(() => new QueryClient());
+  const [queryClient] = useState(() => new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: 2,
+        retryDelay: 1000,
+        staleTime: 1000 * 60 * 5, // 5 minutes
+        refetchOnWindowFocus: false,
+        onError: (error) => {
+          console.error("Query error:", error);
+        }
+      }
+    }
+  }));
 
   return (
     <ThemeProvider defaultTheme="dark">
