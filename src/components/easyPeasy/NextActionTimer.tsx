@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Clock } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface NextActionTimerProps {
   actionableAdvice: any[];
@@ -28,31 +29,47 @@ const NextActionTimer: React.FC<NextActionTimerProps> = ({ actionableAdvice }) =
   
   // Process and sort upcoming actions
   useEffect(() => {
-    if (!actionableAdvice?.length) return;
+    // Ensure actionableAdvice is an array before processing
+    if (!Array.isArray(actionableAdvice) || actionableAdvice.length === 0) {
+      setNextActions([]);
+      return;
+    }
     
-    // Create next actions timeline sorted by time
-    const actions = actionableAdvice
-      .filter(item => item.action && item.action.action !== "HOLD")
-      .map(item => ({
-        time: item.action.actionTime,
-        symbol: item.symbol.replace('USDT', ''),
-        action: item.action.action,
-        price: item.action.entryPrice,
-      }))
-      .sort((a, b) => {
-        // Convert time strings to comparable values
-        const timeA = convertTimeStringToMinutes(a.time);
-        const timeB = convertTimeStringToMinutes(b.time);
-        return timeA - timeB;
-      });
-      
-    setNextActions(actions);
+    try {
+      // Create next actions timeline sorted by time
+      const actions = actionableAdvice
+        .filter(item => item && item.action && item.action.action !== "HOLD")
+        .map(item => ({
+          time: item.action.actionTime,
+          symbol: item.symbol.replace('USDT', ''),
+          action: item.action.action,
+          price: item.action.entryPrice,
+        }))
+        .sort((a, b) => {
+          // Convert time strings to comparable values
+          const timeA = convertTimeStringToMinutes(a.time);
+          const timeB = convertTimeStringToMinutes(b.time);
+          return timeA - timeB;
+        });
+        
+      setNextActions(actions);
+    } catch (error) {
+      console.error("Error processing action data:", error);
+      setNextActions([]);
+    }
   }, [actionableAdvice]);
   
   // Helper to convert "HH:MM" to minutes since midnight for sorting
   const convertTimeStringToMinutes = (timeStr: string) => {
-    const [hours, minutes] = timeStr.split(':').map(Number);
-    return hours * 60 + minutes;
+    if (!timeStr || typeof timeStr !== 'string') return 0;
+    
+    try {
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      return (hours || 0) * 60 + (minutes || 0);
+    } catch (error) {
+      console.error("Error converting time string:", error);
+      return 0;
+    }
   };
   
   if (nextActions.length === 0) {
