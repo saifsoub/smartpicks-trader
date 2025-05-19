@@ -7,6 +7,7 @@ import EasyPeasyHeader from "@/components/easyPeasy/EasyPeasyHeader";
 import SymbolSelectionCard from "@/components/easyPeasy/SymbolSelectionCard";
 import ActionCardGrid from "@/components/easyPeasy/ActionCardGrid";
 import NextActionTimerCard from "@/components/easyPeasy/NextActionTimerCard";
+import ErrorBoundary from "@/components/easyPeasy/ErrorBoundary";
 
 const EasyPeasy: React.FC = () => {
   const [selectedSymbols, setSelectedSymbols] = useState<string[]>(["BTCUSDT", "ETHUSDT"]);
@@ -29,19 +30,25 @@ const EasyPeasy: React.FC = () => {
         <EasyPeasyHeader loading={loading} onRefresh={handleRefresh} />
         
         <div className="mb-6">
-          <SymbolSelectionCard 
-            selectedSymbols={selectedSymbols} 
-            onSymbolsChange={handleSymbolsChange} 
-          />
+          <ErrorBoundary>
+            <SymbolSelectionCard 
+              selectedSymbols={selectedSymbols} 
+              onSymbolsChange={handleSymbolsChange} 
+            />
+          </ErrorBoundary>
         </div>
         
-        <ActionCardGrid 
-          actionableAdvice={actionableAdvice}
-          onAction={handleAction}
-        />
+        <ErrorBoundary>
+          <ActionCardGrid 
+            actionableAdvice={actionableAdvice || []}
+            onAction={handleAction}
+          />
+        </ErrorBoundary>
         
         <div className="mb-6">
-          <NextActionTimerCard actionableAdvice={actionableAdvice} />
+          <ErrorBoundary>
+            <NextActionTimerCard actionableAdvice={actionableAdvice || []} />
+          </ErrorBoundary>
         </div>
       </div>
     </div>

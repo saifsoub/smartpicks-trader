@@ -9,17 +9,34 @@ interface ActionCardGridProps {
 }
 
 const ActionCardGrid: React.FC<ActionCardGridProps> = ({ actionableAdvice, onAction }) => {
+  // Make sure we have a valid array
+  const safeAdvice = Array.isArray(actionableAdvice) ? actionableAdvice : [];
+  
+  if (safeAdvice.length === 0) {
+    return (
+      <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-6 mb-8 text-center">
+        <p className="text-slate-400">No trading advice available yet. Select cryptocurrencies and wait for analysis.</p>
+      </div>
+    );
+  }
+  
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-      {actionableAdvice.map((item) => (
-        <ActionCard 
-          key={item.symbol} 
-          symbol={item.symbol} 
-          advice={item.action} 
-          currentPrice={item.currentPrice} 
-          onAction={onAction}
-        />
-      ))}
+      {safeAdvice.map((item) => {
+        if (!item || typeof item.symbol !== 'string' || !item.action) {
+          return null; // Skip invalid items
+        }
+        
+        return (
+          <ActionCard 
+            key={item.symbol} 
+            symbol={item.symbol} 
+            advice={item.action} 
+            currentPrice={item.currentPrice} 
+            onAction={onAction}
+          />
+        );
+      })}
     </div>
   );
 };

@@ -16,6 +16,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import binanceService from "@/services/binanceService";
+import { toast } from "sonner";
 
 interface SymbolSelectorProps {
   selectedSymbols: string[];
@@ -26,23 +27,34 @@ const SymbolSelector: React.FC<SymbolSelectorProps> = ({ selectedSymbols, onChan
   const [open, setOpen] = useState(false);
   const [symbols, setSymbols] = useState<{symbol: string, priceChangePercent: string}[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const MAX_SELECTIONS = 5;
 
   useEffect(() => {
     const fetchSymbols = async () => {
       try {
         setLoading(true);
+        setError(null);
+        
         const allSymbols = await binanceService.getSymbols();
+        
+        // Validate the response before processing
+        if (!allSymbols || !Array.isArray(allSymbols)) {
+          console.warn("Invalid symbols data received:", allSymbols);
+          throw new Error("Failed to get valid symbol data");
+        }
+        
         // Filter for major USDT pairs
-        const filteredSymbols = Array.isArray(allSymbols) ? 
-          allSymbols
-            .filter(s => s && s.symbol && s.symbol.endsWith('USDT'))
-            // Top 20 by trading volume or just use the most common ones
-            .slice(0, 50)
-          : [];
+        const filteredSymbols = allSymbols
+          .filter(s => s && s.symbol && typeof s.symbol === 'string' && s.symbol.endsWith('USDT'))
+          // Top 20 by trading volume or just use the most common ones
+          .slice(0, 50);
+          
         setSymbols(filteredSymbols);
       } catch (error) {
         console.error("Failed to fetch symbols:", error);
+        setError("Failed to load symbols. Using default list.");
+        
         // Fallback to common symbols if API fails
         setSymbols([
           { symbol: "BTCUSDT", priceChangePercent: "0" },
@@ -54,6 +66,9 @@ const SymbolSelector: React.FC<SymbolSelectorProps> = ({ selectedSymbols, onChan
           { symbol: "DOTUSDT", priceChangePercent: "0" },
           { symbol: "SOLUSDT", priceChangePercent: "0" },
         ]);
+        
+        // Show toast for better UX
+        toast.error("Failed to load symbols. Using default list.");
       } finally {
         setLoading(false);
       }
@@ -65,19 +80,23 @@ const SymbolSelector: React.FC<SymbolSelectorProps> = ({ selectedSymbols, onChan
   const handleSymbolSelect = (symbol: string) => {
     if (!symbol) return;
     
+    // Make sure selectedSymbols is an array
+    const safeSelectedSymbols = Array.isArray(selectedSymbols) ? selectedSymbols : [];
+    
     // If already selected, remove it
-    if (selectedSymbols.includes(symbol)) {
-      onChange(selectedSymbols.filter(s => s !== symbol));
+    if (safeSelectedSymbols.includes(symbol)) {
+      onChange(safeSelectedSymbols.filter(s => s !== symbol));
     } 
     // Otherwise add it if under the limit
-    else if (selectedSymbols.length < MAX_SELECTIONS) {
-      onChange([...selectedSymbols, symbol]);
+    else if (safeSelectedSymbols.length < MAX_SELECTIONS) {
+      onChange([...safeSelectedSymbols, symbol]);
     }
   };
 
   const removeSymbol = (symbol: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    onChange(selectedSymbols.filter(s => s !== symbol));
+    const safeSelectedSymbols = Array.isArray(selectedSymbols) ? selectedSymbols : [];
+    onChange(safeSelectedSymbols.filter(s => s !== symbol));
   };
 
   // Make sure we have valid arrays for the component to work with
@@ -122,46 +141,60 @@ const SymbolSelector: React.FC<SymbolSelectorProps> = ({ selectedSymbols, onChan
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-full p-0 bg-slate-900 border-slate-700">
-          {safeSymbols.length > 0 ? (
-            <Command className="bg-transparent">
-              <CommandInput placeholder="Search cryptocurrencies..." className="text-white" />
-              <CommandEmpty>No cryptocurrency found.</CommandEmpty>
-              <CommandGroup>
-                {safeSymbols.map((item) => {
-                  const isSelected = safeSelectedSymbols.includes(item.symbol);
-                  const isDisabled = safeSelectedSymbols.length >= MAX_SELECTIONS && !isSelected;
-                  
-                  return (
-                    <CommandItem
-                      key={item.symbol}
-                      value={item.symbol}
-                      onSelect={() => handleSymbolSelect(item.symbol)}
-                      disabled={isDisabled}
-                      className={cn(
-                        "flex items-center justify-between text-white",
-                        isDisabled && "opacity-50 cursor-not-allowed",
-                        isSelected && "bg-indigo-900/30"
-                      )}
-                    >
-                      <div className="flex items-center">
-                        {item.symbol.replace('USDT', '')}
-                        <span className={cn(
-                          "ml-2 text-xs",
-                          parseFloat(item.priceChangePercent) >= 0 ? "text-green-400" : "text-red-400"
-                        )}>
-                          {parseFloat(item.priceChangePercent) > 0 && "+"}
-                          {parseFloat(item.priceChangePercent).toFixed(2)}%
-                        </span>
-                      </div>
-                      {isSelected && <Check className="h-4 w-4 text-green-500" />}
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-            </Command>
-          ) : (
-            <div className="p-4 text-center text-white">No symbols found</div>
+          {error && (
+            <div className="p-2 text-amber-400 text-xs border-b border-slate-800">
+              {error}
+            </div>
           )}
+          
+          <Command className="bg-transparent">
+            <CommandInput placeholder="Search cryptocurrencies..." className="text-white" />
+            <CommandEmpty>No cryptocurrency found.</CommandEmpty>
+            <div className="max-h-[280px] overflow-y-auto">
+              <CommandGroup>
+                {safeSymbols.length > 0 ? (
+                  safeSymbols.map((item) => {
+                    if (!item || typeof item.symbol !== 'string') {
+                      return null; // Skip invalid items
+                    }
+                    
+                    const isSelected = safeSelectedSymbols.includes(item.symbol);
+                    const isDisabled = safeSelectedSymbols.length >= MAX_SELECTIONS && !isSelected;
+                    
+                    return (
+                      <CommandItem
+                        key={item.symbol}
+                        value={item.symbol}
+                        onSelect={() => handleSymbolSelect(item.symbol)}
+                        disabled={isDisabled}
+                        className={cn(
+                          "flex items-center justify-between text-white",
+                          isDisabled && "opacity-50 cursor-not-allowed",
+                          isSelected && "bg-indigo-900/30"
+                        )}
+                      >
+                        <div className="flex items-center">
+                          {item.symbol.replace('USDT', '')}
+                          <span className={cn(
+                            "ml-2 text-xs",
+                            parseFloat(item.priceChangePercent || "0") >= 0 ? "text-green-400" : "text-red-400"
+                          )}>
+                            {parseFloat(item.priceChangePercent || "0") > 0 && "+"}
+                            {parseFloat(item.priceChangePercent || "0").toFixed(2)}%
+                          </span>
+                        </div>
+                        {isSelected && <Check className="h-4 w-4 text-green-500" />}
+                      </CommandItem>
+                    );
+                  })
+                ) : loading ? (
+                  <div className="p-4 text-center text-white">Loading symbols...</div>
+                ) : (
+                  <div className="p-4 text-center text-white">No symbols found</div>
+                )}
+              </CommandGroup>
+            </div>
+          </Command>
         </PopoverContent>
       </Popover>
       
