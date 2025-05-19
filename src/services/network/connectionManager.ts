@@ -130,9 +130,9 @@ export class ConnectionManager {
     
     // Always set success state
     setConnectionStage({
-      internet: 'success' as const,
-      binanceApi: 'success' as const,
-      account: 'success' as const
+      internet: 'success',
+      binanceApi: 'success',
+      account: 'success'
     });
     setIsOnline(true);
   }

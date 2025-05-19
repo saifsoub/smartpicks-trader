@@ -35,12 +35,11 @@ export const NetworkStatusAlert = () => {
 
   // Helper function to determine alert severity color
   const getAlertColor = () => {
-    // Create local constants for safe comparison
+    // Type-safe access to connection stage values
     const internetStage = connectionStage.internet;
     const binanceApiStage = connectionStage.binanceApi;
     const accountStage = connectionStage.account;
     
-    // Type-safe string comparison
     if (internetStage === "failed") {
       return 'bg-red-900/30 border-red-700'; // Critical error - no internet
     } else if (binanceApiStage === "failed") {
@@ -85,8 +84,7 @@ export const NetworkStatusAlert = () => {
     }
   }, [isVisible, isOnline, connectionStage, setIsVisible]);
   
-  // Determine if the alert should be positioned as a smaller notification
-  // Use local variables for safe type comparison
+  // Type-safe access to connection stage values
   const internetStage = connectionStage.internet;
   const binanceApiStage = connectionStage.binanceApi;
   

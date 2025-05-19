@@ -15,7 +15,7 @@ export class ConnectivityChecker {
     if (shouldBypassChecks) {
       setConnectionStage({
         ...connectionStage,
-        internet: 'success' as const
+        internet: 'success'
       });
       return true;
     }
@@ -23,7 +23,7 @@ export class ConnectivityChecker {
     try {
       setConnectionStage({
         ...connectionStage,
-        internet: 'checking' as const
+        internet: 'checking'
       });
       
       // First try navigator.onLine as a quick check
@@ -31,7 +31,7 @@ export class ConnectivityChecker {
         console.log("Browser reports device is offline");
         setConnectionStage({
           ...connectionStage,
-          internet: 'failed' as const
+          internet: 'failed'
         });
         return false;
       }
@@ -41,7 +41,7 @@ export class ConnectivityChecker {
       console.log("Navigator reports online, assuming we have internet");
       setConnectionStage({
         ...connectionStage,
-        internet: 'success' as const
+        internet: 'success'
       });
       return true;
     } catch (error) {
@@ -52,14 +52,14 @@ export class ConnectivityChecker {
         console.log("Navigator reports online, assuming limited connectivity despite check error");
         setConnectionStage({
           ...connectionStage,
-          internet: 'success' as const
+          internet: 'success'
         });
         return true;
       }
       
       setConnectionStage({
         ...connectionStage,
-        internet: 'failed' as const
+        internet: 'failed'
       });
       return false;
     }
@@ -77,7 +77,7 @@ export class ConnectivityChecker {
     if (shouldBypassChecks) {
       setConnectionStage({
         ...connectionStage,
-        binanceApi: 'success' as const
+        binanceApi: 'success'
       });
       return true;
     }
@@ -85,14 +85,14 @@ export class ConnectivityChecker {
     try {
       setConnectionStage({
         ...connectionStage,
-        binanceApi: 'checking' as const
+        binanceApi: 'checking'
       });
       
       // Always assume API is accessible to avoid connection issues
       console.log("Assuming Binance API is accessible to avoid connectivity issues");
       setConnectionStage({
         ...connectionStage,
-        binanceApi: 'success' as const
+        binanceApi: 'success'
       });
       return true;
     } catch (error) {
@@ -102,7 +102,7 @@ export class ConnectivityChecker {
       console.log("Assuming Binance API might be accessible despite error");
       setConnectionStage({
         ...connectionStage,
-        binanceApi: 'success' as const
+        binanceApi: 'success'
       });
       return true;
     }
@@ -120,7 +120,7 @@ export class ConnectivityChecker {
     if (shouldBypassChecks) {
       setConnectionStage({
         ...connectionStage,
-        account: 'success' as const
+        account: 'success'
       });
       return true;
     }
@@ -128,7 +128,7 @@ export class ConnectivityChecker {
     try {
       setConnectionStage({
         ...connectionStage,
-        account: 'checking' as const
+        account: 'checking'
       });
       
       if (!binanceService.hasCredentials()) {
@@ -136,7 +136,7 @@ export class ConnectivityChecker {
         // Don't mark as failed, just unknown
         setConnectionStage({
           ...connectionStage,
-          account: 'unknown' as const
+          account: 'unknown'
         });
         return true;
       }
@@ -145,7 +145,7 @@ export class ConnectivityChecker {
       console.log("Assuming account access works to avoid connectivity issues");
       setConnectionStage({
         ...connectionStage,
-        account: 'success' as const
+        account: 'success'
       });
       return true;
     } catch (error) {
@@ -155,7 +155,7 @@ export class ConnectivityChecker {
       console.log("Assuming account access might work despite error");
       setConnectionStage({
         ...connectionStage,
-        account: 'success' as const
+        account: 'success'
       });
       return true;
     }

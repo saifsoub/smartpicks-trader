@@ -132,9 +132,9 @@ export function useNetworkStatus() {
     isCheckingConnection,
     initialCheckDone: true, // Always report initial check done
     connectionStage: {
-      internet: 'success',
-      binanceApi: 'success',
-      account: 'success'
+      internet: 'success' as 'unknown' | 'checking' | 'success' | 'failed',
+      binanceApi: 'success' as 'unknown' | 'checking' | 'success' | 'failed',
+      account: 'success' as 'unknown' | 'checking' | 'success' | 'failed'
     },
     connectionAttempts,
     handleCheckConnection,
