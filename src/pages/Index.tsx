@@ -85,12 +85,21 @@ const Index: React.FC = () => {
                 </TabsList>
               </Tabs>
               
-              <Link to="/bot-dashboard">
-                <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
-                  <Bot className="mr-2 h-4 w-4" />
-                  Advanced Bot Dashboard
-                </Button>
-              </Link>
+              <div className="flex gap-2">
+                <Link to="/bot-dashboard">
+                  <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+                    <Bot className="mr-2 h-4 w-4" />
+                    Bot Dashboard
+                  </Button>
+                </Link>
+                
+                <Link to="/easy-peasy">
+                  <Button className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
+                    <Zap className="mr-2 h-4 w-4" />
+                    Easy Peasy
+                  </Button>
+                </Link>
+              </div>
             </div>
           </div>
           

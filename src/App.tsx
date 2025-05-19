@@ -12,6 +12,7 @@ import Settings from "./pages/Settings";
 import Strategies from "./pages/Strategies";
 import StrategyDetail from "./pages/StrategyDetail";
 import BotDashboard from "./pages/BotDashboard";
+import EasyPeasy from "./pages/EasyPeasy";
 
 const App = () => {
   // Create a client instance inside the component
@@ -30,6 +31,7 @@ const App = () => {
               <Route path="/strategies" element={<Strategies />} />
               <Route path="/strategies/:id" element={<StrategyDetail />} />
               <Route path="/bot-dashboard" element={<BotDashboard />} />
+              <Route path="/easy-peasy" element={<EasyPeasy />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
