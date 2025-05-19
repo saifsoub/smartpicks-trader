@@ -23,8 +23,11 @@ const App = () => {
         retryDelay: 1000,
         staleTime: 1000 * 60 * 5, // 5 minutes
         refetchOnWindowFocus: false,
-        onError: (error) => {
-          console.error("Query error:", error);
+        meta: {
+          // Error handling moved to meta object
+          onError: (error: Error) => {
+            console.error("Query error:", error);
+          }
         }
       }
     }
