@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -33,10 +34,12 @@ const SymbolSelector: React.FC<SymbolSelectorProps> = ({ selectedSymbols, onChan
       try {
         const allSymbols = await binanceService.getSymbols();
         // Filter for major USDT pairs
-        const filteredSymbols = allSymbols
-          .filter(s => s.symbol.endsWith('USDT'))
-          // Top 20 by trading volume or just use the most common ones
-          .slice(0, 50);
+        const filteredSymbols = Array.isArray(allSymbols) ? 
+          allSymbols
+            .filter(s => s && s.symbol && s.symbol.endsWith('USDT'))
+            // Top 20 by trading volume or just use the most common ones
+            .slice(0, 50)
+          : [];
         setSymbols(filteredSymbols);
       } catch (error) {
         console.error("Failed to fetch symbols:", error);
@@ -60,6 +63,8 @@ const SymbolSelector: React.FC<SymbolSelectorProps> = ({ selectedSymbols, onChan
   }, []);
 
   const handleSymbolSelect = (symbol: string) => {
+    if (!symbol) return;
+    
     // If already selected, remove it
     if (selectedSymbols.includes(symbol)) {
       onChange(selectedSymbols.filter(s => s !== symbol));
@@ -113,42 +118,46 @@ const SymbolSelector: React.FC<SymbolSelectorProps> = ({ selectedSymbols, onChan
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-full p-0 bg-slate-900 border-slate-700">
-          <Command className="bg-transparent">
-            <CommandInput placeholder="Search cryptocurrencies..." className="text-white" />
-            <CommandEmpty>No cryptocurrency found.</CommandEmpty>
-            <CommandGroup className="max-h-64 overflow-y-auto">
-              {symbols.map((item) => {
-                const isSelected = selectedSymbols.includes(item.symbol);
-                const isDisabled = selectedSymbols.length >= MAX_SELECTIONS && !isSelected;
-                
-                return (
-                  <CommandItem
-                    key={item.symbol}
-                    value={item.symbol}
-                    onSelect={() => handleSymbolSelect(item.symbol)}
-                    disabled={isDisabled}
-                    className={cn(
-                      "flex items-center justify-between text-white",
-                      isDisabled && "opacity-50 cursor-not-allowed",
-                      isSelected && "bg-indigo-900/30"
-                    )}
-                  >
-                    <div className="flex items-center">
-                      {item.symbol.replace('USDT', '')}
-                      <span className={cn(
-                        "ml-2 text-xs",
-                        parseFloat(item.priceChangePercent) >= 0 ? "text-green-400" : "text-red-400"
-                      )}>
-                        {parseFloat(item.priceChangePercent) > 0 && "+"}
-                        {parseFloat(item.priceChangePercent).toFixed(2)}%
-                      </span>
-                    </div>
-                    {isSelected && <Check className="h-4 w-4 text-green-500" />}
-                  </CommandItem>
-                );
-              })}
-            </CommandGroup>
-          </Command>
+          {symbols.length > 0 ? (
+            <Command className="bg-transparent">
+              <CommandInput placeholder="Search cryptocurrencies..." className="text-white" />
+              <CommandEmpty>No cryptocurrency found.</CommandEmpty>
+              <CommandGroup className="max-h-64 overflow-y-auto">
+                {symbols.map((item) => {
+                  const isSelected = selectedSymbols.includes(item.symbol);
+                  const isDisabled = selectedSymbols.length >= MAX_SELECTIONS && !isSelected;
+                  
+                  return (
+                    <CommandItem
+                      key={item.symbol}
+                      value={item.symbol}
+                      onSelect={() => handleSymbolSelect(item.symbol)}
+                      disabled={isDisabled}
+                      className={cn(
+                        "flex items-center justify-between text-white",
+                        isDisabled && "opacity-50 cursor-not-allowed",
+                        isSelected && "bg-indigo-900/30"
+                      )}
+                    >
+                      <div className="flex items-center">
+                        {item.symbol.replace('USDT', '')}
+                        <span className={cn(
+                          "ml-2 text-xs",
+                          parseFloat(item.priceChangePercent) >= 0 ? "text-green-400" : "text-red-400"
+                        )}>
+                          {parseFloat(item.priceChangePercent) > 0 && "+"}
+                          {parseFloat(item.priceChangePercent).toFixed(2)}%
+                        </span>
+                      </div>
+                      {isSelected && <Check className="h-4 w-4 text-green-500" />}
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            </Command>
+          ) : (
+            <div className="p-4 text-center text-white">No symbols found</div>
+          )}
         </PopoverContent>
       </Popover>
       
