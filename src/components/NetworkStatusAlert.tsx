@@ -40,7 +40,7 @@ export const NetworkStatusAlert = () => {
     const binanceApiStage = connectionStage.binanceApi;
     const accountStage = connectionStage.account;
     
-    // Use type-safe string comparison
+    // Type-safe comparison using string equality
     if (internetStage === 'failed') {
       return 'bg-red-900/30 border-red-700'; // Critical error - no internet
     } else if (binanceApiStage === 'failed') {
@@ -90,6 +90,7 @@ export const NetworkStatusAlert = () => {
   const internetStage = connectionStage.internet;
   const binanceApiStage = connectionStage.binanceApi;
   
+  // Type-safe string comparison
   const isMinorIssue = isOnline && 
                       internetStage === 'success' && 
                       (binanceApiStage === 'success' || binanceApiStage === 'unknown');
