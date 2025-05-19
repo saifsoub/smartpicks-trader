@@ -2,9 +2,10 @@
 import React, { useState, useEffect } from "react";
 import { Clock } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { TradeAdvice } from "@/hooks/useTradeAdvice";
 
 interface NextActionTimerProps {
-  actionableAdvice: any[];
+  actionableAdvice: TradeAdvice[];
 }
 
 const NextActionTimer: React.FC<NextActionTimerProps> = ({ actionableAdvice }) => {
@@ -72,7 +73,7 @@ const NextActionTimer: React.FC<NextActionTimerProps> = ({ actionableAdvice }) =
     }
   };
   
-  if (nextActions.length === 0) {
+  if (!Array.isArray(nextActions) || nextActions.length === 0) {
     return (
       <div className="text-center p-8 text-white/60">
         No upcoming actions scheduled. Select more symbols or refresh advice.

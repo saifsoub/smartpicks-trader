@@ -80,10 +80,14 @@ const SymbolSelector: React.FC<SymbolSelectorProps> = ({ selectedSymbols, onChan
     onChange(selectedSymbols.filter(s => s !== symbol));
   };
 
+  // Make sure we have valid arrays for the component to work with
+  const safeSymbols = Array.isArray(symbols) ? symbols : [];
+  const safeSelectedSymbols = Array.isArray(selectedSymbols) ? selectedSymbols : [];
+
   return (
     <div className="flex flex-col space-y-4">
       <div className="flex flex-wrap gap-2 mb-2">
-        {selectedSymbols.map(symbol => (
+        {safeSelectedSymbols.map(symbol => (
           <Badge 
             key={symbol} 
             variant="secondary"
@@ -111,21 +115,21 @@ const SymbolSelector: React.FC<SymbolSelectorProps> = ({ selectedSymbols, onChan
           >
             {loading 
               ? "Loading symbols..." 
-              : selectedSymbols.length === 0 
+              : safeSelectedSymbols.length === 0 
                 ? "Select cryptocurrencies..." 
-                : `${selectedSymbols.length}/${MAX_SELECTIONS} selected`}
+                : `${safeSelectedSymbols.length}/${MAX_SELECTIONS} selected`}
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-full p-0 bg-slate-900 border-slate-700">
-          {symbols.length > 0 ? (
+          {safeSymbols.length > 0 ? (
             <Command className="bg-transparent">
               <CommandInput placeholder="Search cryptocurrencies..." className="text-white" />
               <CommandEmpty>No cryptocurrency found.</CommandEmpty>
               <CommandGroup className="max-h-64 overflow-y-auto">
-                {symbols.map((item) => {
-                  const isSelected = selectedSymbols.includes(item.symbol);
-                  const isDisabled = selectedSymbols.length >= MAX_SELECTIONS && !isSelected;
+                {safeSymbols.map((item) => {
+                  const isSelected = safeSelectedSymbols.includes(item.symbol);
+                  const isDisabled = safeSelectedSymbols.length >= MAX_SELECTIONS && !isSelected;
                   
                   return (
                     <CommandItem
@@ -162,7 +166,7 @@ const SymbolSelector: React.FC<SymbolSelectorProps> = ({ selectedSymbols, onChan
       </Popover>
       
       <p className="text-xs text-slate-400">
-        {selectedSymbols.length === MAX_SELECTIONS 
+        {safeSelectedSymbols.length === MAX_SELECTIONS 
           ? `Maximum ${MAX_SELECTIONS} symbols selected` 
           : `Select up to ${MAX_SELECTIONS} symbols`}
       </p>
