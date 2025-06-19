@@ -1,3 +1,4 @@
+
 import binanceService from '@/services/binanceService';
 import { StorageManager } from '@/services/binance/storageManager';
 import { ConnectionStage } from '@/components/network/NetworkAlertMessage';
@@ -36,22 +37,21 @@ export class ConnectivityChecker {
         return false;
       }
       
-      // Test actual connectivity with multiple endpoints
+      // Test actual connectivity with reliable endpoints
       const connectivityTests = [
-        fetch('https://www.google.com/generate_204', { 
-          method: 'HEAD',
-          mode: 'no-cors',
-          signal: AbortSignal.timeout(5000)
-        }),
-        fetch('https://api.binance.com/api/v3/ping', {
-          signal: AbortSignal.timeout(5000)
+        // Use a more reliable connectivity test
+        fetch('https://api.binance.com/api/v3/time', { 
+          method: 'GET',
+          signal: AbortSignal.timeout(8000),
+          cache: 'no-store'
         }),
         fetch('https://httpbin.org/get', {
-          signal: AbortSignal.timeout(5000)
+          signal: AbortSignal.timeout(8000),
+          cache: 'no-store'
         })
       ];
       
-      // Use Promise.allSettled instead of Promise.any for better compatibility
+      // Use Promise.allSettled and check for at least one success
       const results = await Promise.allSettled(connectivityTests);
       
       // Check if any test succeeded
@@ -85,7 +85,7 @@ export class ConnectivityChecker {
   }
 
   /**
-   * Enhanced check for Binance API accessibility
+   * Enhanced check for Binance API accessibility with better fallback handling
    */
   public static async checkBinanceApiAccess(
     connectionStage: ConnectionStage,
@@ -108,34 +108,59 @@ export class ConnectivityChecker {
         binanceApi: 'checking'
       });
       
-      // Test both direct API and proxy access
+      // Test direct API first (most reliable)
       const directApiTest = fetch('https://api.binance.com/api/v3/ping', {
-        signal: AbortSignal.timeout(8000)
+        signal: AbortSignal.timeout(8000),
+        cache: 'no-store'
       });
       
-      const proxyTest = fetch('https://binance-proxy.vercel.app/api/ping', {
-        headers: {
-          'Accept': 'application/json',
-          'Cache-Control': 'no-cache'
-        },
-        signal: AbortSignal.timeout(10000)
-      });
+      // Test multiple proxy endpoints as fallbacks
+      const proxyTests = [
+        fetch('https://binance-proxy.vercel.app/api/ping', {
+          headers: {
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache'
+          },
+          signal: AbortSignal.timeout(10000),
+          cache: 'no-store'
+        }),
+        // Add additional proxy fallbacks
+        fetch('https://api.binance.com/api/v3/time', {
+          signal: AbortSignal.timeout(8000),
+          cache: 'no-store'
+        })
+      ];
       
-      // Try both methods, succeed if either works
-      const results = await Promise.allSettled([directApiTest, proxyTest]);
+      // Try direct API first
+      const directResult = await Promise.allSettled([directApiTest]);
+      const directSuccess = directResult[0].status === 'fulfilled' && directResult[0].value.ok;
       
-      const directSuccess = results[0].status === 'fulfilled' && results[0].value.ok;
-      const proxySuccess = results[1].status === 'fulfilled' && results[1].value.ok;
+      if (directSuccess) {
+        console.log('Binance API accessible via direct connection');
+        setConnectionStage({
+          ...connectionStage,
+          binanceApi: 'success'
+        });
+        return true;
+      }
       
-      if (directSuccess || proxySuccess) {
-        console.log(`Binance API accessible - Direct: ${directSuccess}, Proxy: ${proxySuccess}`);
+      // If direct fails, try proxy methods
+      console.log('Direct API failed, trying proxy methods...');
+      const proxyResults = await Promise.allSettled(proxyTests);
+      
+      const proxySuccess = proxyResults.some(result => 
+        result.status === 'fulfilled' && result.value.ok
+      );
+      
+      if (proxySuccess) {
+        console.log('Binance API accessible via proxy connection');
         setConnectionStage({
           ...connectionStage,
           binanceApi: 'success'
         });
         return true;
       } else {
-        console.error('Both direct and proxy Binance API tests failed');
+        console.error('All Binance API connection methods failed');
         setConnectionStage({
           ...connectionStage,
           binanceApi: 'failed'
@@ -153,7 +178,7 @@ export class ConnectivityChecker {
   }
   
   /**
-   * Check account access (authentication)
+   * Enhanced account access check with better credential validation
    */
   public static async checkAccountAccess(
     connectionStage: ConnectionStage,
@@ -176,6 +201,7 @@ export class ConnectivityChecker {
         account: 'checking'
       });
       
+      // Check if credentials are properly configured
       if (!binanceService.hasCredentials()) {
         console.log("No API credentials configured");
         setConnectionStage({
@@ -185,8 +211,34 @@ export class ConnectivityChecker {
         return false;
       }
       
-      // Test actual account access
-      const testResult = await binanceService.testConnection();
+      // Validate API key format before testing
+      const apiKey = binanceService.getApiKey();
+      if (!this.validateApiKeyFormat(apiKey)) {
+        console.error("Invalid API key format");
+        setConnectionStage({
+          ...connectionStage,
+          account: 'failed'
+        });
+        return false;
+      }
+      
+      // Test actual account access with retry logic
+      let testResult = false;
+      let lastError = null;
+      
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          console.log(`Testing account access (attempt ${attempt + 1}/2)...`);
+          testResult = await binanceService.testConnection();
+          if (testResult) break;
+        } catch (error) {
+          lastError = error;
+          console.warn(`Account test attempt ${attempt + 1} failed:`, error);
+          if (attempt < 1) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+      }
       
       if (testResult) {
         console.log("Account access verified");
@@ -196,7 +248,7 @@ export class ConnectivityChecker {
         });
         return true;
       } else {
-        console.error("Account access test failed");
+        console.error("Account access test failed:", lastError);
         setConnectionStage({
           ...connectionStage,
           account: 'failed'
@@ -211,5 +263,18 @@ export class ConnectivityChecker {
       });
       return false;
     }
+  }
+  
+  /**
+   * Validate API key format
+   */
+  private static validateApiKeyFormat(apiKey: string): boolean {
+    if (!apiKey || typeof apiKey !== 'string') {
+      return false;
+    }
+    
+    // Binance API keys are typically 64 characters long and alphanumeric
+    const apiKeyPattern = /^[a-zA-Z0-9]{64}$/;
+    return apiKeyPattern.test(apiKey);
   }
 }

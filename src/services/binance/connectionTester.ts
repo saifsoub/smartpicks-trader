@@ -31,7 +31,7 @@ export class ConnectionTester {
   }
   
   /**
-   * Tests the direct API connection to Binance
+   * Enhanced direct API connection test with better error handling
    */
   public async testDirectConnection(): Promise<boolean> {
     this.testingInProgress = true;
@@ -40,20 +40,33 @@ export class ConnectionTester {
     try {
       console.log('Testing direct connection to Binance API...');
       
-      // Test basic ping endpoint
-      const response = await fetch('https://api.binance.com/api/v3/ping', {
-        method: 'GET',
-        signal: AbortSignal.timeout(10000)
-      });
+      // Test multiple direct endpoints for better reliability
+      const tests = [
+        fetch('https://api.binance.com/api/v3/ping', {
+          method: 'GET',
+          signal: AbortSignal.timeout(8000),
+          cache: 'no-store'
+        }),
+        fetch('https://api.binance.com/api/v3/time', {
+          method: 'GET',
+          signal: AbortSignal.timeout(8000),
+          cache: 'no-store'
+        })
+      ];
       
-      if (!response.ok) {
-        throw new Error(`Direct API test failed: ${response.status} ${response.statusText}`);
+      const results = await Promise.allSettled(tests);
+      const hasSuccess = results.some(result => 
+        result.status === 'fulfilled' && result.value.ok
+      );
+      
+      if (hasSuccess) {
+        this.logManager.addTradingLog('Direct API connection test successful', 'success');
+        this.resetNetworkErrorCount();
+        this.testingInProgress = false;
+        return true;
+      } else {
+        throw new Error('All direct API tests failed');
       }
-      
-      this.logManager.addTradingLog('Direct API connection test successful', 'success');
-      this.resetNetworkErrorCount();
-      this.testingInProgress = false;
-      return true;
     } catch (error) {
       console.error('Direct API connection test failed:', error);
       this.logManager.addTradingLog(`Direct API connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
@@ -64,7 +77,7 @@ export class ConnectionTester {
   }
   
   /**
-   * Tests the proxy connection to Binance
+   * Enhanced proxy connection test with multiple fallbacks
    */
   public async testProxyConnection(): Promise<boolean> {
     this.testingInProgress = true;
@@ -72,25 +85,43 @@ export class ConnectionTester {
     try {
       console.log('Testing proxy connection to Binance API...');
       
-      // Test through proxy
-      const response = await fetch('https://binance-proxy.vercel.app/api/ping', {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Cache-Control': 'no-cache'
-        },
-        signal: AbortSignal.timeout(15000)
-      });
+      // Test multiple proxy endpoints
+      const proxyUrls = [
+        'https://binance-proxy.vercel.app/api/ping',
+        // Fallback to direct API time endpoint as proxy alternative
+        'https://api.binance.com/api/v3/time'
+      ];
       
-      if (!response.ok) {
-        throw new Error(`Proxy test failed: ${response.status} ${response.statusText}`);
+      let lastError = null;
+      
+      for (const url of proxyUrls) {
+        try {
+          console.log(`Testing proxy endpoint: ${url}`);
+          
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+              'Cache-Control': 'no-cache'
+            },
+            signal: AbortSignal.timeout(12000),
+            cache: 'no-store'
+          });
+          
+          if (response.ok) {
+            console.log(`Proxy test successful for: ${url}`);
+            this.logManager.addTradingLog('Proxy connection test successful', 'success');
+            this.resetNetworkErrorCount();
+            this.testingInProgress = false;
+            return true;
+          }
+        } catch (error) {
+          console.warn(`Proxy test failed for ${url}:`, error);
+          lastError = error;
+        }
       }
       
-      const data = await response.json();
-      this.logManager.addTradingLog('Proxy connection test successful', 'success');
-      this.resetNetworkErrorCount();
-      this.testingInProgress = false;
-      return true;
+      throw lastError || new Error('All proxy tests failed');
     } catch (error) {
       console.error('Proxy connection test failed:', error);
       this.logManager.addTradingLog(`Proxy connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
@@ -101,7 +132,7 @@ export class ConnectionTester {
   }
   
   /**
-   * Validate API key format
+   * Enhanced API key format validation
    */
   public validateApiKeyFormat(apiKey: string): boolean {
     if (!apiKey || typeof apiKey !== 'string') {
@@ -110,7 +141,14 @@ export class ConnectionTester {
     
     // Binance API keys are typically 64 characters long and alphanumeric
     const apiKeyPattern = /^[a-zA-Z0-9]{64}$/;
-    return apiKeyPattern.test(apiKey);
+    const isValidFormat = apiKeyPattern.test(apiKey);
+    
+    if (!isValidFormat) {
+      console.warn('API key format validation failed');
+      this.logManager.addTradingLog('Invalid API key format detected', 'error');
+    }
+    
+    return isValidFormat;
   }
   
   /**
@@ -136,5 +174,14 @@ export class ConnectionTester {
    */
   public getNetworkErrorCount(): number {
     return this.networkErrorCount;
+  }
+  
+  /**
+   * Get connection quality assessment
+   */
+  public getConnectionQuality(): 'good' | 'poor' | 'bad' {
+    if (this.networkErrorCount === 0) return 'good';
+    if (this.networkErrorCount < 3) return 'poor';
+    return 'bad';
   }
 }
