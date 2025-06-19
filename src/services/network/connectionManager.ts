@@ -16,12 +16,10 @@ export class ConnectionManager {
     setIsOnline: (isOnline: boolean) => void,
     connectionAttempts: number
   ): Promise<boolean> {
-    try {
-      // Always use bypass mode for reliability
-      StorageManager.bypassConnectionChecks(true);
-      StorageManager.forceDirectApi(true);
-      
-      console.log("Bypassing connection checks for reliability");
+    const shouldBypass = StorageManager.shouldBypassConnectionChecks();
+    
+    if (shouldBypass) {
+      console.log("Connection checks are bypassed");
       setConnectionStage({
         internet: 'success',
         binanceApi: 'success',
@@ -30,18 +28,61 @@ export class ConnectionManager {
       setIsCheckingConnection(false);
       setIsOnline(true);
       return true;
+    }
+    
+    setIsCheckingConnection(true);
+    let overallSuccess = true;
+    
+    try {
+      // Check internet connectivity
+      const internetOk = await ConnectivityChecker.checkInternetConnectivity(
+        connectionStage,
+        setConnectionStage,
+        shouldBypass
+      );
+      
+      if (!internetOk) {
+        overallSuccess = false;
+      }
+      
+      // Check Binance API access if internet is working
+      let binanceOk = false;
+      if (internetOk) {
+        binanceOk = await ConnectivityChecker.checkBinanceApiAccess(
+          connectionStage,
+          setConnectionStage,
+          connectionAttempts,
+          shouldBypass
+        );
+        
+        if (!binanceOk) {
+          overallSuccess = false;
+        }
+      }
+      
+      // Check account access if API is working
+      if (binanceOk) {
+        const accountOk = await ConnectivityChecker.checkAccountAccess(
+          connectionStage,
+          setConnectionStage,
+          connectionAttempts,
+          shouldBypass
+        );
+        
+        // Account issues don't fail the overall check but are noted
+        if (!accountOk) {
+          console.log('Account access issues detected, but continuing...');
+        }
+      }
+      
+      setIsOnline(overallSuccess);
+      return overallSuccess;
     } catch (error) {
       console.error("Error in comprehensive connectivity check:", error);
-      
-      // Even if there's an error, still report success for reliability
+      setIsOnline(false);
+      return false;
+    } finally {
       setIsCheckingConnection(false);
-      setIsOnline(true);
-      setConnectionStage({
-        internet: 'success',
-        binanceApi: 'success',
-        account: 'success'
-      });
-      return true;
     }
   }
 
@@ -60,16 +101,22 @@ export class ConnectionManager {
     setConnectionAttempts(prev => prev + 1);
     console.log("Manual connection check initiated");
     
-    // For reliability, just report success without actually checking
-    setIsVisible(false);
-    setIsOnline(true);
-    setConnectionStage({
-      internet: 'success',
-      binanceApi: 'success',
-      account: 'success'
-    });
-    toast.success("Successfully connected to Binance API");
-    return true;
+    const result = await this.checkRealConnectivity(
+      connectionStage,
+      setConnectionStage,
+      setIsCheckingConnection,
+      setIsOnline,
+      connectionAttempts
+    );
+    
+    if (result) {
+      setIsVisible(false);
+      toast.success("Successfully connected to Binance API");
+    } else {
+      toast.error("Connection issues detected. Please check your network and API settings.");
+    }
+    
+    return result;
   }
   
   /**
@@ -91,17 +138,31 @@ export class ConnectionManager {
     setIsCheckingConnection: (isChecking: boolean) => void,
     connectionAttempts: number
   ): void {
-    // Always enable bypass
-    StorageManager.bypassConnectionChecks(true);
+    const currentValue = StorageManager.shouldBypassConnectionChecks();
+    const newValue = !currentValue;
     
-    // Enabling bypass
-    setConnectionStage({
-      internet: 'success',
-      binanceApi: 'success',
-      account: 'success'
-    });
-    setIsOnline(true);
-    toast.success("Connection checks bypassed for better reliability");
+    StorageManager.bypassConnectionChecks(newValue);
+    
+    if (newValue) {
+      // Enabling bypass
+      setConnectionStage({
+        internet: 'success',
+        binanceApi: 'success',
+        account: 'success'
+      });
+      setIsOnline(true);
+      toast.success("Connection checks bypassed");
+    } else {
+      // Disabling bypass - trigger real check
+      toast.info("Connection checks re-enabled. Running connectivity test...");
+      this.checkRealConnectivity(
+        connectionStage,
+        setConnectionStage,
+        setIsCheckingConnection,
+        setIsOnline,
+        connectionAttempts
+      );
+    }
   }
   
   /**
@@ -114,26 +175,25 @@ export class ConnectionManager {
     setIsOnline: (isOnline: boolean) => void,
     connectionAttempts: number
   ): void {
-    // Always enable direct API
     const currentValue = StorageManager.shouldForceDirectApi();
+    const newValue = !currentValue;
     
-    // Only log if changing state
-    if (!currentValue) {
-      console.log(`Force Direct API: Current state = ${currentValue}, changing to true`);
-      
-      // Update the direct API mode in binanceService
-      binanceService.forceDirectApi(true);
-      
-      // Enabling direct API mode
-      toast.success("Direct API mode enabled for better reliability");
+    StorageManager.forceDirectApi(newValue);
+    binanceService.forceDirectApi(newValue);
+    
+    if (newValue) {
+      toast.success("Direct API mode enabled");
+    } else {
+      toast.info("Direct API mode disabled");
     }
     
-    // Always set success state
-    setConnectionStage({
-      internet: 'success',
-      binanceApi: 'success',
-      account: 'success'
-    });
-    setIsOnline(true);
+    // Re-run connectivity check to reflect the change
+    this.checkRealConnectivity(
+      connectionStage,
+      setConnectionStage,
+      setIsCheckingConnection,
+      setIsOnline,
+      connectionAttempts
+    );
   }
 }

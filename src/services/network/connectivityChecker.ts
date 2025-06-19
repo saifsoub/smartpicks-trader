@@ -13,6 +13,7 @@ export class ConnectivityChecker {
     shouldBypassChecks: boolean = false
   ): Promise<boolean> {
     if (shouldBypassChecks) {
+      console.log('Bypassing internet connectivity check');
       setConnectionStage({
         ...connectionStage,
         internet: 'success'
@@ -26,7 +27,7 @@ export class ConnectivityChecker {
         internet: 'checking'
       });
       
-      // First try navigator.onLine as a quick check
+      // First check navigator.onLine
       if (!navigator.onLine) {
         console.log("Browser reports device is offline");
         setConnectionStage({
@@ -36,27 +37,40 @@ export class ConnectivityChecker {
         return false;
       }
       
-      // Always assume online after navigator.onLine check passes
-      // This helps with environments where fetch calls might be blocked
-      console.log("Navigator reports online, assuming we have internet");
-      setConnectionStage({
-        ...connectionStage,
-        internet: 'success'
-      });
-      return true;
-    } catch (error) {
-      console.error("Error checking internet connectivity:", error);
+      // Test actual connectivity with multiple endpoints
+      const connectivityTests = [
+        fetch('https://www.google.com/generate_204', { 
+          method: 'HEAD',
+          mode: 'no-cors',
+          signal: AbortSignal.timeout(5000)
+        }),
+        fetch('https://api.binance.com/api/v3/ping', {
+          signal: AbortSignal.timeout(5000)
+        }),
+        fetch('https://httpbin.org/get', {
+          signal: AbortSignal.timeout(5000)
+        })
+      ];
       
-      // For simplicity, if we can't check connectivity but navigator says we're online, assume we're online
-      if (navigator.onLine) {
-        console.log("Navigator reports online, assuming limited connectivity despite check error");
+      // Use Promise.any to succeed if any test passes
+      try {
+        await Promise.any(connectivityTests);
+        console.log("Internet connectivity confirmed");
         setConnectionStage({
           ...connectionStage,
           internet: 'success'
         });
         return true;
+      } catch (error) {
+        console.error("All connectivity tests failed:", error);
+        setConnectionStage({
+          ...connectionStage,
+          internet: 'failed'
+        });
+        return false;
       }
-      
+    } catch (error) {
+      console.error("Error checking internet connectivity:", error);
       setConnectionStage({
         ...connectionStage,
         internet: 'failed'
@@ -75,6 +89,7 @@ export class ConnectivityChecker {
     shouldBypassChecks: boolean = false
   ): Promise<boolean> {
     if (shouldBypassChecks) {
+      console.log('Bypassing Binance API check');
       setConnectionStage({
         ...connectionStage,
         binanceApi: 'success'
@@ -88,23 +103,56 @@ export class ConnectivityChecker {
         binanceApi: 'checking'
       });
       
-      // Always assume API is accessible to avoid connection issues
-      console.log("Assuming Binance API is accessible to avoid connectivity issues");
-      setConnectionStage({
-        ...connectionStage,
-        binanceApi: 'success'
+      // Test both direct API and proxy access
+      const directApiTest = fetch('https://api.binance.com/api/v3/ping', {
+        signal: AbortSignal.timeout(8000)
       });
-      return true;
+      
+      const proxyTest = fetch('https://binance-proxy.vercel.app/api/ping', {
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache'
+        },
+        signal: AbortSignal.timeout(10000)
+      });
+      
+      // Try both methods, succeed if either works
+      try {
+        const results = await Promise.allSettled([directApiTest, proxyTest]);
+        
+        const directSuccess = results[0].status === 'fulfilled' && results[0].value.ok;
+        const proxySuccess = results[1].status === 'fulfilled' && results[1].value.ok;
+        
+        if (directSuccess || proxySuccess) {
+          console.log(`Binance API accessible - Direct: ${directSuccess}, Proxy: ${proxySuccess}`);
+          setConnectionStage({
+            ...connectionStage,
+            binanceApi: 'success'
+          });
+          return true;
+        } else {
+          console.error('Both direct and proxy Binance API tests failed');
+          setConnectionStage({
+            ...connectionStage,
+            binanceApi: 'failed'
+          });
+          return false;
+        }
+      } catch (error) {
+        console.error('Error testing Binance API access:', error);
+        setConnectionStage({
+          ...connectionStage,
+          binanceApi: 'failed'
+        });
+        return false;
+      }
     } catch (error) {
       console.error("Error checking Binance API access:", error);
-      
-      // Always return success to avoid blocking the user
-      console.log("Assuming Binance API might be accessible despite error");
       setConnectionStage({
         ...connectionStage,
-        binanceApi: 'success'
+        binanceApi: 'failed'
       });
-      return true;
+      return false;
     }
   }
   
@@ -118,6 +166,7 @@ export class ConnectivityChecker {
     shouldBypassChecks: boolean = false
   ): Promise<boolean> {
     if (shouldBypassChecks) {
+      console.log('Bypassing account access check');
       setConnectionStage({
         ...connectionStage,
         account: 'success'
@@ -133,31 +182,38 @@ export class ConnectivityChecker {
       
       if (!binanceService.hasCredentials()) {
         console.log("No API credentials configured");
-        // Don't mark as failed, just unknown
         setConnectionStage({
           ...connectionStage,
           account: 'unknown'
         });
-        return true;
+        return false;
       }
       
-      // Always assume account access works to avoid connectivity issues
-      console.log("Assuming account access works to avoid connectivity issues");
-      setConnectionStage({
-        ...connectionStage,
-        account: 'success'
-      });
-      return true;
+      // Test actual account access
+      const testResult = await binanceService.testConnection();
+      
+      if (testResult) {
+        console.log("Account access verified");
+        setConnectionStage({
+          ...connectionStage,
+          account: 'success'
+        });
+        return true;
+      } else {
+        console.error("Account access test failed");
+        setConnectionStage({
+          ...connectionStage,
+          account: 'failed'
+        });
+        return false;
+      }
     } catch (error) {
       console.error("Error checking account access:", error);
-      
-      // Always return success to avoid blocking the user
-      console.log("Assuming account access might work despite error");
       setConnectionStage({
         ...connectionStage,
-        account: 'success'
+        account: 'failed'
       });
-      return true;
+      return false;
     }
   }
 }

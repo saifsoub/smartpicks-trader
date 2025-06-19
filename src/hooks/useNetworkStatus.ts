@@ -8,51 +8,106 @@ import { ConnectionManager } from '@/services/network/connectionManager';
 import { NetworkEventHandler } from '@/services/network/networkEventHandler';
 
 export function useNetworkStatus() {
-  const [isOnline, setIsOnline] = useState<boolean>(true); // Always start with online
+  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [isVisible, setIsVisible] = useState<boolean>(false);
   const [connectionAttempts, setConnectionAttempts] = useState<number>(0);
   const [isCheckingConnection, setIsCheckingConnection] = useState<boolean>(false);
   const [initialCheckDone, setInitialCheckDone] = useState<boolean>(false);
   const [connectionStage, setConnectionStage] = useState<ConnectionStage>({
-    internet: 'success', 
-    binanceApi: 'success',
-    account: 'success'
+    internet: 'unknown', 
+    binanceApi: 'unknown',
+    account: 'unknown'
   });
-  
-  // Always enable bypass connection checks for reliability
-  useEffect(() => {
-    StorageManager.bypassConnectionChecks(true);
-    StorageManager.forceDirectApi(true);
-  }, []);
   
   // Comprehensive connection check that runs all stages
   const checkRealConnectivity = useCallback(async (): Promise<boolean> => {
-    // Auto-enable bypass mode
-    StorageManager.bypassConnectionChecks(true);
+    const shouldBypass = StorageManager.shouldBypassConnectionChecks();
     
-    return ConnectionManager.checkRealConnectivity(
-      connectionStage,
-      setConnectionStage,
-      setIsCheckingConnection,
-      setIsOnline,
-      connectionAttempts
-    );
+    if (shouldBypass) {
+      console.log('Connection checks are bypassed');
+      setConnectionStage({
+        internet: 'success',
+        binanceApi: 'success',
+        account: 'success'
+      });
+      setIsOnline(true);
+      return true;
+    }
+    
+    setIsCheckingConnection(true);
+    let allGood = true;
+    
+    try {
+      // Step 1: Check internet connectivity
+      const internetOk = await ConnectivityChecker.checkInternetConnectivity(
+        connectionStage,
+        setConnectionStage,
+        shouldBypass
+      );
+      
+      if (!internetOk) {
+        allGood = false;
+        setIsOnline(false);
+        setIsVisible(true);
+      }
+      
+      // Step 2: Check Binance API access (if internet is working)
+      if (internetOk) {
+        const binanceOk = await ConnectivityChecker.checkBinanceApiAccess(
+          connectionStage,
+          setConnectionStage,
+          connectionAttempts,
+          shouldBypass
+        );
+        
+        if (!binanceOk) {
+          allGood = false;
+          setIsVisible(true);
+        }
+        
+        // Step 3: Check account access (if API is working)
+        if (binanceOk) {
+          const accountOk = await ConnectivityChecker.checkAccountAccess(
+            connectionStage,
+            setConnectionStage,
+            connectionAttempts,
+            shouldBypass
+          );
+          
+          if (!accountOk) {
+            // Account issues are less critical than connectivity issues
+            console.log('Account access issues detected');
+          }
+        }
+      }
+      
+      setIsOnline(allGood);
+      return allGood;
+    } catch (error) {
+      console.error('Connectivity check failed:', error);
+      setIsOnline(false);
+      setIsVisible(true);
+      return false;
+    } finally {
+      setIsCheckingConnection(false);
+    }
   }, [connectionStage, connectionAttempts]);
 
   // Handle check connection button
   const handleCheckConnection = async () => {
-    // Auto-enable bypass mode before checking
-    StorageManager.bypassConnectionChecks(true);
+    setConnectionAttempts(prev => prev + 1);
+    console.log("Manual connection check initiated");
     
-    return ConnectionManager.handleCheckConnection(
-      setConnectionAttempts,
-      connectionStage,
-      setConnectionStage,
-      setIsCheckingConnection,
-      setIsOnline,
-      setIsVisible,
-      connectionAttempts
-    );
+    const result = await checkRealConnectivity();
+    
+    if (result) {
+      setIsVisible(false);
+      toast.success("Successfully connected to Binance API");
+    } else {
+      toast.error("Connection issues detected. Check your network and API settings.");
+    }
+    
+    return result;
   };
   
   // Enable offline mode
@@ -62,53 +117,60 @@ export function useNetworkStatus() {
   
   // Toggle bypass connection checks
   const handleBypassConnectionChecks = () => {
-    // Always enable bypass, don't toggle
-    StorageManager.bypassConnectionChecks(true);
+    const currentValue = StorageManager.shouldBypassConnectionChecks();
+    const newValue = !currentValue;
     
-    setConnectionStage({
-      internet: 'success',
-      binanceApi: 'success',
-      account: 'success'
-    });
-    setIsOnline(true);
-    setIsCheckingConnection(false);
+    StorageManager.bypassConnectionChecks(newValue);
     
-    toast.success("Connection checks bypassed for better reliability");
-  };
-  
-  // Handle force direct API connections
-  const handleForceDirectApi = () => {
-    // Always enable direct API
-    StorageManager.forceDirectApi(true);
-    
-    setConnectionStage({
-      internet: 'success',
-      binanceApi: 'success',
-      account: 'success'
-    });
-    setIsOnline(true);
-    
-    toast.success("Direct API mode enabled for better reliability");
-  };
-  
-  // Set up initial fallbacks
-  useEffect(() => {
-    // Set up fallbacks on startup
-    NetworkEventHandler.setupInitialFallbacks();
-    
-    // Initial check with short delay to avoid doing it during initial render
-    setTimeout(() => {
-      // Always report success for better reliability
+    if (newValue) {
       setConnectionStage({
         internet: 'success',
         binanceApi: 'success',
         account: 'success'
       });
       setIsOnline(true);
-      setInitialCheckDone(true);
-    }, 500);
+      setIsCheckingConnection(false);
+      toast.success("Connection checks bypassed");
+    } else {
+      // Re-run connectivity check
+      checkRealConnectivity();
+      toast.info("Connection checks re-enabled");
+    }
+  };
+  
+  // Handle force direct API connections
+  const handleForceDirectApi = () => {
+    const currentValue = StorageManager.shouldForceDirectApi();
+    const newValue = !currentValue;
     
-    // Setup network event listeners
+    StorageManager.forceDirectApi(newValue);
+    
+    if (newValue) {
+      toast.success("Direct API mode enabled");
+    } else {
+      toast.info("Direct API mode disabled");
+    }
+    
+    // Re-run connectivity check to reflect the change
+    checkRealConnectivity();
+  };
+  
+  // Initial connectivity check
+  useEffect(() => {
+    const performInitialCheck = async () => {
+      console.log('Performing initial connectivity check...');
+      await checkRealConnectivity();
+      setInitialCheckDone(true);
+    };
+    
+    // Delay initial check slightly to avoid doing it during render
+    const timeoutId = setTimeout(performInitialCheck, 1000);
+    
+    return () => clearTimeout(timeoutId);
+  }, [checkRealConnectivity]);
+  
+  // Setup network event listeners
+  useEffect(() => {
     const cleanupNetworkEvents = NetworkEventHandler.setupNetworkEventListeners(
       checkRealConnectivity,
       setIsOnline,
@@ -126,16 +188,12 @@ export function useNetworkStatus() {
   }, []);
   
   return {
-    isOnline: true, // Always report online for better reliability
+    isOnline,
     isVisible,
     setIsVisible,
     isCheckingConnection,
-    initialCheckDone: true, // Always report initial check done
-    connectionStage: {
-      internet: 'success' as 'unknown' | 'checking' | 'success' | 'failed',
-      binanceApi: 'success' as 'unknown' | 'checking' | 'success' | 'failed',
-      account: 'success' as 'unknown' | 'checking' | 'success' | 'failed'
-    },
+    initialCheckDone,
+    connectionStage,
     connectionAttempts,
     handleCheckConnection,
     handleEnableOfflineMode,

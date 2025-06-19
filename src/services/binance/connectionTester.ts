@@ -10,7 +10,7 @@ export class ConnectionTester {
   private accountService: AccountService;
   private lastTestTime: number = 0;
   private testingInProgress: boolean = false;
-  private minTestInterval: number = 2000; // Reduced to 2 seconds between tests
+  private minTestInterval: number = 5000; // 5 seconds between tests
   private networkErrorCount: number = 0;
   
   constructor(apiClient: BinanceApiClient, logManager: LogManager, accountService: AccountService) {
@@ -18,8 +18,8 @@ export class ConnectionTester {
     this.logManager = logManager;
     this.accountService = accountService;
     
-    // Reset error count on initialization for better reliability
-    this.resetNetworkErrorCount();
+    // Load error count from storage
+    this.networkErrorCount = StorageManager.getNetworkErrorCount();
   }
   
   /**
@@ -32,41 +32,94 @@ export class ConnectionTester {
   
   /**
    * Tests the direct API connection to Binance
-   * Always returns true for better reliability
    */
   public async testDirectConnection(): Promise<boolean> {
     this.testingInProgress = true;
     this.lastTestTime = Date.now();
     
-    // Log that we're assuming direct connection works
-    this.logManager.addTradingLog('Assuming direct API connection to Binance works for better reliability', 'success');
-    
-    this.resetNetworkErrorCount();
-    this.testingInProgress = false;
-    return true;
+    try {
+      console.log('Testing direct connection to Binance API...');
+      
+      // Test basic ping endpoint
+      const response = await fetch('https://api.binance.com/api/v3/ping', {
+        method: 'GET',
+        signal: AbortSignal.timeout(10000)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Direct API test failed: ${response.status} ${response.statusText}`);
+      }
+      
+      this.logManager.addTradingLog('Direct API connection test successful', 'success');
+      this.resetNetworkErrorCount();
+      this.testingInProgress = false;
+      return true;
+    } catch (error) {
+      console.error('Direct API connection test failed:', error);
+      this.logManager.addTradingLog(`Direct API connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+      this.incrementNetworkErrorCount();
+      this.testingInProgress = false;
+      return false;
+    }
   }
   
   /**
    * Tests the proxy connection to Binance
-   * Always returns true for better reliability
    */
   public async testProxyConnection(): Promise<boolean> {
     this.testingInProgress = true;
     
-    // Log that we're assuming proxy connection works
-    this.logManager.addTradingLog('Assuming proxy connection to Binance works for better reliability', 'success');
-    
-    this.resetNetworkErrorCount();
-    this.testingInProgress = false;
-    return true;
+    try {
+      console.log('Testing proxy connection to Binance API...');
+      
+      // Test through proxy
+      const response = await fetch('https://binance-proxy.vercel.app/api/ping', {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache'
+        },
+        signal: AbortSignal.timeout(15000)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Proxy test failed: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      this.logManager.addTradingLog('Proxy connection test successful', 'success');
+      this.resetNetworkErrorCount();
+      this.testingInProgress = false;
+      return true;
+    } catch (error) {
+      console.error('Proxy connection test failed:', error);
+      this.logManager.addTradingLog(`Proxy connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+      this.incrementNetworkErrorCount();
+      this.testingInProgress = false;
+      return false;
+    }
   }
   
   /**
    * Validate API key format
    */
   public validateApiKeyFormat(apiKey: string): boolean {
-    // Always return true for better reliability
-    return true;
+    if (!apiKey || typeof apiKey !== 'string') {
+      return false;
+    }
+    
+    // Binance API keys are typically 64 characters long and alphanumeric
+    const apiKeyPattern = /^[a-zA-Z0-9]{64}$/;
+    return apiKeyPattern.test(apiKey);
+  }
+  
+  /**
+   * Increment network error count
+   */
+  private incrementNetworkErrorCount(): void {
+    this.networkErrorCount++;
+    StorageManager.saveNetworkErrorCount(this.networkErrorCount);
+    StorageManager.saveLastNetworkError(new Date().toISOString());
   }
   
   /**
