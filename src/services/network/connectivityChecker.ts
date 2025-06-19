@@ -1,4 +1,3 @@
-
 import binanceService from '@/services/binanceService';
 import { StorageManager } from '@/services/binance/storageManager';
 import { ConnectionStage } from '@/components/network/NetworkAlertMessage';
@@ -52,17 +51,23 @@ export class ConnectivityChecker {
         })
       ];
       
-      // Use Promise.any to succeed if any test passes
-      try {
-        await Promise.any(connectivityTests);
+      // Use Promise.allSettled instead of Promise.any for better compatibility
+      const results = await Promise.allSettled(connectivityTests);
+      
+      // Check if any test succeeded
+      const hasSuccessfulTest = results.some(result => 
+        result.status === 'fulfilled' && result.value.ok
+      );
+      
+      if (hasSuccessfulTest) {
         console.log("Internet connectivity confirmed");
         setConnectionStage({
           ...connectionStage,
           internet: 'success'
         });
         return true;
-      } catch (error) {
-        console.error("All connectivity tests failed:", error);
+      } else {
+        console.error("All connectivity tests failed:", results);
         setConnectionStage({
           ...connectionStage,
           internet: 'failed'
@@ -117,29 +122,20 @@ export class ConnectivityChecker {
       });
       
       // Try both methods, succeed if either works
-      try {
-        const results = await Promise.allSettled([directApiTest, proxyTest]);
-        
-        const directSuccess = results[0].status === 'fulfilled' && results[0].value.ok;
-        const proxySuccess = results[1].status === 'fulfilled' && results[1].value.ok;
-        
-        if (directSuccess || proxySuccess) {
-          console.log(`Binance API accessible - Direct: ${directSuccess}, Proxy: ${proxySuccess}`);
-          setConnectionStage({
-            ...connectionStage,
-            binanceApi: 'success'
-          });
-          return true;
-        } else {
-          console.error('Both direct and proxy Binance API tests failed');
-          setConnectionStage({
-            ...connectionStage,
-            binanceApi: 'failed'
-          });
-          return false;
-        }
-      } catch (error) {
-        console.error('Error testing Binance API access:', error);
+      const results = await Promise.allSettled([directApiTest, proxyTest]);
+      
+      const directSuccess = results[0].status === 'fulfilled' && results[0].value.ok;
+      const proxySuccess = results[1].status === 'fulfilled' && results[1].value.ok;
+      
+      if (directSuccess || proxySuccess) {
+        console.log(`Binance API accessible - Direct: ${directSuccess}, Proxy: ${proxySuccess}`);
+        setConnectionStage({
+          ...connectionStage,
+          binanceApi: 'success'
+        });
+        return true;
+      } else {
+        console.error('Both direct and proxy Binance API tests failed');
         setConnectionStage({
           ...connectionStage,
           binanceApi: 'failed'
