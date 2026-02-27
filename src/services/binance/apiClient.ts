@@ -136,6 +136,14 @@ export class BinanceApiClient {
       }
     }
     
+    // Generate HMAC-SHA256 signature for authenticated endpoints before sending to proxy
+    if (this.requiresSignature(endpoint) && this.credentials?.secretKey && !params.signature) {
+      const queryString = Object.entries(params)
+        .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+        .join('&');
+      params.signature = await this.generateSignature(queryString);
+    }
+    
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         const queryString = Object.entries(params)

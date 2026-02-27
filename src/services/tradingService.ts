@@ -571,7 +571,8 @@ class TradingService {
   private strategies: TradingStrategy[] = [];
   private tradingInterval: ReturnType<typeof setInterval> | null = null;
   private tradingPairs: string[] = [];
-  private positions: Record<string, { inPosition: boolean, entryPrice: number | null, stopLoss: number | null, takeProfit: number | null }> = {};
+  private readonly DEFAULT_POSITION_SIZE = '0.0015';
+  private positions: Record<string, { inPosition: boolean, entryPrice: number | null, stopLoss: number | null, takeProfit: number | null, quantity: string | null }> = {};
   private performanceHistory: PerformanceData[] = [];
   private dailyPerformance: Record<string, PerformanceData> = {};
   private weeklyPerformance: Record<string, PerformanceData> = {};
@@ -690,7 +691,8 @@ class TradingService {
             inPosition: false,
             entryPrice: null,
             stopLoss: null,
-            takeProfit: null
+            takeProfit: null,
+            quantity: null
           };
         }
       }
@@ -754,7 +756,8 @@ class TradingService {
             inPosition: false,
             entryPrice: null,
             stopLoss: null,
-            takeProfit: null
+            takeProfit: null,
+            quantity: null
           };
         }
       }
@@ -1028,7 +1031,7 @@ class TradingService {
         console.log(`Executing BUY order for ${pair} at $${price}`);
         
         // Calculate position size based on risk level and whether dynamic sizing is enabled
-        let quantity = '0.0015'; // Default size
+        let quantity = this.DEFAULT_POSITION_SIZE; // Default size
         
         if (this.botSettings.useDynamicPositionSizing) {
           // Scale position size based on risk level (0.001 to 0.003)
@@ -1042,6 +1045,7 @@ class TradingService {
         
         position.inPosition = true;
         position.entryPrice = parseFloat(price);
+        position.quantity = quantity;
         
         // Set stop loss and take profit levels
         if (position.entryPrice) {
@@ -1066,15 +1070,15 @@ class TradingService {
       } else if (signal === 'SELL') {
         console.log(`Executing SELL order for ${pair} at $${price}`);
         
-        // Use the same quantity from the buy
-        const quantity = '0.0015';
+        // Use the quantity from the original buy order if available
+        let quantity = position.quantity || this.DEFAULT_POSITION_SIZE;
         
-        if (this.botSettings.useDynamicPositionSizing) {
-          // Use the same quantity calculation logic as BUY
+        if (!position.quantity && this.botSettings.useDynamicPositionSizing) {
+          // Fall back to dynamic sizing if no stored quantity
           const baseSize = 0.001;
           const riskMultiplier = this.botSettings.riskLevel / 50;
-          const dynamicQuantity = (baseSize * riskMultiplier * 1.5).toFixed(4);
-          console.log(`Dynamic position sizing for sell: ${dynamicQuantity}`);
+          quantity = (baseSize * riskMultiplier * 1.5).toFixed(4);
+          console.log(`Dynamic position sizing for sell: ${quantity}`);
         }
         
         await binanceService.placeMarketOrder(pair, 'SELL', quantity);
@@ -1098,6 +1102,7 @@ class TradingService {
         position.entryPrice = null;
         position.stopLoss = null;
         position.takeProfit = null;
+        position.quantity = null;
         
         await notificationService.notifyTrade(pair, signal, price);
       }
