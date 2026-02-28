@@ -570,6 +570,7 @@ class TradingService {
   private isRunning: boolean = false;
   private strategies: TradingStrategy[] = [];
   private tradingInterval: ReturnType<typeof setInterval> | null = null;
+  private checkPositionsInterval: ReturnType<typeof setInterval> | null = null;
   private tradingPairs: string[] = [];
   private readonly DEFAULT_POSITION_SIZE = '0.0015';
   private positions: Record<string, { inPosition: boolean, entryPrice: number | null, stopLoss: number | null, takeProfit: number | null, quantity: string | null }> = {};
@@ -700,6 +701,18 @@ class TradingService {
       console.error('Error initializing trading pairs:', error);
       // Fallback to default pairs if initialization fails
       this.tradingPairs = ['BTCUSDT', 'ETHUSDT'];
+      // Initialize positions for fallback pairs
+      for (const pair of this.tradingPairs) {
+        if (!this.positions[pair]) {
+          this.positions[pair] = {
+            inPosition: false,
+            entryPrice: null,
+            stopLoss: null,
+            takeProfit: null,
+            quantity: null
+          };
+        }
+      }
     }
   }
   
@@ -794,6 +807,12 @@ class TradingService {
         this.analyzeMarket();
       }, 2 * 60 * 1000);
       
+      // Check open positions (stop loss / take profit) every 30 seconds
+      this.checkPositions();
+      this.checkPositionsInterval = setInterval(() => {
+        this.checkPositions();
+      }, 30 * 1000);
+      
       toast.success('Trading bot started successfully');
       notificationService.addNotification({
         title: 'Trading Bot Started',
@@ -834,6 +853,11 @@ class TradingService {
     if (this.tradingInterval) {
       clearInterval(this.tradingInterval);
       this.tradingInterval = null;
+    }
+    
+    if (this.checkPositionsInterval) {
+      clearInterval(this.checkPositionsInterval);
+      this.checkPositionsInterval = null;
     }
     
     toast.info('Trading bot stopped');

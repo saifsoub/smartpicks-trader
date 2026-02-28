@@ -124,27 +124,25 @@ export class BinanceApiClient {
     let lastError;
     const maxRetries = skipRetryOnFailure ? 1 : this.proxyRetries;
     
-    // Add timestamp and recvWindow to signed requests if not already present
-    if (!params.timestamp && this.requiresSignature(endpoint) && method !== 'DELETE') {
-      // Use server time with adjustment if available, otherwise use local time
-      const timestamp = Date.now() + this.timeDifference;
-      params.timestamp = timestamp.toString();
-      
-      // Add recvWindow for all signed requests to handle time differences
-      if (!params.recvWindow) {
-        params.recvWindow = '10000'; // 10 seconds
-      }
-    }
-    
-    // Generate HMAC-SHA256 signature for authenticated endpoints before sending to proxy
-    if (this.requiresSignature(endpoint) && this.credentials?.secretKey && !params.signature) {
-      const queryString = Object.entries(params)
-        .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
-        .join('&');
-      params.signature = await this.generateSignature(queryString);
+    // Set recvWindow for signed requests if not already present (done once, not per-retry)
+    if (this.requiresSignature(endpoint) && method !== 'DELETE' && !params.recvWindow) {
+      params.recvWindow = '10000'; // 10 seconds
     }
     
     for (let attempt = 0; attempt < maxRetries; attempt++) {
+      // Refresh timestamp and regenerate signature on every attempt so the request
+      // never exceeds recvWindow even after slow proxy failures / backoff delays.
+      if (this.requiresSignature(endpoint) && method !== 'DELETE') {
+        params.timestamp = (Date.now() + this.timeDifference).toString();
+        if (this.credentials?.secretKey) {
+          delete params.signature;
+          const signingQuery = Object.entries(params)
+            .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+            .join('&');
+          params.signature = await this.generateSignature(signingQuery);
+        }
+      }
+      
       try {
         const queryString = Object.entries(params)
           .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
