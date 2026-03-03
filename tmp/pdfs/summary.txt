@@ -1,0 +1,46 @@
+SmartPicks Trader - One-Page Summary
+
+What it is
+- A React + Vite web app for crypto trading workflows, with Binance connectivity,
+  bot dashboards, strategy management, and risk tooling.
+- It combines market data views, automated trading orchestration, and assistant-style
+  guidance features.
+
+Who it is for
+- Primary persona: crypto traders who want to monitor a Binance-linked portfolio and
+  configure rule-based automated trading behavior from a browser UI.
+
+What it does
+- Connects to Binance using saved API credentials, with proxy/direct modes and
+  offline demo fallback.
+- Shows dashboard views for portfolio, recent trades, bot status, performance charts,
+  and live symbol pricing.
+- Runs automated market analysis on intervals using technical indicators across
+  multiple timeframes.
+- Supports strategy lifecycle management (default templates, add/update/delete,
+  enabled states).
+- Applies configurable risk controls including position size limits, stop loss/take
+  profit, and max open positions.
+- Includes a backtesting module with persisted strategy results (implemented as
+  simulated backtests in current code).
+- Provides assistant-style AI features (chat, predictions, advice), with simulated
+  responses/models in this repo.
+
+How it works (architecture overview)
+- UI layer: React pages/routes (dashboard, bot dashboard, easy-peasy workflow,
+  settings, strategies).
+- Service layer: binanceService composes API client plus account/market/connection/
+  trading modules.
+- Trading orchestration: automatedTradingService wires StrategyManager, RiskManager,
+  BacktestingService, and StrategyExecutor via a trading event emitter.
+- Data persistence: localStorage stores credentials, proxy/offline flags, heartbeat
+  status, strategies, risk settings, and backtest outputs.
+- External flow: Browser UI -> services -> Binance proxy/direct endpoints -> results
+  back to UI; Telegram notifications are simulated in code.
+- Dedicated backend service owned by this repo: Not found in repo.
+
+How to run (minimal)
+- Install Node.js and npm (README states these are required).
+- Install dependencies: npm i
+- Start local dev server: npm run dev
+- Open the local URL printed by Vite in your terminal.
