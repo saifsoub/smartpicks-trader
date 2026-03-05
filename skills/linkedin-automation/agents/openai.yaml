@@ -1,0 +1,4 @@
+interface:
+  display_name: "LinkedIn Automation"
+  short_description: "Automate LinkedIn posting and outreach workflows"
+  default_prompt: "Use $linkedin-automation to plan, draft, and run human-reviewed LinkedIn workflows for content and engagement."
