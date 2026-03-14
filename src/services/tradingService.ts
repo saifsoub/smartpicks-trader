@@ -2,6 +2,8 @@ import binanceService from './binanceService';
 import notificationService from './notificationService';
 import heartbeatService from './heartbeatService';
 import { toast } from 'sonner';
+import { createDefaultStrategies } from './trading/strategies/technicalStrategies';
+import { TradingMode, STORAGE_KEYS } from './trading/types';
 
 // Trading signals
 type TradingSignal = 'BUY' | 'SELL' | 'HOLD';
@@ -30,532 +32,13 @@ export interface Strategy {
   lastExecuted?: string;
 }
 
-// Trading strategy interface
+// Trading strategy interface (internal)
 interface TradingStrategy {
   name: string;
   description: string;
   analyze: (data: any) => Promise<TradingSignal>;
 }
 
-// Simple Moving Average Crossover Strategy - Enhanced for higher sensitivity
-class SMAStrategy implements TradingStrategy {
-  name = 'SMA Crossover';
-  description = 'Simple Moving Average crossover strategy (3/10)';
-  
-  async analyze(data: any): Promise<TradingSignal> {
-    try {
-      // Calculate 3-period SMA (faster response to trends)
-      const sma3 = this.calculateSMA(data, 3);
-      
-      // Calculate 10-period SMA (more sensitive than 20)
-      const sma10 = this.calculateSMA(data, 10);
-      
-      // Get the last two values for both SMAs to determine crossover
-      const currentSMA3 = sma3[sma3.length - 1];
-      const previousSMA3 = sma3[sma3.length - 2];
-      const currentSMA10 = sma10[sma10.length - 1];
-      const previousSMA10 = sma10[sma10.length - 2];
-      
-      // Check for bullish crossover (3 SMA crosses above 10 SMA)
-      if (previousSMA3 <= previousSMA10 && currentSMA3 > currentSMA10) {
-        return 'BUY';
-      }
-      
-      // Check for bearish crossover (3 SMA crosses below 10 SMA)
-      if (previousSMA3 >= previousSMA10 && currentSMA3 < currentSMA10) {
-        return 'SELL';
-      }
-      
-      // Add trend-following logic for more trading opportunities
-      if (currentSMA3 > currentSMA10 && currentSMA3 > previousSMA3) {
-        return 'BUY'; // Strong uptrend
-      }
-      
-      if (currentSMA3 < currentSMA10 && currentSMA3 < previousSMA3) {
-        return 'SELL'; // Strong downtrend
-      }
-      
-      // No clear signal
-      return 'HOLD';
-    } catch (error) {
-      console.error('Error in SMA strategy analysis:', error);
-      return 'HOLD';
-    }
-  }
-  
-  private calculateSMA(data: any[], period: number): number[] {
-    const sma: number[] = [];
-    
-    // Need at least 'period' data points to calculate SMA
-    if (data.length < period) {
-      return sma;
-    }
-    
-    // Calculate initial SMA
-    let sum = 0;
-    for (let i = 0; i < period; i++) {
-      sum += parseFloat(data[i][4]); // Close price
-    }
-    sma.push(sum / period);
-    
-    // Calculate remaining SMAs
-    for (let i = period; i < data.length; i++) {
-      sum = sum - parseFloat(data[i - period][4]) + parseFloat(data[i][4]);
-      sma.push(sum / period);
-    }
-    
-    return sma;
-  }
-}
-
-// RSI Strategy - Enhanced for faster trading
-class RSIStrategy implements TradingStrategy {
-  name = 'RSI';
-  description = 'Relative Strength Index strategy (8-period)';
-  
-  async analyze(data: any): Promise<TradingSignal> {
-    try {
-      // Calculate 8-period RSI (more responsive than 14)
-      const rsi = this.calculateRSI(data, 8);
-      
-      // Get the current RSI value
-      const currentRSI = rsi[rsi.length - 1];
-      const previousRSI = rsi[rsi.length - 2] || 50;
-      
-      // More aggressive oversold condition (RSI < 40)
-      if (currentRSI < 40) {
-        return 'BUY';
-      }
-      
-      // More aggressive overbought condition (RSI > 60)
-      if (currentRSI > 60) {
-        return 'SELL';
-      }
-      
-      // Add momentum-based signals for more trading opportunities
-      if (currentRSI > previousRSI && currentRSI > 45 && currentRSI < 55) {
-        return 'BUY'; // Catching upward momentum early
-      }
-      
-      if (currentRSI < previousRSI && currentRSI > 45 && currentRSI < 55) {
-        return 'SELL'; // Catching downward momentum early
-      }
-      
-      // No signal
-      return 'HOLD';
-    } catch (error) {
-      console.error('Error in RSI strategy analysis:', error);
-      return 'HOLD';
-    }
-  }
-  
-  private calculateRSI(data: any[], period: number): number[] {
-    const rsi: number[] = [];
-    const gains: number[] = [];
-    const losses: number[] = [];
-    
-    // Calculate price changes
-    for (let i = 1; i < data.length; i++) {
-      const change = parseFloat(data[i][4]) - parseFloat(data[i - 1][4]);
-      gains.push(change > 0 ? change : 0);
-      losses.push(change < 0 ? Math.abs(change) : 0);
-    }
-    
-    // Need at least 'period + 1' data points to calculate first RSI
-    if (data.length <= period + 1) {
-      return rsi;
-    }
-    
-    // Calculate initial average gain and loss
-    let avgGain = gains.slice(0, period).reduce((sum, gain) => sum + gain, 0) / period;
-    let avgLoss = losses.slice(0, period).reduce((sum, loss) => sum + loss, 0) / period;
-    
-    // Calculate first RSI
-    let rs = avgGain / (avgLoss === 0 ? 0.001 : avgLoss); // Avoid division by zero
-    rsi.push(100 - (100 / (1 + rs)));
-    
-    // Calculate remaining RSIs
-    for (let i = period; i < gains.length; i++) {
-      avgGain = ((avgGain * (period - 1)) + gains[i]) / period;
-      avgLoss = ((avgLoss * (period - 1)) + losses[i]) / period;
-      
-      rs = avgGain / (avgLoss === 0 ? 0.001 : avgLoss);
-      rsi.push(100 - (100 / (1 + rs)));
-    }
-    
-    return rsi;
-  }
-}
-
-// MACD Strategy - Enhanced for faster signals
-class MACDStrategy implements TradingStrategy {
-  name = 'MACD';
-  description = 'Moving Average Convergence Divergence strategy';
-  
-  async analyze(data: any): Promise<TradingSignal> {
-    try {
-      // Calculate MACD line (8-period EMA - 17-period EMA for faster signals)
-      const ema8 = this.calculateEMA(data, 8);
-      const ema17 = this.calculateEMA(data, 17);
-      
-      const macdLine: number[] = [];
-      for (let i = 0; i < ema8.length; i++) {
-        if (i < ema17.length) {
-          macdLine.push(ema8[i] - ema17[i]);
-        }
-      }
-      
-      // Calculate signal line (5-period EMA of MACD line for faster signals)
-      const signalLine = this.calculateEMAFromArray(macdLine, 5);
-      
-      // Need at least one value for both MACD and signal line
-      if (macdLine.length === 0 || signalLine.length === 0) {
-        return 'HOLD';
-      }
-      
-      // Get the last two values for both lines to determine crossover
-      const currentMACD = macdLine[macdLine.length - 1];
-      const previousMACD = macdLine[macdLine.length - 2];
-      const currentSignal = signalLine[signalLine.length - 1];
-      const previousSignal = signalLine[signalLine.length - 2];
-      
-      // Check for bullish crossover (MACD crosses above signal line)
-      if (previousMACD <= previousSignal && currentMACD > currentSignal) {
-        return 'BUY';
-      }
-      
-      // Check for bearish crossover (MACD crosses below signal line)
-      if (previousMACD >= previousSignal && currentMACD < currentSignal) {
-        return 'SELL';
-      }
-      
-      // Add zero-line crossover signals for more trading opportunities
-      if (previousMACD < 0 && currentMACD >= 0) {
-        return 'BUY'; // Bullish zero-line crossover
-      }
-      
-      if (previousMACD > 0 && currentMACD <= 0) {
-        return 'SELL'; // Bearish zero-line crossover
-      }
-      
-      // Additional signal: MACD direction change
-      if (previousMACD < currentMACD && currentMACD > 0) {
-        return 'BUY'; // MACD turning up while positive
-      }
-      
-      if (previousMACD > currentMACD && currentMACD < 0) {
-        return 'SELL'; // MACD turning down while negative
-      }
-      
-      // No crossover
-      return 'HOLD';
-    } catch (error) {
-      console.error('Error in MACD strategy analysis:', error);
-      return 'HOLD';
-    }
-  }
-  
-  private calculateEMA(data: any[], period: number): number[] {
-    const ema: number[] = [];
-    
-    // Need at least 'period' data points to calculate EMA
-    if (data.length < period) {
-      return ema;
-    }
-    
-    // Calculate initial SMA
-    let sum = 0;
-    for (let i = 0; i < period; i++) {
-      sum += parseFloat(data[i][4]); // Close price
-    }
-    const sma = sum / period;
-    ema.push(sma);
-    
-    // Calculate multiplier
-    const multiplier = 2 / (period + 1);
-    
-    // Calculate remaining EMAs
-    for (let i = period; i < data.length; i++) {
-      const currentPrice = parseFloat(data[i][4]);
-      const currentEMA = (currentPrice - ema[ema.length - 1]) * multiplier + ema[ema.length - 1];
-      ema.push(currentEMA);
-    }
-    
-    return ema;
-  }
-  
-  private calculateEMAFromArray(data: number[], period: number): number[] {
-    const ema: number[] = [];
-    
-    // Need at least 'period' data points to calculate EMA
-    if (data.length < period) {
-      return ema;
-    }
-    
-    // Calculate initial SMA
-    let sum = 0;
-    for (let i = 0; i < period; i++) {
-      sum += data[i];
-    }
-    const sma = sum / period;
-    ema.push(sma);
-    
-    // Calculate multiplier
-    const multiplier = 2 / (period + 1);
-    
-    // Calculate remaining EMAs
-    for (let i = period; i < data.length; i++) {
-      const currentValue = data[i];
-      const currentEMA = (currentValue - ema[ema.length - 1]) * multiplier + ema[ema.length - 1];
-      ema.push(currentEMA);
-    }
-    
-    return ema;
-  }
-}
-
-// New Volume-based Strategy
-class VolumeStrategy implements TradingStrategy {
-  name = 'Volume Analysis';
-  description = 'Analyzes volume patterns for trading signals';
-  
-  async analyze(data: any): Promise<TradingSignal> {
-    try {
-      // Need at least 10 data points
-      if (data.length < 10) {
-        return 'HOLD';
-      }
-      
-      // Extract volumes and prices
-      const volumes = data.slice(-10).map((candle: any) => parseFloat(candle[5])); // Volume is at index 5
-      const closes = data.slice(-10).map((candle: any) => parseFloat(candle[4])); // Close is at index 4
-      
-      // Calculate average volume
-      const avgVolume = volumes.slice(0, 8).reduce((sum, vol) => sum + vol, 0) / 8;
-      
-      // Check most recent volume
-      const latestVolume = volumes[volumes.length - 1];
-      const previousVolume = volumes[volumes.length - 2];
-      
-      // Check price direction
-      const latestClose = closes[closes.length - 1];
-      const previousClose = closes[closes.length - 2];
-      const priceChange = (latestClose - previousClose) / previousClose;
-      
-      // Volume spike with price up = strong buy signal
-      if (latestVolume > avgVolume * 1.5 && priceChange > 0.002) {
-        return 'BUY';
-      }
-      
-      // Volume spike with price down = strong sell signal
-      if (latestVolume > avgVolume * 1.5 && priceChange < -0.002) {
-        return 'SELL';
-      }
-      
-      // Volume increasing with price trend
-      if (latestVolume > previousVolume && latestVolume > avgVolume) {
-        if (priceChange > 0.001) {
-          return 'BUY';
-        } else if (priceChange < -0.001) {
-          return 'SELL';
-        }
-      }
-      
-      return 'HOLD';
-    } catch (error) {
-      console.error('Error in Volume strategy analysis:', error);
-      return 'HOLD';
-    }
-  }
-}
-
-// New Divergence Strategy for spotting reversals
-class DivergenceStrategy implements TradingStrategy {
-  name = 'RSI Divergence';
-  description = 'Detects price/RSI divergences for potential reversals';
-  
-  async analyze(data: any): Promise<TradingSignal> {
-    try {
-      // Calculate RSI
-      const rsi = this.calculateRSI(data, 14);
-      
-      // Need enough data points
-      if (rsi.length < 10) return 'HOLD';
-      
-      // Extract price data (close prices)
-      const closePrices = data.slice(-rsi.length).map((candle: any) => parseFloat(candle[4]));
-      
-      // Look for bullish divergence
-      // Price making lower lows but RSI making higher lows
-      let bullishDivergence = false;
-      if (closePrices[closePrices.length - 1] < closePrices[closePrices.length - 3] &&
-          rsi[rsi.length - 1] > rsi[rsi.length - 3]) {
-        bullishDivergence = true;
-      }
-      
-      // Look for bearish divergence
-      // Price making higher highs but RSI making lower highs
-      let bearishDivergence = false;
-      if (closePrices[closePrices.length - 1] > closePrices[closePrices.length - 3] &&
-          rsi[rsi.length - 1] < rsi[rsi.length - 3]) {
-        bearishDivergence = true;
-      }
-      
-      if (bullishDivergence) {
-        // Confirm with oversold condition for higher probability
-        if (rsi[rsi.length - 1] < 40) {
-          return 'BUY';
-        }
-      }
-      
-      if (bearishDivergence) {
-        // Confirm with overbought condition for higher probability
-        if (rsi[rsi.length - 1] > 70) {
-          return 'SELL';
-        }
-      }
-      
-      return 'HOLD';
-    } catch (error) {
-      console.error('Error in Divergence strategy analysis:', error);
-      return 'HOLD';
-    }
-  }
-  
-  // Reuse RSI calculation from RSI strategy
-  private calculateRSI(data: any[], period: number): number[] {
-    const rsi: number[] = [];
-    const gains: number[] = [];
-    const losses: number[] = [];
-    
-    // Calculate price changes
-    for (let i = 1; i < data.length; i++) {
-      const change = parseFloat(data[i][4]) - parseFloat(data[i - 1][4]);
-      gains.push(change > 0 ? change : 0);
-      losses.push(change < 0 ? Math.abs(change) : 0);
-    }
-    
-    // Need at least 'period + 1' data points to calculate first RSI
-    if (data.length <= period + 1) {
-      return rsi;
-    }
-    
-    // Calculate initial average gain and loss
-    let avgGain = gains.slice(0, period).reduce((sum, gain) => sum + gain, 0) / period;
-    let avgLoss = losses.slice(0, period).reduce((sum, loss) => sum + loss, 0) / period;
-    
-    // Calculate first RSI
-    let rs = avgGain / (avgLoss === 0 ? 0.001 : avgLoss); // Avoid division by zero
-    rsi.push(100 - (100 / (1 + rs)));
-    
-    // Calculate remaining RSIs
-    for (let i = period; i < gains.length; i++) {
-      avgGain = ((avgGain * (period - 1)) + gains[i]) / period;
-      avgLoss = ((avgLoss * (period - 1)) + losses[i]) / period;
-      
-      rs = avgGain / (avgLoss === 0 ? 0.001 : avgLoss);
-      rsi.push(100 - (100 / (1 + rs)));
-    }
-    
-    return rsi;
-  }
-}
-
-// New Breakout Strategy
-class BreakoutStrategy implements TradingStrategy {
-  name = 'Support/Resistance Breakout';
-  description = 'Detects breakouts from key support/resistance levels';
-  
-  async analyze(data: any): Promise<TradingSignal> {
-    try {
-      if (data.length < 30) return 'HOLD';
-      
-      // Extract high and low prices
-      const highs = data.map((candle: any) => parseFloat(candle[2]));
-      const lows = data.map((candle: any) => parseFloat(candle[3]));
-      const closes = data.map((candle: any) => parseFloat(candle[4]));
-      const volumes = data.map((candle: any) => parseFloat(candle[5]));
-      
-      // Identify potential resistance levels (recent highs)
-      // We'll use a simple approach here - in a real strategy, this would be more sophisticated
-      const recentData = data.slice(-20);
-      const recentHighs = recentData.map((candle: any) => parseFloat(candle[2]));
-      const maxHigh = Math.max(...recentHighs.slice(0, -1)); // Excluding most recent candle
-      
-      // Identify potential support levels (recent lows)
-      const recentLows = recentData.map((candle: any) => parseFloat(candle[3]));
-      const minLow = Math.min(...recentLows.slice(0, -1)); // Excluding most recent candle
-      
-      // Get most recent close
-      const currentClose = closes[closes.length - 1];
-      const previousClose = closes[closes.length - 2];
-      
-      // Get recent average volume (for confirmation)
-      const avgVolume = volumes.slice(-10, -1).reduce((sum, vol) => sum + vol, 0) / 9;
-      const currentVolume = volumes[volumes.length - 1];
-      const volumeIncrease = currentVolume > avgVolume * 1.3; // 30% above average
-      
-      // Check for resistance breakout (bullish)
-      if (previousClose < maxHigh && currentClose > maxHigh && volumeIncrease) {
-        return 'BUY';
-      }
-      
-      // Check for support breakdown (bearish)
-      if (previousClose > minLow && currentClose < minLow && volumeIncrease) {
-        return 'SELL';
-      }
-      
-      return 'HOLD';
-    } catch (error) {
-      console.error('Error in Breakout strategy analysis:', error);
-      return 'HOLD';
-    }
-  }
-}
-
-// New Profit-Taking Strategy
-class ProfitTakingStrategy implements TradingStrategy {
-  name = 'Profit Taking';
-  description = 'Implements profit-taking rules based on price movement';
-  
-  async analyze(data: any): Promise<TradingSignal> {
-    try {
-      if (data.length < 10) return 'HOLD';
-      
-      // Extract price data
-      const closes = data.map((candle: any) => parseFloat(candle[4]));
-      const currentClose = closes[closes.length - 1];
-      
-      // Simple implementation for example purposes
-      // In a real strategy, this would check current positions and their entry prices
-      
-      // Calculate short-term momentum (example using 3-period ROC)
-      const roc = ((currentClose / closes[closes.length - 4]) - 1) * 100;
-      
-      // If we've seen strong positive momentum that's now slowing, take profits
-      if (roc > 3 && roc < 5) {
-        // Check if momentum is decreasing
-        const previousRoc = ((closes[closes.length - 2] / closes[closes.length - 5]) - 1) * 100;
-        if (roc < previousRoc) {
-          return 'SELL'; // Take profits
-        }
-      }
-      
-      // Check for potential reversal patterns
-      // This is simplified; real strategies would use more complex reversal patterns
-      const lastThreeCloses = closes.slice(-3);
-      if (lastThreeCloses[0] < lastThreeCloses[1] && lastThreeCloses[2] < lastThreeCloses[1]) {
-        // Potential bearish reversal (higher high followed by lower low)
-        return 'SELL'; // Take profits
-      }
-      
-      return 'HOLD';
-    } catch (error) {
-      console.error('Error in Profit Taking strategy analysis:', error);
-      return 'HOLD';
-    }
-  }
-}
 
 // Add a new interface for performance history data
 interface PerformanceData {
@@ -648,17 +131,19 @@ class TradingService {
     'BNB': { score: 45, trend: 'neutral' },
     'XRP': { score: 32, trend: 'bearish' }
   };
+
+  // Trading mode – defaults to 'demo' (safe default, no real orders).
+  // Persisted in localStorage (not a secret) so the preference survives reloads.
+  private tradingMode: TradingMode = 'demo';
   
   constructor() {
-    this.strategies = [
-      new SMAStrategy(),
-      new RSIStrategy(),
-      new MACDStrategy(),
-      new VolumeStrategy(),
-      new DivergenceStrategy(),
-      new BreakoutStrategy(),
-      new ProfitTakingStrategy()
-    ];
+    this.strategies = createDefaultStrategies();
+
+    // Load persisted trading mode; fall back to 'demo' for safety.
+    const savedMode = localStorage.getItem(STORAGE_KEYS.TRADING_MODE) as TradingMode | null;
+    if (savedMode === 'demo' || savedMode === 'paper' || savedMode === 'live') {
+      this.tradingMode = savedMode;
+    }
     
     this.initializeTradingPairs();
     
@@ -738,6 +223,41 @@ class TradingService {
   
   public getMarketSentiment(): Record<string, { score: number; trend: 'bullish' | 'bearish' | 'neutral' }> {
     return {...this.marketSentiment};
+  }
+
+  // ---------------------------------------------------------------------------
+  // Trading mode management
+  // ---------------------------------------------------------------------------
+
+  public getTradingMode(): TradingMode {
+    return this.tradingMode;
+  }
+
+  public setTradingMode(mode: TradingMode): void {
+    const previous = this.tradingMode;
+    this.tradingMode = mode;
+    localStorage.setItem(STORAGE_KEYS.TRADING_MODE, mode);
+
+    // Stop the bot when switching away from live to prevent in-flight orders
+    if (previous === 'live' && mode !== 'live' && this.isRunning) {
+      this.stopTrading();
+      toast.info('Trading bot stopped because mode changed away from Live.');
+    }
+
+    console.log(`Trading mode changed: ${previous} → ${mode}`);
+    window.dispatchEvent(new CustomEvent('trading-mode-changed', { detail: { mode } }));
+  }
+
+  // Kill switch: immediately stop bot and reset mode to demo
+  public emergencyStop(): void {
+    this.stopTrading();
+    this.setTradingMode('demo');
+    toast.error('🚨 Emergency stop activated. Mode reset to Demo.');
+    notificationService.addNotification({
+      title: 'Emergency Stop',
+      message: 'Trading bot stopped and mode reset to Demo.',
+      type: 'error'
+    });
   }
   
   public updateBotSettings(settings: Partial<BotSettings>): void {
@@ -1022,10 +542,14 @@ class TradingService {
       console.log(`Not in a position to sell ${pair}`);
       return;
     }
+
+    // Mode enforcement: only place real orders in 'live' mode.
+    const isLive = this.tradingMode === 'live';
+    const modeLabel = isLive ? '' : ` [${this.tradingMode.toUpperCase()} – simulated]`;
     
     try {
       if (signal === 'BUY') {
-        console.log(`Executing BUY order for ${pair} at $${price}`);
+        console.log(`Executing BUY order for ${pair} at $${price}${modeLabel}`);
         
         // Calculate position size based on risk level and whether dynamic sizing is enabled
         let quantity = '0.0015'; // Default size
@@ -1037,8 +561,13 @@ class TradingService {
           quantity = (baseSize * riskMultiplier * 1.5).toFixed(4);
           console.log(`Dynamic position sizing: ${quantity} based on risk level ${this.botSettings.riskLevel}%`);
         }
-        
-        await binanceService.placeMarketOrder(pair, 'BUY', quantity);
+
+        if (isLive) {
+          await binanceService.placeMarketOrder(pair, 'BUY', quantity);
+        } else {
+          // Simulate: log the intended order but do not call the exchange.
+          console.info(`[SIMULATED] BUY ${quantity} ${pair} @ $${price} (mode: ${this.tradingMode})`);
+        }
         
         position.inPosition = true;
         position.entryPrice = parseFloat(price);
@@ -1062,9 +591,9 @@ class TradingService {
         
         await notificationService.notifyTrade(pair, signal, price);
         
-        toast.success(`Bought ${pair} at $${parseFloat(price).toLocaleString()}`);
+        toast.success(`Bought ${pair} at $${parseFloat(price).toLocaleString()}${modeLabel}`);
       } else if (signal === 'SELL') {
-        console.log(`Executing SELL order for ${pair} at $${price}`);
+        console.log(`Executing SELL order for ${pair} at $${price}${modeLabel}`);
         
         // Use the same quantity from the buy
         const quantity = '0.0015';
@@ -1076,21 +605,25 @@ class TradingService {
           const dynamicQuantity = (baseSize * riskMultiplier * 1.5).toFixed(4);
           console.log(`Dynamic position sizing for sell: ${dynamicQuantity}`);
         }
-        
-        await binanceService.placeMarketOrder(pair, 'SELL', quantity);
+
+        if (isLive) {
+          await binanceService.placeMarketOrder(pair, 'SELL', quantity);
+        } else {
+          console.info(`[SIMULATED] SELL ${quantity} ${pair} @ $${price} (mode: ${this.tradingMode})`);
+        }
         
         if (position.entryPrice) {
           const priceDiff = parseFloat(price) - position.entryPrice;
           const percentChange = (priceDiff / position.entryPrice) * 100;
-          console.log(`Closed position with ${percentChange.toFixed(2)}% ${priceDiff >= 0 ? 'profit' : 'loss'}`);
+          console.log(`Closed position with ${percentChange.toFixed(2)}% ${priceDiff >= 0 ? 'profit' : 'loss'}${modeLabel}`);
           
           // Update profit/loss statistics
           this.updateTradeStatistics(false, priceDiff >= 0, percentChange);
           
           if (priceDiff >= 0) {
-            toast.success(`Sold ${pair} for ${percentChange.toFixed(2)}% profit`);
+            toast.success(`Sold ${pair} for ${percentChange.toFixed(2)}% profit${modeLabel}`);
           } else {
-            toast.info(`Sold ${pair} with ${Math.abs(percentChange).toFixed(2)}% loss`);
+            toast.info(`Sold ${pair} with ${Math.abs(percentChange).toFixed(2)}% loss${modeLabel}`);
           }
         }
         
@@ -1115,7 +648,7 @@ class TradingService {
     try {
       // Get current statistics
       const statsStr = localStorage.getItem('botStatistics');
-      let stats = statsStr ? JSON.parse(statsStr) : { totalTrades: 0, winRate: "0%", profitLoss: "$0.00" };
+      const stats = statsStr ? JSON.parse(statsStr) : { totalTrades: 0, winRate: "0%", profitLoss: "$0.00" };
       
       // Update total trades count
       if (isNewTrade) {

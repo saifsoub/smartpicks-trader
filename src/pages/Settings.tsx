@@ -5,12 +5,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { ArrowLeft, ArrowUpDown, Save, RefreshCw, CheckCircle, AlertCircle, Loader2, Info, Globe, Server, Shield, Home } from "lucide-react";
+import { ArrowLeft, ArrowUpDown, Save, RefreshCw, CheckCircle, AlertCircle, Loader2, Info, Globe, Server, Shield, Home, AlertTriangle, Zap } from "lucide-react";
 import { toast } from "sonner";
 import binanceService from "@/services/binanceService";
 import notificationService from "@/services/notificationService";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { NetworkStatusAlert } from "@/components/NetworkStatusAlert";
+import tradingService from "@/services/tradingService";
+import type { TradingMode } from "@/services/trading/types";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const Settings = () => {
   const navigate = useNavigate();
@@ -35,12 +47,17 @@ const Settings = () => {
   const [portfolioData, setPortfolioData] = useState<{asset: string, value: number}[]>([]);
   
   const [isOfflineMode, setIsOfflineMode] = useState(false);
+
+  // Trading mode state
+  const [tradingMode, setTradingMode] = useState<TradingMode>(tradingService.getTradingMode());
+  const [pendingLiveMode, setPendingLiveMode] = useState(false);
   
   useEffect(() => {
     loadSavedSettings();
     checkConnection();
     
     setIsOfflineMode(binanceService.isInOfflineMode());
+    setTradingMode(tradingService.getTradingMode());
   }, []);
   
   const addStatusMessage = (message: string) => {
@@ -48,13 +65,11 @@ const Settings = () => {
   };
   
   const loadSavedSettings = () => {
-    const savedCredentials = localStorage.getItem('binanceCredentials');
-    if (savedCredentials) {
-      const credentials = JSON.parse(savedCredentials);
-      setApiKey(credentials.apiKey || "");
-      if (credentials.secretKey) {
-        setSecretKey("••••••••••••••••••••••••••••••••");
-      }
+    // Credentials are managed by binanceService (stored in sessionStorage only).
+    // We display the API key if it is already set so the user knows keys are loaded.
+    if (binanceService.hasCredentials()) {
+      setApiKey(binanceService.getApiKey());
+      setSecretKey("••••••••••••••••••••••••••••••••");
     }
     
     setUseProxyMode(binanceService.getProxyMode());
@@ -324,8 +339,8 @@ const Settings = () => {
       // First save the credentials
       const success = binanceService.saveCredentials({
         apiKey,
-        secretKey: secretKey === "••••••••••••••••••••••••••••••••" 
-          ? JSON.parse(localStorage.getItem('binanceCredentials') || '{}').secretKey
+        secretKey: secretKey === "••••••••••••••••••••••••••••••••"
+          ? binanceService.getSecretKey()
           : secretKey
       });
       
@@ -576,6 +591,29 @@ const Settings = () => {
     }
   };
 
+  const handleSetTradingMode = (mode: TradingMode) => {
+    if (mode === 'live') {
+      // Show confirmation dialog before enabling live mode
+      setPendingLiveMode(true);
+    } else {
+      tradingService.setTradingMode(mode);
+      setTradingMode(mode);
+      toast.success(`Trading mode set to: ${mode === 'paper' ? 'Paper Trading' : 'Demo'}`);
+    }
+  };
+
+  const handleConfirmLiveMode = () => {
+    tradingService.setTradingMode('live');
+    setTradingMode('live');
+    setPendingLiveMode(false);
+    toast.warning('🔴 LIVE TRADING enabled. Real orders will be placed.');
+  };
+
+  const handleEmergencyStop = () => {
+    tradingService.emergencyStop();
+    setTradingMode('demo');
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-slate-950 text-white">
       <header className="border-b border-slate-800 bg-slate-900 px-4 py-3">
@@ -685,6 +723,98 @@ const Settings = () => {
         )}
 
         <div className="grid gap-6 md:grid-cols-2">
+          {/* Security notice for API credentials */}
+          <Card className="bg-amber-950/40 border-amber-800/60 shadow-lg md:col-span-2">
+            <CardContent className="pt-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-400 mt-0.5 shrink-0" />
+                <div className="space-y-1 text-sm">
+                  <p className="font-semibold text-amber-300">API Key Security Notice</p>
+                  <p className="text-amber-200/80">
+                    Your Binance API key and secret are stored in <strong>session memory only</strong> — they are
+                    never written to disk or browser localStorage. They will be cleared when you close this tab.
+                    You will need to re-enter them on the next visit.
+                  </p>
+                  <p className="text-amber-200/80">
+                    ⚠️ This is a <strong>frontend-only</strong> application. For maximum security we recommend
+                    using read-only API keys or restricting trading to specific IP addresses in your Binance
+                    account settings. Never store exchange secrets in a shared or untrusted browser.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Trading Mode Card */}
+          <Card className="bg-slate-900 border-slate-800 shadow-lg md:col-span-2">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <Zap className="h-5 w-5 text-yellow-400" />
+                Trading Mode
+              </CardTitle>
+              <CardDescription className="text-slate-300">
+                Control whether orders are simulated or placed for real. Default is Demo (no real trading).
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                {(['demo', 'paper', 'live'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => handleSetTradingMode(mode)}
+                    className={`p-3 rounded-lg border text-left transition-colors ${
+                      tradingMode === mode
+                        ? mode === 'live'
+                          ? 'bg-red-900/40 border-red-600 text-red-200'
+                          : mode === 'paper'
+                          ? 'bg-blue-900/40 border-blue-600 text-blue-200'
+                          : 'bg-slate-700 border-slate-500 text-white'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'
+                    }`}
+                  >
+                    <div className="font-semibold text-sm capitalize">
+                      {mode === 'demo' ? '🟢 Demo' : mode === 'paper' ? '🔵 Paper' : '🔴 Live'}
+                    </div>
+                    <div className="text-xs mt-1 opacity-80">
+                      {mode === 'demo'
+                        ? 'Fully simulated, no API needed'
+                        : mode === 'paper'
+                        ? 'Real data, simulated orders'
+                        : 'Real orders on exchange'}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {tradingMode === 'live' && (
+                <div className="flex items-start gap-3 p-3 bg-red-950/40 rounded-lg border border-red-800">
+                  <AlertCircle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-red-300">Live Trading is Active</p>
+                    <p className="text-xs text-red-300/80 mt-1">
+                      Real buy/sell orders will be placed on Binance. Ensure your API key has trading permissions
+                      and that you have reviewed your risk settings carefully.
+                    </p>
+                  </div>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleEmergencyStop}
+                    className="shrink-0"
+                  >
+                    🚨 Kill Switch
+                  </Button>
+                </div>
+              )}
+
+              <div className="text-xs text-slate-500 mt-2">
+                Current mode: <span className={`font-semibold ${
+                  tradingMode === 'live' ? 'text-red-400' : tradingMode === 'paper' ? 'text-blue-400' : 'text-green-400'
+                }`}>{tradingMode === 'demo' ? 'Demo' : tradingMode === 'paper' ? 'Paper Trading' : 'Live Trading'}</span>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="bg-slate-900 border-slate-800 shadow-lg">
             <CardHeader>
               <CardTitle className="text-white">Binance API Configuration</CardTitle>
@@ -801,8 +931,12 @@ const Settings = () => {
               </div>
               
               <div className="mt-4 pt-2 border-t border-slate-800 text-center">
-                <p className="text-sm font-medium text-green-300">
-                  🔴 LIVE TRADING MODE - Real orders will be executed
+                <p className={`text-sm font-medium ${tradingMode === 'live' ? 'text-red-400' : 'text-green-400'}`}>
+                  {tradingMode === 'live'
+                    ? '🔴 LIVE TRADING MODE – Real orders will be executed'
+                    : tradingMode === 'paper'
+                    ? '🔵 PAPER TRADING MODE – Orders are simulated'
+                    : '🟢 DEMO MODE – No real orders or API required'}
                 </p>
               </div>
             </CardContent>
@@ -928,6 +1062,43 @@ const Settings = () => {
           </Card>
         </div>
       </main>
+
+      {/* Live mode confirmation dialog */}
+      <AlertDialog open={pendingLiveMode} onOpenChange={setPendingLiveMode}>
+        <AlertDialogContent className="bg-slate-900 border-red-800 text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-red-400 flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Enable Live Trading?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-300 space-y-2">
+              <p>You are about to enable <strong className="text-red-400">Live Trading</strong> mode.</p>
+              <p>In this mode the bot will place <strong>real buy and sell orders</strong> on your Binance account using real funds.</p>
+              <ul className="list-disc list-inside text-sm space-y-1 mt-2">
+                <li>Losses may occur and cannot be reversed.</li>
+                <li>Ensure your API key has trading permissions.</li>
+                <li>Review and understand all risk settings before proceeding.</li>
+                <li>This app is not financial advice.</li>
+              </ul>
+              <p className="text-amber-300 font-medium mt-2">⚠️ Proceed only if you fully understand the risks.</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className="border-slate-700 text-slate-200 hover:bg-slate-800"
+              onClick={() => setPendingLiveMode(false)}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-700 hover:bg-red-600 text-white"
+              onClick={handleConfirmLiveMode}
+            >
+              I understand – Enable Live Trading
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

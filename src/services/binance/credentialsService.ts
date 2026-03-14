@@ -109,7 +109,11 @@ export class CredentialsService {
   public getApiKey(): string {
     return this.apiClient.getApiKey();
   }
-  
+
+  public getSecretKey(): string {
+    return this.apiClient.getSecretKey();
+  }
+
   public saveCredentials(credentials: BinanceCredentials): boolean {
     try {
       // Trim whitespace from credentials to prevent common errors

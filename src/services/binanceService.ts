@@ -120,6 +120,10 @@ class BinanceService {
     return this.credentialsService.getApiKey();
   }
 
+  public getSecretKey(): string {
+    return this.credentialsService.getSecretKey();
+  }
+
   public setProxyMode(useLocalProxy: boolean) {
     this.credentialsService.setProxyMode(useLocalProxy);
     

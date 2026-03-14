@@ -1,4 +1,16 @@
 
+// Trading mode controls whether the bot places real orders or only simulates them.
+// - demo:  No API calls needed; all data is simulated. Safe default for first-time users.
+// - paper: Connects to real market data but all orders are simulated (no real money).
+// - live:  Real order placement is enabled. Requires explicit user confirmation.
+export type TradingMode = 'demo' | 'paper' | 'live';
+
+export const TRADING_MODE_LABELS: Record<TradingMode, string> = {
+  demo: 'Demo',
+  paper: 'Paper Trading',
+  live: 'Live Trading',
+};
+
 export interface TradingStrategy {
   id: string;
   name: string;
@@ -83,7 +95,8 @@ export const STORAGE_KEYS = {
   NETWORK_STATUS: 'networkStatus',
   CONNECTION_BYPASS: 'connectionBypass',
   DIRECT_API: 'directApi',
-  OFFLINE_MODE: 'offlineMode'
+  OFFLINE_MODE: 'offlineMode',
+  TRADING_MODE: 'tradingMode',
 };
 
 export interface MarketAnalysis {
