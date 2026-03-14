@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Brain, Zap, BarChart2, Bot, Shield, Users, Settings, AlertTriangle, Activity } from "lucide-react";
+import { Brain, Zap, BarChart2, Shield, Users, Settings, Activity } from "lucide-react";
 import { toast } from "sonner";
 
 import Header from "@/components/dashboard/Header";
@@ -21,9 +20,19 @@ import ActiveStrategies from "@/components/ActiveStrategies";
 import TwoFactorAuth from "@/components/TwoFactorAuth";
 import automatedTradingService from "@/services/automatedTradingService";
 import AITradingAssistant from "@/components/AITradingAssistant";
+import tradingService from "@/services/tradingService";
+import type { TradingMode } from "@/services/trading/types";
+import { TRADING_MODE_LABELS } from "@/services/trading/types";
+
+const TRADING_MODE_CONFIG: Record<TradingMode, { label: string; classes: string; dot: string }> = {
+  demo:  { label: TRADING_MODE_LABELS.demo,  classes: 'bg-green-900/40 border-green-700 text-green-300',  dot: 'bg-green-400' },
+  paper: { label: TRADING_MODE_LABELS.paper, classes: 'bg-blue-900/40 border-blue-700 text-blue-300',    dot: 'bg-blue-400'  },
+  live:  { label: TRADING_MODE_LABELS.live,  classes: 'bg-red-900/40 border-red-700 text-red-300',       dot: 'bg-red-400 animate-pulse'   },
+};
 
 const BotDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState("overview");
+  const [tradingMode, setTradingMode] = useState<TradingMode>(tradingService.getTradingMode());
   
   useEffect(() => {
     // Initialize the automated trading service
@@ -34,10 +43,22 @@ const BotDashboard: React.FC = () => {
         });
       }
     });
+
+    // Keep the displayed trading mode in sync with changes made in Settings
+    const handleModeChange = (e: Event) => {
+      const detail = (e as CustomEvent<{ mode: TradingMode }>).detail;
+      if (detail?.mode) setTradingMode(detail.mode);
+    };
+    window.addEventListener('trading-mode-changed', handleModeChange);
     
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      window.removeEventListener('trading-mode-changed', handleModeChange);
+    };
   }, []);
   
+  const modeConfig = TRADING_MODE_CONFIG[tradingMode];
+
   return (
     <div className="flex flex-col min-h-screen bg-slate-950">
       <Header />
@@ -50,7 +71,15 @@ const BotDashboard: React.FC = () => {
               <p className="text-blue-300">Comprehensive trading management system</p>
             </div>
             
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-3">
+              {/* Trading mode badge – always visible */}
+              <div
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold ${modeConfig.classes}`}
+                title="Current trading mode. Change in Settings."
+              >
+                <span className={`h-2 w-2 rounded-full ${modeConfig.dot}`} />
+                {modeConfig.label}
+              </div>
               <TwoFactorAuth />
             </div>
           </div>

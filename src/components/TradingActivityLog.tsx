@@ -3,11 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RefreshCw, Clock, Check, AlertTriangle, Info, Trash2, ArrowDownUp } from "lucide-react";
+import { RefreshCw, Clock, Check, AlertTriangle, Info, Trash2, ArrowDownUp, Download } from "lucide-react";
 import binanceService from "@/services/binanceService";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { LogType, TradingLog } from "@/services/binance/types";
+import { logsToCSV, downloadTextFile } from "@/lib/exportLogs";
 
 const TradingActivityLog: React.FC = () => {
   const [logs, setLogs] = useState<TradingLog[]>([]);
@@ -116,6 +117,17 @@ const TradingActivityLog: React.FC = () => {
       toast.success("All trading activity logs have been cleared");
     }
   };
+
+  const exportLogs = () => {
+    if (logs.length === 0) {
+      toast.error("No logs to export");
+      return;
+    }
+    const csv = logsToCSV(logs);
+    const filename = `trading-activity-${new Date().toISOString().slice(0, 10)}.csv`;
+    downloadTextFile(csv, filename);
+    toast.success(`Exported ${logs.length} log entries as ${filename}`);
+  };
   
   const executeManualTrade = async () => {
     if (!binanceService.hasCredentials()) {
@@ -197,6 +209,16 @@ const TradingActivityLog: React.FC = () => {
         <div className="flex items-center justify-between">
           <CardTitle className="text-white">Trading Activity</CardTitle>
           <div className="flex gap-2">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={exportLogs}
+              disabled={logs.length === 0}
+              className="text-slate-400 hover:text-white"
+              title="Export logs as CSV"
+            >
+              <Download className="h-4 w-4" />
+            </Button>
             <Button 
               variant="ghost" 
               size="sm" 
