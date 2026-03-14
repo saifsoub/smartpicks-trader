@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+import type { HtmlTagDescriptor } from "vite";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -11,8 +12,32 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     react(),
-    mode === 'development' &&
-    componentTagger(),
+    mode === 'development' && componentTagger(),
+    // Strip the Lovable/GPT-Engineer live-edit script in production builds.
+    // In development it is injected via transformIndexHtml so it is never
+    // hard-coded in index.html (keeping the file clean for production).
+    {
+      name: 'dev-only-scripts',
+      transformIndexHtml(html, ctx) {
+        if (!ctx.server) {
+          // Production: remove the gptengineer script tag if it slipped through
+          return html.replace(
+            /\s*<!--.*?DO NOT REMOVE.*?-->\s*<script[^>]*cdn\.gpteng\.co[^>]*><\/script>/s,
+            ''
+          );
+        }
+        // Development: inject the script dynamically so it never appears in
+        // the committed index.html
+        const tags: HtmlTagDescriptor[] = [
+          {
+            tag: 'script',
+            attrs: { src: 'https://cdn.gpteng.co/gptengineer.js', type: 'module' },
+            injectTo: 'body',
+          },
+        ];
+        return { html, tags };
+      },
+    },
   ].filter(Boolean),
   resolve: {
     alias: {

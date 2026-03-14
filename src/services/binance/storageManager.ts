@@ -11,32 +11,63 @@ export class StorageManager {
   private static BYPASS_CONNECTION_CHECKS_KEY = 'bypassConnectionChecks';
   private static MAX_CONNECTION_RETRIES_KEY = 'maxConnectionRetries';
   private static FORCE_DIRECT_API_KEY = 'forceDirectApi';
-  
+
+  // ---------------------------------------------------------------------------
+  // Credentials – stored in sessionStorage ONLY (never in localStorage).
+  // This limits exposure: keys are cleared when the browser tab/session ends
+  // and are not accessible across origins via the localStorage attack surface.
+  // If a value was previously persisted in localStorage we migrate it once and
+  // immediately purge it from localStorage.
+  // ---------------------------------------------------------------------------
+
   public static loadCredentials(): BinanceCredentials | null {
-    const savedCredentials = localStorage.getItem(this.CREDENTIALS_KEY);
-    if (savedCredentials) {
+    // Attempt to load from sessionStorage first
+    const sessionData = sessionStorage.getItem(this.CREDENTIALS_KEY);
+    if (sessionData) {
       try {
-        const credentials = JSON.parse(savedCredentials);
-        console.log("Credentials loaded successfully:", credentials ? "API Key found" : "No API key");
-        return credentials;
-      } catch (error) {
-        console.error("Failed to parse credentials from localStorage:", error);
-        localStorage.removeItem(this.CREDENTIALS_KEY);
-        return null;
+        return JSON.parse(sessionData);
+      } catch {
+        sessionStorage.removeItem(this.CREDENTIALS_KEY);
       }
     }
+
+    // One-time migration: if old credentials exist in localStorage, move them
+    // to sessionStorage then erase from localStorage.
+    const legacyData = localStorage.getItem(this.CREDENTIALS_KEY);
+    if (legacyData) {
+      try {
+        const credentials = JSON.parse(legacyData) as BinanceCredentials;
+        console.warn(
+          'Migrating Binance credentials from localStorage → sessionStorage. ' +
+          'Credentials will no longer persist across browser sessions.'
+        );
+        sessionStorage.setItem(this.CREDENTIALS_KEY, legacyData);
+        localStorage.removeItem(this.CREDENTIALS_KEY);
+        return credentials;
+      } catch {
+        localStorage.removeItem(this.CREDENTIALS_KEY);
+      }
+    }
+
     return null;
   }
-  
+
   public static saveCredentials(credentials: BinanceCredentials): boolean {
     try {
-      localStorage.setItem(this.CREDENTIALS_KEY, JSON.stringify(credentials));
-      console.log("Credentials saved successfully");
+      // Ensure no stale copy lingers in localStorage
+      localStorage.removeItem(this.CREDENTIALS_KEY);
+      sessionStorage.setItem(this.CREDENTIALS_KEY, JSON.stringify(credentials));
+      console.log('Credentials saved to sessionStorage (session-only, not persisted).');
       return true;
     } catch (error) {
       console.error('Failed to save credentials:', error);
       return false;
     }
+  }
+
+  public static clearCredentials(): void {
+    sessionStorage.removeItem(this.CREDENTIALS_KEY);
+    localStorage.removeItem(this.CREDENTIALS_KEY);
   }
   
   public static loadApiPermissions(): ApiPermissions {
