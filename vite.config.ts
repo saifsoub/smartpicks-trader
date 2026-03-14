@@ -20,7 +20,10 @@ export default defineConfig(({ mode }) => ({
       name: 'dev-only-scripts',
       transformIndexHtml(html, ctx) {
         if (!ctx.server) {
-          // Production: remove the gptengineer script tag if it slipped through
+          // Production: defensively strip any gptengineer/cdn.gpteng.co script
+          // that might be added back accidentally (the hard-coded script and its
+          // comment have been removed from index.html, but this acts as a
+          // safety net for future contributors).
           return html.replace(
             /\s*<!--.*?DO NOT REMOVE.*?-->\s*<script[^>]*cdn\.gpteng\.co[^>]*><\/script>/s,
             ''
@@ -43,5 +46,9 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+  },
+  test: {
+    globals: true,
+    environment: "node",
   },
 }));

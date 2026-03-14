@@ -648,7 +648,7 @@ class TradingService {
     try {
       // Get current statistics
       const statsStr = localStorage.getItem('botStatistics');
-      let stats = statsStr ? JSON.parse(statsStr) : { totalTrades: 0, winRate: "0%", profitLoss: "$0.00" };
+      const stats = statsStr ? JSON.parse(statsStr) : { totalTrades: 0, winRate: "0%", profitLoss: "$0.00" };
       
       // Update total trades count
       if (isNewTrade) {
