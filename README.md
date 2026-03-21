@@ -1,3 +1,23 @@
+# SmartPicks Trader
+
+AI-powered cryptocurrency trading bot dashboard. Connects to the Binance API to run automated strategies in **Demo**, **Paper**, or **Live** mode with full safety rails.
+
+## PaperclipAI Onboarding
+
+This repository ships a [Paperclip](https://paperclip.ing) company manifest. Import it into any Paperclip instance to spin up the SmartPicks Trader AI company — complete with a Trading Strategist (CEO), Lead Developer (CTO), Market Analyst, Frontend Engineer, and Risk Manager.
+
+```bash
+# 1. Set up a local Paperclip instance (first time only)
+npx paperclipai onboard --yes
+
+# 2. Import the SmartPicks Trader company
+npx paperclipai company import --from https://github.com/saifsoub/smartpicks-trader
+```
+
+The manifest (`paperclip.manifest.json`) and agent system-prompts (`paperclip/`) are committed to this repository. See [Paperclip docs](https://paperclip.ing/docs) for more.
+
+---
+
 # Welcome to your Lovable project
 
 ## Project info

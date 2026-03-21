@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-03-21T15:31:34.754Z",
+  "source": null,
+  "includes": {
+    "company": true,
+    "agents": true
+  },
+  "company": {
+    "path": "paperclip/company.md",
+    "name": "SmartPicks Trader",
+    "description": "AI-powered cryptocurrency trading bot dashboard built with React, TypeScript, and Vite. Connects to the Binance API to run automated strategies in Demo, Paper, or Live mode with full safety rails.",
+    "brandColor": "#6366f1",
+    "requireBoardApprovalForNewAgents": false
+  },
+  "agents": [
+    {
+      "slug": "trading-strategist",
+      "name": "Trading Strategist",
+      "path": "paperclip/agents/ceo.md",
+      "role": "ceo",
+      "title": "Chief Trading Strategist",
+      "icon": "trending-up",
+      "capabilities": "Trading strategy direction, roadmap prioritisation, Live mode approval, risk budget setting",
+      "reportsToSlug": null,
+      "adapterType": "claude_local",
+      "adapterConfig": {},
+      "runtimeConfig": {},
+      "permissions": {},
+      "budgetMonthlyCents": 5000,
+      "metadata": null
+    },
+    {
+      "slug": "lead-developer",
+      "name": "Lead Developer",
+      "path": "paperclip/agents/cto.md",
+      "role": "cto",
+      "title": "CTO / Lead Developer",
+      "icon": "code",
+      "capabilities": "TypeScript/React development, CI pipeline, architecture, code review, build tooling",
+      "reportsToSlug": "trading-strategist",
+      "adapterType": "codex_local",
+      "adapterConfig": {},
+      "runtimeConfig": {},
+      "permissions": {},
+      "budgetMonthlyCents": 10000,
+      "metadata": null
+    },
+    {
+      "slug": "market-analyst",
+      "name": "Market Analyst",
+      "path": "paperclip/agents/analyst.md",
+      "role": "researcher",
+      "title": "Market Analyst",
+      "icon": "bar-chart-2",
+      "capabilities": "Strategy backtesting, market research, Binance data analysis, performance reporting",
+      "reportsToSlug": "trading-strategist",
+      "adapterType": "claude_local",
+      "adapterConfig": {},
+      "runtimeConfig": {},
+      "permissions": {},
+      "budgetMonthlyCents": 3000,
+      "metadata": null
+    },
+    {
+      "slug": "frontend-engineer",
+      "name": "Frontend Engineer",
+      "path": "paperclip/agents/engineer.md",
+      "role": "engineer",
+      "title": "Frontend Engineer",
+      "icon": "layout-dashboard",
+      "capabilities": "React/TypeScript UI development, Vitest unit tests, Tailwind CSS, shadcn-ui, bug fixes",
+      "reportsToSlug": "lead-developer",
+      "adapterType": "codex_local",
+      "adapterConfig": {},
+      "runtimeConfig": {},
+      "permissions": {},
+      "budgetMonthlyCents": 10000,
+      "metadata": null
+    },
+    {
+      "slug": "risk-manager",
+      "name": "Risk Manager",
+      "path": "paperclip/agents/risk-manager.md",
+      "role": "pm",
+      "title": "Risk Manager & PM",
+      "icon": "shield",
+      "capabilities": "Position sizing, stop-loss enforcement, product backlog, safety rule ownership, mode-gate management",
+      "reportsToSlug": "trading-strategist",
+      "adapterType": "claude_local",
+      "adapterConfig": {},
+      "runtimeConfig": {},
+      "permissions": {},
+      "budgetMonthlyCents": 3000,
+      "metadata": null
+    }
+  ],
+  "requiredSecrets": [
+    {
+      "key": "BINANCE_API_KEY",
+      "description": "Binance API key used by the trading bot for market data and order placement. Required only in Live mode.",
+      "agentSlug": null,
+      "providerHint": "binance"
+    },
+    {
+      "key": "BINANCE_API_SECRET",
+      "description": "Binance API secret for HMAC-SHA256 request signing. Required only in Live mode.",
+      "agentSlug": null,
+      "providerHint": "binance"
+    }
+  ]
+}
