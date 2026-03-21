@@ -4,7 +4,7 @@ AI-powered cryptocurrency trading bot dashboard. Connects to the Binance API to 
 
 ## PaperclipAI Onboarding
 
-This repository ships a [Paperclip](https://paperclip.ing) company manifest. Import it into any Paperclip instance to spin up the SmartPicks Trader AI company — complete with a Trading Strategist (CEO), Lead Developer (CTO), Market Analyst, Frontend Engineer, and Risk Manager.
+This repository ships a [Paperclip](https://paperclip.ing) company manifest. Import it into any Paperclip instance to spin up the SmartPicks Trader AI company — complete with a Trading Strategist (CEO), Lead Developer (CTO), Market Analyst, Frontend Engineer, and Risk Manager. All agents run on **Gemini 2.5 Pro** via the `gemini_local` adapter.
 
 ```bash
 # 1. Set up a local Paperclip instance (first time only)

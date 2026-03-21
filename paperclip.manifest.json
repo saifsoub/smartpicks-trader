@@ -23,8 +23,10 @@
       "icon": "trending-up",
       "capabilities": "Trading strategy direction, roadmap prioritisation, Live mode approval, risk budget setting",
       "reportsToSlug": null,
-      "adapterType": "claude_local",
-      "adapterConfig": {},
+      "adapterType": "gemini_local",
+      "adapterConfig": {
+        "model": "gemini-2.5-pro"
+      },
       "runtimeConfig": {},
       "permissions": {},
       "budgetMonthlyCents": 5000,
@@ -39,8 +41,10 @@
       "icon": "code",
       "capabilities": "TypeScript/React development, CI pipeline, architecture, code review, build tooling",
       "reportsToSlug": "trading-strategist",
-      "adapterType": "codex_local",
-      "adapterConfig": {},
+      "adapterType": "gemini_local",
+      "adapterConfig": {
+        "model": "gemini-2.5-pro"
+      },
       "runtimeConfig": {},
       "permissions": {},
       "budgetMonthlyCents": 10000,
@@ -55,8 +59,10 @@
       "icon": "bar-chart-2",
       "capabilities": "Strategy backtesting, market research, Binance data analysis, performance reporting",
       "reportsToSlug": "trading-strategist",
-      "adapterType": "claude_local",
-      "adapterConfig": {},
+      "adapterType": "gemini_local",
+      "adapterConfig": {
+        "model": "gemini-2.5-pro"
+      },
       "runtimeConfig": {},
       "permissions": {},
       "budgetMonthlyCents": 3000,
@@ -71,8 +77,10 @@
       "icon": "layout-dashboard",
       "capabilities": "React/TypeScript UI development, Vitest unit tests, Tailwind CSS, shadcn-ui, bug fixes",
       "reportsToSlug": "lead-developer",
-      "adapterType": "codex_local",
-      "adapterConfig": {},
+      "adapterType": "gemini_local",
+      "adapterConfig": {
+        "model": "gemini-2.5-pro"
+      },
       "runtimeConfig": {},
       "permissions": {},
       "budgetMonthlyCents": 10000,
@@ -87,8 +95,10 @@
       "icon": "shield",
       "capabilities": "Position sizing, stop-loss enforcement, product backlog, safety rule ownership, mode-gate management",
       "reportsToSlug": "trading-strategist",
-      "adapterType": "claude_local",
-      "adapterConfig": {},
+      "adapterType": "gemini_local",
+      "adapterConfig": {
+        "model": "gemini-2.5-pro"
+      },
       "runtimeConfig": {},
       "permissions": {},
       "budgetMonthlyCents": 3000,
@@ -96,6 +106,12 @@
     }
   ],
   "requiredSecrets": [
+    {
+      "key": "GOOGLE_API_KEY",
+      "description": "Google API key used by all Gemini agents. Required for agent heartbeats and task execution.",
+      "agentSlug": null,
+      "providerHint": "google"
+    },
     {
       "key": "BINANCE_API_KEY",
       "description": "Binance API key used by the trading bot for market data and order placement. Required only in Live mode.",
