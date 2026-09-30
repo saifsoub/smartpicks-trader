@@ -1,69 +1,47 @@
-# Welcome to your Lovable project
+# SmartPicks Trader
 
-## Project info
+An AI-powered cryptocurrency trading dashboard. It connects to the Binance API for live market
+data and brings strategy management, bot monitoring, backtesting, and an AI trading assistant
+into a single interface.
 
-**URL**: https://lovable.dev/projects/f2fd55cb-f731-4c04-9872-9ca7a65be347
+## Features
 
-## How can I edit this code?
+- **Live market data** from the Binance API
+- **Portfolio summary** and performance metrics
+- **Trading charts** built with Recharts
+- **Active strategies** with an automated trading setup flow
+- **Backtesting module**
+- **Risk management tools**
+- **AI chat assistant** and AI trading assistant
+- **AI insights** banner and summary panels
+- **Recent trades** and a trading activity log
+- **Two-factor authentication**
+- **Social trading** features
+- **Newbie guide** dashboard
 
-There are several ways of editing your application.
+## Tech stack
 
-**Use Lovable**
+React 18 · TypeScript · Vite · Tailwind CSS · shadcn/ui (Radix UI primitives) · React Router v6 ·
+TanStack Query · Recharts · React Hook Form + Zod
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/f2fd55cb-f731-4c04-9872-9ca7a65be347) and start prompting.
+## Run locally
 
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The dev server runs on port 8080.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Layout
 
-**Use GitHub Codespaces**
+| Path | Purpose |
+|---|---|
+| `src/components/` | Dashboard, trading, portfolio, risk, and AI assistant components |
+| `src/components/dashboard/` | Header, price display, market insights, and AI insights panels |
+| `UAE_E_Invoicing_Orchestration_Layer_Design.ipynb` | Standalone Colab notebook (Gemini) designing a UAE e-invoicing orchestration layer — separate from the trading dashboard |
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Provenance
 
-## What technologies are used for this project?
-
-This project is built with .
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/f2fd55cb-f731-4c04-9872-9ca7a65be347) and click on Share -> Publish.
-
-## I want to use a custom domain - is that possible?
-
-We don't support custom domains (yet). If you want to deploy your project under your own domain then we recommend using Netlify. Visit our docs for more details: [Custom domains](https://docs.lovable.dev/tips-tricks/custom-domain/)
+Exported from Lovable. Live project:
+<https://lovable.dev/projects/f2fd55cb-f731-4c04-9872-9ca7a65be347>
